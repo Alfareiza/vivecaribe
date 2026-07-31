@@ -9,7 +9,8 @@ import sentry_sdk
 from fastapi import FastAPI
 
 from vivecaribe import __version__
-from vivecaribe.api.routers import health
+from vivecaribe.api import deps
+from vivecaribe.api.routers import auth, health
 from vivecaribe.logging import configure_logging, logger
 from vivecaribe.settings import get_settings
 
@@ -39,15 +40,17 @@ def _init_sentry() -> None:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    """Configure stdout logging on startup; log shutdown on exit."""
+    """Configure logging and DB on startup; dispose engine on shutdown."""
     settings = get_settings()
     configure_logging(settings)
+    deps.init_db()
     logger.info(
         "ViveCaribe starting (env=%s, version=%s)",
         settings.environment,
         __version__,
     )
     yield
+    await deps.shutdown_db()
     logger.info("ViveCaribe shutting down")
 
 
@@ -62,6 +65,7 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
     app.include_router(health.router)
+    app.include_router(auth.router)
     return app
 
 
