@@ -61,10 +61,21 @@ Protected routes use `Authorization: Bearer <access_token>` (JWT only).
 
 ## Database
 
+<<<<<<< Updated upstream
 | Environment | `DATABASE_URL` |
 |-------------|----------------|
 | Local | `postgresql+asyncpg://postgres:postgres@localhost:5433/vivecaribe` (Compose `db` → host `5433`) |
 | Vercel + Supabase | Transaction pooler URL (port **6543**). App uses `NullPool` + disables prepared-statement cache. |
+=======
+| Environment | `ENVIRONMENT` | `DATABASE_URL` |
+|-------------|---------------|----------------|
+| Local | `local` | `postgresql+asyncpg://postgres:postgres@localhost:5433/vivecaribe` (Compose `db` → host `5433`) |
+| Vercel + Supabase | `prod` | Transaction pooler (port **6543**), **`postgresql+asyncpg://`** or **`postgresql+psycopg://`**. App uses `NullPool` + driver-specific prepared-statement disable. |
+
+Supabase dashboard URIs use plain `postgresql://` — **change the scheme** before pasting
+into Vercel. If the password contains `@`, `#`, `/`, or other reserved characters,
+[URL-encode](https://developer.mozilla.org/en-US/docs/Glossary/Percent-encoding) it first.
+>>>>>>> Stashed changes
 
 Migrations:
 
@@ -111,11 +122,43 @@ src/vivecaribe/
 
 Production: https://vivecaribe.vercel.app
 
+Entrypoint: `src/main.py` (re-exports `vivecaribe.main:app`).
+
+### Vercel env vars (Production)
+
+Set these under **Production** only (not required for local `.env` + Docker):
+
+| Variable | Example / notes |
+|----------|-----------------|
+| `ENVIRONMENT` | `prod` — **not** `production` (pydantic rejects it) |
+| `DATABASE_URL` | See [Database](#database) — async driver + Supabase pooler `:6543` |
+| `JWT_SECRET` | Long random string |
+| `CRON_SECRET` | Long random string |
+| `LOG_LEVEL` | Optional, e.g. `INFO` |
+| `SENTRY_DSN` | Optional |
+
+Example `DATABASE_URL` (replace `<ref>`, `<password>`, `<region>`):
+
+```text
+postgresql+asyncpg://postgres.<ref>:<password>@aws-<region>.pooler.supabase.com:6543/postgres
+```
+
+Apply migrations to Supabase **once** from your machine (same URL):
+
+```bash
+DATABASE_URL='postgresql+asyncpg://postgres.<ref>:<password>@aws-<region>.pooler.supabase.com:6543/postgres' \
+  uv run alembic upgrade head
+```
+
+Verify after deploy:
+
+```bash
+curl https://vivecaribe.vercel.app/health
+```
+
 ```bash
 vercel deploy --prod
 ```
-
-Entrypoint: `src/main.py` (re-exports `vivecaribe.main:app`).
 
 ## Tests
 
