@@ -64,7 +64,7 @@ Protected routes use `Authorization: Bearer <access_token>` (JWT only).
 | Environment | `DATABASE_URL` |
 |-------------|----------------|
 | Local | `postgresql+asyncpg://postgres:postgres@localhost:5433/vivecaribe` (Compose `db` → host `5433`) |
-| Vercel + Supabase | Transaction pooler URL (port **6543**). App uses `NullPool` + disables prepared-statement cache. |
+| Vercel + Supabase | Transaction pooler URL (port **6543**), `postgresql+asyncpg` or `postgresql+psycopg`. App uses `NullPool` + driver-specific prepared-statement disable. |
 
 Migrations:
 
