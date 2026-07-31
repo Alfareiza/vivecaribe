@@ -1,40 +1,67 @@
 # ViveCaribe
 
-API-first booking platform for ViveCaribe. This repository currently ships the
-project scaffold (settings, logging, health endpoint, Docker). Domain,
-persistence, auth, and automation land in follow-up issues.
+API-first booking platform for ViveCaribe. Scaffold + domain core + PostgreSQL
+persistence (SQLAlchemy async / Alembic) are in place. Auth and automation
+follow in later issues.
 
 ## Requirements
 
 - Python **3.13+**
 - [uv](https://docs.astral.sh/uv/)
-- Docker (optional, for containerized local runs)
+- Docker (Postgres for local persistence)
 
-## Local setup (uv)
+Pick **one** local path (not both at once):
+
+### Option A — API on your machine (recommended for development)
+
+Runs only the Postgres container. The FastAPI app runs with `uv` on the host
+(hot reload, easy debugging).
 
 ```bash
 cp .env.example .env
 # edit .env with local secrets
 
+docker compose up -d db   # start Postgres only (background)
 uv sync --group dev
+uv run alembic upgrade head
 uv run uvicorn vivecaribe.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Health check:
+### Option B — API + Postgres both in Docker
 
-```bash
-curl http://localhost:8000/health
-```
-
-## Local setup (Docker)
+Builds and starts every Compose service (`db` and `api`). Use this when you
+want a fully containerized stack (no local `uvicorn`).
 
 ```bash
 cp .env.example .env
 # edit .env with local secrets
 
-docker compose up --build
+docker compose up --build   # start db + api (foreground; Ctrl+C to stop)
+```
+
+Health check (either option):
+
+```bash
 curl http://localhost:8000/health
 ```
+
+## Database
+
+| Environment | `DATABASE_URL` |
+|-------------|----------------|
+| Local | `postgresql+asyncpg://postgres:postgres@localhost:5433/vivecaribe` (Compose `db` → host `5433`) |
+| Vercel + Supabase | Transaction pooler URL (port **6543**). App uses `NullPool` + disables prepared-statement cache. |
+
+Migrations:
+
+```bash
+uv run alembic upgrade head
+uv run alembic revision --autogenerate -m "describe change"
+```
+
+CI note (not wired yet): GitHub Actions can start the same `postgres:16` service
+container and run `alembic upgrade head` + `pytest` against
+`postgresql+asyncpg://postgres:postgres@localhost:5433/vivecaribe`.
 
 ## Project layout
 
@@ -44,9 +71,10 @@ src/vivecaribe/
 ├── settings.py        # pydantic-settings BaseSettings
 ├── logging.py         # shared ``logger`` + configure_logging
 ├── api/               # HTTP routers & schemas
-├── domain/            # business core (later issues)
+├── domain/            # business core (Pydantic entities + ports)
 ├── application/       # use cases (later issues)
-└── infrastructure/    # adapters (later issues)
+└── infrastructure/
+    └── db/            # SQLAlchemy session, ORM, repositories
 ```
 
 ## Config
@@ -68,6 +96,11 @@ Entrypoint: `src/main.py` (re-exports `vivecaribe.main:app`).
 
 ## Tests
 
+Unit tests always run. Persistence tests need Postgres (same as Option A —
+only the `db` service):
+
 ```bash
+docker compose up -d db   # Postgres only; skip if it is already running
+uv run alembic upgrade head
 uv run pytest
 ```

@@ -9,7 +9,7 @@ import pytest
 # Required before Settings() is first constructed in tests.
 os.environ.setdefault(
     "DATABASE_URL",
-    "postgresql+psycopg://postgres:postgres@localhost:5432/vivecaribe",
+    "postgresql+asyncpg://postgres:postgres@localhost:5433/vivecaribe",
 )
 os.environ.setdefault("JWT_SECRET", "test-jwt-secret-not-for-production")
 os.environ.setdefault("CRON_SECRET", "test-cron-secret-not-for-production")
