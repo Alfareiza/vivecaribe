@@ -39,6 +39,7 @@ def _sample_reserva(**overrides: object) -> Reserva:
         "income": Decimal("96.40"),
         "notificado_whatsapp": False,
         "email_id": uuid4(),
+        "user_id": None,
     }
     data.update(overrides)
     return Reserva.model_validate(data)

@@ -13,11 +13,11 @@ from vivecaribe.domain.user import User
 class ReservaRepository(Protocol):
     """Persistence port for ``Reserva`` aggregates."""
 
-    def get_by_id(self, reserva_id: UUID) -> Reserva | None:
+    async def get_by_id(self, reserva_id: UUID) -> Reserva | None:
         """Return a reservation by primary key, or ``None`` if missing."""
         ...
 
-    def get_by_provider_message_id(
+    async def get_by_provider_message_id(
         self,
         provider: BookingProvider,
         message_id: str,
@@ -25,7 +25,7 @@ class ReservaRepository(Protocol):
         """Return the reservation for the idempotency key, if any."""
         ...
 
-    def save(self, reserva: Reserva) -> Reserva:
+    async def save(self, reserva: Reserva) -> Reserva:
         """Insert or update a reservation and return the persisted entity."""
         ...
 
@@ -33,15 +33,15 @@ class ReservaRepository(Protocol):
 class UserRepository(Protocol):
     """Persistence port for ``User`` accounts."""
 
-    def get_by_id(self, user_id: UUID) -> User | None:
+    async def get_by_id(self, user_id: UUID) -> User | None:
         """Return a user by primary key, or ``None`` if missing."""
         ...
 
-    def get_by_email(self, email: str) -> User | None:
+    async def get_by_email(self, email: str) -> User | None:
         """Return a user by unique email, or ``None`` if missing."""
         ...
 
-    def save(self, user: User) -> User:
+    async def save(self, user: User) -> User:
         """Insert or update a user and return the persisted entity."""
         ...
 
