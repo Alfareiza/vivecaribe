@@ -42,7 +42,7 @@ curl http://localhost:8000/health
 src/vivecaribe/
 ├── main.py            # FastAPI app factory + lifespan
 ├── settings.py        # pydantic-settings BaseSettings
-├── logging.py         # get_logger / configure_logging
+├── logging.py         # shared ``logger`` + configure_logging
 ├── api/               # HTTP routers & schemas
 ├── domain/            # business core (later issues)
 ├── application/       # use cases (later issues)
