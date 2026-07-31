@@ -61,12 +61,12 @@ class PasswordHasher(Protocol):
 class TokenService(Protocol):
     """Issue and validate access tokens (JWT in infrastructure)."""
 
-    def create_access_token(self, *, subject: str) -> str:
-        """Create a signed access token for ``subject`` (usually user id)."""
+    def create_access_token(self, *, subject: str, email: str) -> str:
+        """Create a signed access token for ``subject`` (user id) and email."""
         ...
 
     def decode_access_token(self, token: str) -> str:
-        """Return the subject embedded in ``token``.
+        """Return the subject (user id) embedded in ``token``.
 
         Raises:
             DomainError: If the token is invalid or expired (infra maps

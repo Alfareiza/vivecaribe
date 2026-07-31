@@ -23,7 +23,7 @@ cp .env.example .env
 
 docker compose up -d db   # start Postgres only (background)
 uv sync --group dev
-uv run alembic upgrade head
+uv run alembic upgrade head   # apply DB migrations (creates tables like users)
 uv run uvicorn vivecaribe.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
@@ -45,6 +45,20 @@ Health check (either option):
 curl http://localhost:8000/health
 ```
 
+Auth (public):
+
+```bash
+curl -X POST http://localhost:8000/users \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"ops@vivecaribe.com","password":"secret123"}'
+
+curl -X POST http://localhost:8000/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"ops@vivecaribe.com","password":"secret123"}'
+```
+
+Protected routes use `Authorization: Bearer <access_token>` (JWT only).
+
 ## Database
 
 | Environment | `DATABASE_URL` |
@@ -55,8 +69,17 @@ curl http://localhost:8000/health
 Migrations:
 
 ```bash
-uv run alembic upgrade head
+uv run alembic upgrade head   # apply pending revisions (creates/updates tables)
 uv run alembic revision --autogenerate -m "describe change"
+```
+
+If the API errors with `relation "users" does not exist` but `alembic current`
+already shows `head`, the version table was stamped without the real schema.
+Reset the stamp and re-apply:
+
+```bash
+uv run alembic stamp base
+uv run alembic upgrade head
 ```
 
 CI note (not wired yet): GitHub Actions can start the same `postgres:16` service
@@ -101,6 +124,6 @@ only the `db` service):
 
 ```bash
 docker compose up -d db   # Postgres only; skip if it is already running
-uv run alembic upgrade head
+uv run alembic upgrade head   # apply DB migrations (creates tables like users)
 uv run pytest
 ```
