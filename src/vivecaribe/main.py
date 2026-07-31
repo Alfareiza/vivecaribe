@@ -10,10 +10,8 @@ from fastapi import FastAPI
 
 from vivecaribe import __version__
 from vivecaribe.api.routers import health
-from vivecaribe.logging import configure_logging, get_logger
+from vivecaribe.logging import configure_logging, logger
 from vivecaribe.settings import get_settings
-
-logger = get_logger(__name__)
 
 
 def _init_sentry() -> None:

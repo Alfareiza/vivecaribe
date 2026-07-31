@@ -1,4 +1,11 @@
-"""Shared package logger — Rich locally, JSON-friendly elsewhere."""
+"""Shared package logger — Rich locally, JSON-friendly elsewhere.
+
+Usage elsewhere::
+
+    from vivecaribe.logging import logger
+
+    logger.info("something happened")
+"""
 
 from __future__ import annotations
 
@@ -30,6 +37,8 @@ class JsonFormatter(logging.Formatter):
             "timestamp": datetime.now(UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
+            "module": record.module,
+            "line": record.lineno,
             "message": record.getMessage(),
         }
         correlation_id = correlation_id_var.get()
@@ -53,7 +62,9 @@ def configure_logging(settings: Settings) -> None:
             show_path=False,
             markup=True,
         )
-        handler.setFormatter(logging.Formatter("%(message)s"))
+        handler.setFormatter(
+            logging.Formatter("[%(module)s:%(lineno)d] %(message)s"),
+        )
     else:
         handler = logging.StreamHandler(sys.stdout)
         handler.setFormatter(JsonFormatter())
@@ -64,6 +75,5 @@ def configure_logging(settings: Settings) -> None:
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
 
-def get_logger(name: str | None = None) -> logging.Logger:
-    """Return a named logger for API, application, or infrastructure code."""
-    return logging.getLogger(name or "vivecaribe")
+# Import this everywhere: ``from vivecaribe.logging import logger``.
+logger = logging.getLogger("vivecaribe")
