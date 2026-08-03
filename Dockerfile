@@ -32,7 +32,7 @@ RUN groupadd --system --gid 1000 app \
 
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/src /app/src
-COPY accounts.yaml ./accounts.yaml
+COPY booking_providers.yaml ./booking_providers.yaml
 
 USER app
 

@@ -1,6 +1,4 @@
-"""Settings and accounts.yaml loading."""
-
-from pathlib import Path
+"""Settings and booking_providers.yaml loading."""
 
 from vivecaribe.settings import Settings, get_settings
 
@@ -12,16 +10,18 @@ def test_get_settings_is_cached() -> None:
     assert first is second
 
 
-def test_load_accounts_from_repo_yaml() -> None:
-    """``load_accounts`` parses the repository ``accounts.yaml`` stub."""
+def test_load_booking_providers_from_repo_yaml() -> None:
+    """``load_booking_providers`` parses the repository YAML stub."""
     settings = Settings(
         database_url="postgresql+psycopg://u:p@localhost/db",
         jwt_secret="secret",
         cron_secret="cron",
-        accounts_yaml_path=Path("accounts.yaml"),
     )
-    accounts = settings.load_accounts()
+    config = settings.load_booking_providers()
 
-    assert len(accounts.accounts) >= 1
-    assert accounts.accounts[0].provider in {"gmail", "outlook"}
-    assert accounts.accounts[0].queries
+    assert len(config.booking_providers) >= 1
+    first = config.booking_providers[0]
+    assert first.mailbox.mailbox_name in {"gmail", "outlook"}
+    assert "new_bookings_query" in first.mailbox.queries
+    assert first.mailbox.credentials_file
+    assert first.mailbox.credentials_path.name == first.mailbox.credentials_file

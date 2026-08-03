@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from vivecaribe.domain.errors import ConflictError, DomainError
-from vivecaribe.domain.ports import PasswordHasher, TokenService, UserRepository
 from vivecaribe.domain.user import User
 from vivecaribe.logging import logger
 
@@ -11,11 +12,7 @@ from vivecaribe.logging import logger
 class RegisterUserUseCase:
     """Create a new platform user with a hashed password."""
 
-    def __init__(
-        self,
-        users: UserRepository,
-        password_hasher: PasswordHasher,
-    ) -> None:
+    def __init__(self, users: Any, password_hasher: Any) -> None:
         """Wire persistence and hashing adapters."""
         self._users = users
         self._password_hasher = password_hasher
@@ -44,9 +41,9 @@ class LoginUserUseCase:
 
     def __init__(
         self,
-        users: UserRepository,
-        password_hasher: PasswordHasher,
-        tokens: TokenService,
+        users: Any,
+        password_hasher: Any,
+        tokens: Any,
     ) -> None:
         """Wire persistence, hashing, and token adapters."""
         self._users = users

@@ -1,8 +1,13 @@
 """Database adapters (SQLAlchemy session, ORM models, repositories)."""
 
-from vivecaribe.infrastructure.db.models import Base, EmailORM, ReservaORM, UserORM
+from vivecaribe.infrastructure.db.models import (
+    Base,
+    EmailMessageORM,
+    ReservaORM,
+    UserORM,
+)
 from vivecaribe.infrastructure.db.repositories import (
-    EmailRepository,
+    SqlAlchemyEmailMessageRepository,
     SqlAlchemyReservaRepository,
     SqlAlchemyUserRepository,
 )
@@ -14,9 +19,9 @@ from vivecaribe.infrastructure.db.session import (
 
 __all__ = [
     "Base",
-    "EmailORM",
-    "EmailRepository",
+    "EmailMessageORM",
     "ReservaORM",
+    "SqlAlchemyEmailMessageRepository",
     "SqlAlchemyReservaRepository",
     "SqlAlchemyUserRepository",
     "UserORM",

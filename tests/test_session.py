@@ -1,6 +1,5 @@
 """Engine / pooler connect-arg helpers."""
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -55,7 +54,6 @@ def test_local_engine_uses_queue_pool_without_pooler_args() -> None:
         database_url="postgresql+asyncpg://postgres:postgres@localhost:5433/vivecaribe",
         jwt_secret="secret",
         cron_secret="cron",
-        accounts_yaml_path=Path("accounts.yaml"),
     )
     with patch(
         "vivecaribe.infrastructure.db.session.create_async_engine",
@@ -77,7 +75,6 @@ def test_staging_engine_uses_null_pool_and_psycopg_args() -> None:
         database_url="postgresql+psycopg://u:p@host:6543/postgres",
         jwt_secret="secret",
         cron_secret="cron",
-        accounts_yaml_path=Path("accounts.yaml"),
     )
     with patch(
         "vivecaribe.infrastructure.db.session.create_async_engine",
@@ -97,7 +94,6 @@ def test_staging_engine_uses_asyncpg_statement_cache_arg() -> None:
         database_url="postgresql+asyncpg://u:p@host:6543/postgres",
         jwt_secret="secret",
         cron_secret="cron",
-        accounts_yaml_path=Path("accounts.yaml"),
     )
     with patch(
         "vivecaribe.infrastructure.db.session.create_async_engine",
@@ -117,7 +113,6 @@ def test_local_engine_builds_real_queue_pool() -> None:
         database_url="postgresql+asyncpg://postgres:postgres@localhost:5433/vivecaribe",
         jwt_secret="secret",
         cron_secret="cron",
-        accounts_yaml_path=Path("accounts.yaml"),
     )
     engine = create_engine(settings)
     assert isinstance(engine.sync_engine.pool, QueuePool)

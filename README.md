@@ -116,7 +116,7 @@ src/vivecaribe/
 | Source | Purpose |
 |--------|---------|
 | `.env` | Secrets and runtime settings (`DATABASE_URL`, `JWT_SECRET`, …) |
-| `accounts.yaml` | Non-secret mailbox names and search queries |
+| `booking_providers.yaml` | Non-secret booking-provider mailboxes and search queries |
 
 ## Deploy (Vercel)
 

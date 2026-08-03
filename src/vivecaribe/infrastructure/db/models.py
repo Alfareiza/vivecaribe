@@ -1,4 +1,4 @@
-"""SQLAlchemy ORM models for users, emails, and reservas."""
+"""SQLAlchemy ORM models for users, email_messages, and reservas."""
 
 from __future__ import annotations
 
@@ -46,15 +46,15 @@ class UserORM(Base):
     )
 
 
-class EmailORM(Base):
-    """Persisted inbound email (automation source). No domain entity yet."""
+class EmailMessageORM(Base):
+    """Persisted inbound mailbox message (automation source)."""
 
-    __tablename__ = "emails"
+    __tablename__ = "email_messages"
     __table_args__ = (
         UniqueConstraint(
             "source",
-            "external_message_id",
-            name="uq_emails_source_external_message_id",
+            "mailbox_message_id",
+            name="uq_email_messages_source_mailbox_message_id",
         ),
     )
 
@@ -64,7 +64,7 @@ class EmailORM(Base):
         default=uuid4,
     )
     source: Mapped[str] = mapped_column(String(64), nullable=False)
-    external_message_id: Mapped[str] = mapped_column(String(512), nullable=False)
+    mailbox_message_id: Mapped[str] = mapped_column(String(512), nullable=False)
     sender: Mapped[str] = mapped_column(String(320), nullable=False)
     recipients: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
     subject: Mapped[str] = mapped_column(String(998), nullable=False, default="")
@@ -93,9 +93,9 @@ class ReservaORM(Base):
     __tablename__ = "reservas"
     __table_args__ = (
         UniqueConstraint(
-            "provider",
-            "message_id",
-            name="uq_reservas_provider_message_id",
+            "booking_provider",
+            "reserva_reference",
+            name="uq_reservas_booking_provider_reserva_reference",
         ),
         Index("ix_reservas_notificado_whatsapp", "notificado_whatsapp"),
         Index("ix_reservas_estado", "estado"),
@@ -107,9 +107,9 @@ class ReservaORM(Base):
         primary_key=True,
         default=uuid4,
     )
-    email_id: Mapped[UUID | None] = mapped_column(
+    email_message_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
-        ForeignKey("emails.id", ondelete="SET NULL"),
+        ForeignKey("email_messages.id", ondelete="SET NULL"),
         nullable=True,
     )
     user_id: Mapped[UUID | None] = mapped_column(
@@ -119,8 +119,8 @@ class ReservaORM(Base):
         index=True,
     )
     source: Mapped[str] = mapped_column(String(64), nullable=False)
-    provider: Mapped[str] = mapped_column(String(32), nullable=False)
-    message_id: Mapped[str] = mapped_column(String(512), nullable=False)
+    booking_provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    reserva_reference: Mapped[str] = mapped_column(String(512), nullable=False)
     sender: Mapped[str] = mapped_column(String(320), nullable=False)
     estado: Mapped[str] = mapped_column(String(32), nullable=False)
     subject: Mapped[str] = mapped_column(String(998), nullable=False, default="")
