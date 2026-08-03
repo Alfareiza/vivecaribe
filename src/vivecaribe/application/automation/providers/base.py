@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
@@ -10,6 +11,9 @@ from typing import Self
 from vivecaribe.application.automation.models import ReservaDraft
 from vivecaribe.domain.enums import BookingProvider
 from vivecaribe.domain.errors import ValidationError
+
+# Leading ``+`` optional; allows spaces, dashes, dots, and parentheses.
+_PHONE_CANDIDATE = re.compile(r"\+?\d[\d\s().-]{5,}\d")
 
 
 class BaseExtractor(ABC):
@@ -25,6 +29,41 @@ class BaseExtractor(ABC):
     @abstractmethod
     def to_draft(self) -> ReservaDraft:
         """Assemble a ``ReservaDraft`` from parsed fields."""
+
+    @staticmethod
+    def normalize_phone(raw: str) -> str:
+        """Return a compact phone: optional ``+`` plus digits only.
+
+        Finds the first phone-like token in ``raw``, keeps a leading ``+`` when
+        present, and strips spaces, dashes, parentheses, and other separators.
+
+        >>> BaseExtractor.normalize_phone("+1 (813) 735-0000")
+        '+18137350000'
+        >>> BaseExtractor.normalize_phone("(Teléfono alternativo)US+1 (813) 735-0000")
+        '+18137350000'
+        >>> BaseExtractor.normalize_phone("+1 662 570 9162")
+        '+16625709162'
+        >>> BaseExtractor.normalize_phone("0031 641 428 471")
+        '0031641428471'
+        >>> BaseExtractor.normalize_phone("")
+        ''
+        >>> BaseExtractor.normalize_phone("no phone here")
+        ''
+        """
+        text = raw.strip()
+        if not text:
+            return ""
+
+        match = _PHONE_CANDIDATE.search(text)
+        if match is None:
+            return ""
+
+        candidate = match.group(0)
+        has_plus = candidate.startswith("+")
+        digits = re.sub(r"\D", "", candidate)
+        if not digits:
+            return ""
+        return f"+{digits}" if has_plus else digits
 
     @staticmethod
     def parse_decimal(raw: str) -> Decimal:
@@ -51,6 +90,7 @@ class BaseExtractor(ABC):
     def parse_datetime(raw: str) -> datetime:
         """Parse common booking-email datetime shapes as timezone-aware UTC."""
         candidates = (
+            "%a, %b %d, %Y",
             "%B %d, %Y %I:%M %p",
             "%B %d, %Y %H:%M",
             "%b %d, %Y %I:%M %p",
