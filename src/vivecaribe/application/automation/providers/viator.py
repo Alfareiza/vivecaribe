@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from decimal import Decimal
 from typing import Self
@@ -15,7 +16,7 @@ from vivecaribe.domain.errors import ValidationError
 
 
 class ViatorExtractor(BaseExtractor):
-    """Parse Viator booking HTML (stand-in fixture until a real sample lands)."""
+    """Parse Viator supplier booking-confirmation HTML (Spanish labels)."""
 
     booking_provider = BookingProvider.VIATOR
 
@@ -28,39 +29,42 @@ class ViatorExtractor(BaseExtractor):
         """Build an extractor from raw HTML."""
         return cls(BeautifulSoup(html, "html.parser"))
 
-    def _after_label(self, label: str) -> str:
-        """Return value from a ``<p>Label: value</p>`` line."""
+    def _value_after_label(self, label: str) -> str:
+        """Return the span/text value after ``Label:`` inside a ``<td>``."""
         prefix = f"{label}:"
-        for paragraph in self._soup.find_all("p"):
-            text = paragraph.get_text(" ", strip=True)
-            if text.startswith(prefix):
-                return self.require_text(text[len(prefix) :], field=label)
+        for cell in self._soup.find_all("td"):
+            text = cell.get_text(" ", strip=True)
+            if not text.startswith(prefix):
+                continue
+            span = cell.find("span")
+            if span is not None:
+                return self.require_text(span.get_text(strip=True), field=label)
+            return self.require_text(text[len(prefix) :], field=label)
         raise ValidationError(f"Could not parse {label}", field=label)
 
     def get_reserva_reference(self) -> str:
-        """Return the Viator booking reference."""
-        return self._after_label("Booking reference")
+        """Return the Viator booking reference (e.g. ``BR-1429496135``)."""
+        return self._value_after_label("Referencia de la reserva")
 
     def get_nombre_experiencia(self) -> str:
-        """Return the experience title."""
-        return self._after_label("Experience")
+        """Return the experience / activity title."""
+        return self._value_after_label("Nombre de la excursión o actividad")
 
     def get_ciudad_evento(self) -> str:
-        """Return the city from the experience title."""
-        title = self.get_nombre_experiencia()
-        if ":" not in title:
-            return "Cartagena"
-        return title.split(":", 1)[0].strip()
+        """Return the city from ``Ubicación`` (e.g. ``Barranquilla, Colombia``)."""
+        location = self._value_after_label("Ubicación")
+        return location.split(",", 1)[0].strip()
 
     def get_dt_evento(self) -> datetime:
-        """Return the experience date/time."""
-        return self.parse_datetime(self._after_label("Date"))
+        """Return the travel date."""
+        return self.parse_datetime(self._value_after_label("Fecha del viaje"))
 
     def get_participants(self) -> int:
-        """Return traveler count."""
-        raw = self._after_label("Travelers")
+        """Return traveler count from ``Viajeros`` (e.g. ``1 adulto``)."""
+        raw = self._value_after_label("Viajeros")
+        token = raw.split()[0] if raw else ""
         try:
-            return int(raw.split()[0])
+            return int(token)
         except ValueError as exc:
             raise ValidationError(
                 f"Could not parse participants: {raw}",
@@ -69,30 +73,36 @@ class ViatorExtractor(BaseExtractor):
 
     def get_customer_name(self) -> str:
         """Return the lead traveler name."""
-        return self._after_label("Lead traveler")
+        return self._value_after_label("Nombre del viajero principal")
 
     def get_phone(self) -> str:
-        """Return the customer phone, or empty string if missing."""
+        """Return the customer phone when present (digits only, keep leading ``+``)."""
         try:
-            return self._after_label("Phone")
+            raw = self._value_after_label("Teléfono")
         except ValidationError:
             return ""
+        return self.normalize_phone(raw)
 
     def get_pais_del_visitante(self) -> str:
-        """Return visitor country when present."""
-        return ""
+        """Return a country hint from the phone line when present (e.g. ``US``)."""
+        try:
+            raw = self._value_after_label("Teléfono")
+        except ValidationError:
+            return ""
+        match = re.search(r"\b([A-Z]{2})\+", raw)
+        return match.group(1) if match else ""
 
     def get_moneda(self) -> str:
-        """Return currency code from the total line when present."""
-        raw = self._after_label("Total")
-        token = raw.split()[-1].upper()
-        if token in {"USD", "EUR"}:
+        """Return currency code from ``Tarifa neta`` (e.g. ``USD $78.40``)."""
+        raw = self._value_after_label("Tarifa neta")
+        token = raw.split()[0].upper() if raw.split() else ""
+        if token in {"USD", "EUR", "COP"}:
             return token
         return "USD"
 
     def get_price(self) -> Decimal:
-        """Return the booking total."""
-        return self.parse_decimal(self._after_label("Total"))
+        """Return the net rate (``Tarifa neta``)."""
+        return self.parse_decimal(self._value_after_label("Tarifa neta"))
 
     def get_income(self) -> Decimal:
         """Return operator income for this Viator booking.

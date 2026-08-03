@@ -1,77 +1,29 @@
-"""Integration tests for SQLAlchemy repositories (needs local Postgres)."""
+"""Integration tests for SQLAlchemy repositories (needs vivecaribe_test)."""
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from vivecaribe.domain.email_message import EmailMessage
 from vivecaribe.domain.enums import BookingProvider, ReservaEstado
 from vivecaribe.domain.reserva import Reserva
 from vivecaribe.domain.user import User
-from vivecaribe.infrastructure.db.models import Base
 from vivecaribe.infrastructure.db.repositories import (
     SqlAlchemyEmailMessageRepository,
     SqlAlchemyReservaRepository,
     SqlAlchemyUserRepository,
 )
-from vivecaribe.infrastructure.db.session import create_engine
-from vivecaribe.settings import get_settings
-
-
-async def _postgres_available(engine: AsyncEngine) -> bool:
-    """Return ``True`` if the engine can connect to Postgres."""
-    try:
-        async with engine.connect() as conn:
-            await conn.execute(text("SELECT 1"))
-        return True
-    except Exception:
-        return False
-
-
-@pytest.fixture
-async def engine() -> AsyncIterator[AsyncEngine]:
-    """Create a disposable async engine for repository tests."""
-    eng = create_engine(get_settings())
-    if not await _postgres_available(eng):
-        await eng.dispose()
-        pytest.skip("Postgres is not available (start with: docker compose up -d db)")
-
-    async with eng.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-        await conn.run_sync(Base.metadata.create_all)
-
-    yield eng
-
-    async with eng.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-    await eng.dispose()
-
-
-@pytest.fixture
-async def session(engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
-    """Yield a committed session bound to the test engine."""
-    factory = async_sessionmaker(
-        bind=engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-        autoflush=False,
-    )
-    async with factory() as session:
-        yield session
-        await session.commit()
 
 
 @pytest.mark.asyncio
-async def test_user_save_and_get_by_email(session: AsyncSession) -> None:
+async def test_user_save_and_get_by_email(db_session: AsyncSession) -> None:
     """Users round-trip through the repository."""
-    repo = SqlAlchemyUserRepository(session)
+    repo = SqlAlchemyUserRepository(db_session)
     user = User(email="ops@vivecaribe.com", password_hash="hashed")
 
     saved = await repo.save(user)
@@ -83,11 +35,11 @@ async def test_user_save_and_get_by_email(session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
-async def test_reserva_get_or_create_is_idempotent(session: AsyncSession) -> None:
+async def test_reserva_get_or_create_is_idempotent(db_session: AsyncSession) -> None:
     """``get_or_create`` is idempotent on ``(booking_provider, reserva_reference)``."""
-    user_repo = SqlAlchemyUserRepository(session)
-    email_message_repo = SqlAlchemyEmailMessageRepository(session)
-    reserva_repo = SqlAlchemyReservaRepository(session)
+    user_repo = SqlAlchemyUserRepository(db_session)
+    email_message_repo = SqlAlchemyEmailMessageRepository(db_session)
+    reserva_repo = SqlAlchemyReservaRepository(db_session)
 
     user = await user_repo.save(
         User(email="guide@vivecaribe.com", password_hash="hashed"),

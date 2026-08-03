@@ -58,10 +58,7 @@ class ProcessBookingEmailsUseCase:
                 max_results=self._max_results,
             )
         except DomainError:
-            logger.exception(
-                "Fetch failed for booking_provider=%s",
-                account.booking_provider,
-            )
+            logger.exception(f"Fetch failed for {account.booking_provider!r}")
             return []
         return messages
 
@@ -120,18 +117,35 @@ class ProcessBookingEmailsUseCase:
             )
         return notified, reserva
 
-    async def start(self) -> ProcessBookingEmailsUseCase:
-        """Run the pipeline for every configured booking-provider account.
+    async def start(
+        self,
+        *,
+        booking_provider: BookingProvider | None = None,
+        notify: bool = False,
+    ) -> ProcessBookingEmailsUseCase:
+        """Run the pipeline for configured booking-provider accounts.
 
         Counters ``fetched``, ``created``, ``existing``, and ``notified``
         are reset at the start of each run.
+
+        Args:
+            booking_provider: If set, only process that provider.
+            notify: If ``True``, run the WhatsApp notify / mark-as-read step.
         """
         self.fetched = 0
         self.created = 0
         self.existing = 0
         self.notified = 0
 
-        for account in self._accounts:
+        accounts = self._accounts
+        if booking_provider is not None:
+            accounts = [
+                account
+                for account in accounts
+                if account.booking_provider == booking_provider
+            ]
+
+        for account in accounts:
             mailbox = account.mailbox.client
             query = account.mailbox.queries.get(NEW_BOOKINGS_QUERY, "")
             if not query:
@@ -159,18 +173,15 @@ class ProcessBookingEmailsUseCase:
                             account.booking_provider,
                         )
                     )
-                    notified, _ = await self.notify_if_necessary(
-                        stored_message,
-                        reserva,
-                        mailbox,
-                    )
+                    notified = False
+                    if notify:
+                        notified, _ = await self.notify_if_necessary(
+                            stored_message,
+                            reserva,
+                            mailbox,
+                        )
                 except (ValidationError, DomainError) as exc:
-                    logger.warning(
-                        "Pipeline skipped %s/%s: %s",
-                        account.booking_provider,
-                        message.mailbox_message_id,
-                        exc.message,
-                    )
+                    logger.warning(f"Pipeline skipped {account.booking_provider} ({message.subject[:27]}...): {exc.message}")               
                     continue
 
                 if created:

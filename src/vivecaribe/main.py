@@ -10,7 +10,7 @@ from fastapi import FastAPI
 
 from vivecaribe import __version__
 from vivecaribe.api import deps
-from vivecaribe.api.routers import auth, health
+from vivecaribe.api.routers import auth, automation, health
 from vivecaribe.logging import configure_logging, logger
 from vivecaribe.settings import get_settings
 
@@ -66,6 +66,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(health.router)
     app.include_router(auth.router)
+    app.include_router(automation.router)
     return app
 
 

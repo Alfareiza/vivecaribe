@@ -6,40 +6,17 @@ from collections.abc import AsyncIterator
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from vivecaribe.api import deps
-from vivecaribe.infrastructure.db.models import Base
-from vivecaribe.infrastructure.db.session import create_engine
 from vivecaribe.main import create_app
-from vivecaribe.settings import get_settings
-
-
-async def _postgres_available(engine: AsyncEngine) -> bool:
-    """Return ``True`` if the engine can connect to Postgres."""
-    try:
-        async with engine.connect() as conn:
-            await conn.execute(text("SELECT 1"))
-        return True
-    except Exception:
-        return False
 
 
 @pytest.fixture
-async def auth_client() -> AsyncIterator[AsyncClient]:
-    """HTTP client against the app with a fresh Postgres schema."""
-    engine = create_engine(get_settings())
-    if not await _postgres_available(engine):
-        await engine.dispose()
-        pytest.skip("Postgres is not available (start with: docker compose up -d db)")
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-        await conn.run_sync(Base.metadata.create_all)
-
+async def auth_client(db_engine: AsyncEngine) -> AsyncIterator[AsyncClient]:
+    """HTTP client against the app using the isolated test database."""
     factory = async_sessionmaker(
-        bind=engine,
+        bind=db_engine,
         class_=AsyncSession,
         expire_on_commit=False,
         autoflush=False,
@@ -62,7 +39,6 @@ async def auth_client() -> AsyncIterator[AsyncClient]:
         yield client
 
     app.dependency_overrides.clear()
-    await engine.dispose()
 
 
 @pytest.mark.asyncio

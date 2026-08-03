@@ -74,20 +74,40 @@ class GmailMailbox:
         except (json.JSONDecodeError, ValueError, TypeError) as exc:
             raise DomainError("Invalid Gmail credentials JSON") from exc
 
+    def _refresh_credentials(self) -> None:
+        """Refresh the access token in memory (never writes credentials back)."""
+        assert self._creds is not None
+        if not self._creds.refresh_token:
+            raise DomainError(
+                "Gmail credentials expired and cannot be refreshed; re-authorize",
+            )
+        try:
+            self._creds.refresh(Request())
+        except Exception as exc:
+            raise DomainError(
+                "Gmail token refresh failed; re-authorize the mailbox",
+            ) from exc
+        logger.info("Refreshed Gmail access token in memory")
+
     def _access_token_from_oauth(self) -> str:
-        """Load OAuth credentials and refresh the access token in memory."""
+        """Load OAuth credentials and return a usable access token.
+
+        Always refreshes once on first load when a ``refresh_token`` is present.
+        Stored ``token``/``expiry`` in JSON can be stale (we never rewrite the
+        file after refresh), which otherwise makes ``Credentials.valid`` trust a
+        dead access token and Gmail returns HTTP 401.
+        """
         if self._creds is None:
             self._creds = self._load_credentials()
-
-        if not self._creds.valid:
-            if self._creds.expired and self._creds.refresh_token:
-                try:
-                    self._creds.refresh(Request())
-                except Exception as exc:
-                    raise DomainError(
-                        "Gmail token refresh failed; re-authorize the mailbox",
-                    ) from exc
-                logger.info("Refreshed Gmail access token in memory")
+            if self._creds.refresh_token:
+                self._refresh_credentials()
+            elif not self._creds.valid:
+                raise DomainError(
+                    "Gmail credentials expired and cannot be refreshed; re-authorize",
+                )
+        elif not self._creds.valid:
+            if self._creds.expired:
+                self._refresh_credentials()
             else:
                 raise DomainError(
                     "Gmail credentials expired and cannot be refreshed; re-authorize",
@@ -136,7 +156,7 @@ class GmailMailbox:
             messages: list[EmailMessage] = []
             for message_id in ids:
                 messages.append(await self._load_message(client, message_id))
-            logger.info("Gmail fetched %s messages for query=%s", len(messages), query)
+            logger.info(f"Gmail fetched {len(messages)} messages for query={query!r}")
             return messages
         finally:
             if owns_client:

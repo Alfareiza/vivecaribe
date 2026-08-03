@@ -99,7 +99,7 @@ class GetYourGuideExtractor(BaseExtractor):
         for span in right.find_all("span"):
             text = span.get_text(" ", strip=True)
             if text.startswith("Teléfono:"):
-                return text.split(":", 1)[1].strip()
+                return self.normalize_phone(text.split(":", 1)[1])
         return ""
 
     def get_pais_del_visitante(self) -> str:

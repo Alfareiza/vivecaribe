@@ -10,14 +10,21 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from vivecaribe.application.automation.use_cases import ProcessBookingEmailsUseCase
 from vivecaribe.domain.errors import DomainError
 from vivecaribe.domain.user import User
-from vivecaribe.infrastructure.db.repositories import SqlAlchemyUserRepository
+from vivecaribe.infrastructure.db.repositories import (
+    SqlAlchemyEmailMessageRepository,
+    SqlAlchemyReservaRepository,
+    SqlAlchemyUserRepository,
+)
 from vivecaribe.infrastructure.db.session import create_engine, create_session_factory
 from vivecaribe.infrastructure.integrations.security import (
     Argon2PasswordHasher,
     JwtTokenService,
 )
+from vivecaribe.infrastructure.integrations.whatsapp import NoOpWhatsAppNotifier
+from vivecaribe.settings import get_settings
 
 _bearer = HTTPBearer(auto_error=False)
 
@@ -112,8 +119,26 @@ async def get_current_user(
 # Alias for protected routes (JWT only).
 require_auth = get_current_user
 
+
+def get_process_booking_emails_use_case(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> ProcessBookingEmailsUseCase:
+    """Build the booking-email pipeline for the current request."""
+    settings = get_settings()
+    return ProcessBookingEmailsUseCase(
+        accounts=settings.load_booking_providers().booking_providers,
+        email_messages=SqlAlchemyEmailMessageRepository(session),
+        reservas=SqlAlchemyReservaRepository(session),
+        whatsapp=NoOpWhatsAppNotifier(),
+    )
+
+
 DbSession = Annotated[AsyncSession, Depends(get_db_session)]
 UserRepo = Annotated[SqlAlchemyUserRepository, Depends(get_user_repository)]
 PasswordHasherDep = Annotated[Argon2PasswordHasher, Depends(get_password_hasher)]
 TokenServiceDep = Annotated[JwtTokenService, Depends(get_token_service)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
+ProcessBookingEmailsDep = Annotated[
+    ProcessBookingEmailsUseCase,
+    Depends(get_process_booking_emails_use_case),
+]

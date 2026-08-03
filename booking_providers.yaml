@@ -19,7 +19,7 @@ booking_providers:
       mailbox_name: gmail
       credentials_file: footballtourcol_token.json
       queries:
-        new_bookings_query: 'from:viator.com newer_than:7d'
+        new_bookings_query: 'from:booking@t1.viator.com "Nueva reserva"'
 
   - booking_provider: homefans
     mailbox:

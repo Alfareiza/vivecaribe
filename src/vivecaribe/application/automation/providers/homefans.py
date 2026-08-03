@@ -98,7 +98,7 @@ class HomefansExtractor(BaseExtractor):
 
     def get_phone(self) -> str:
         """Return the customer phone."""
-        return self._after_strong("Phone")
+        return self.normalize_phone(self._after_strong("Phone"))
 
     def get_pais_del_visitante(self) -> str:
         """Return the customer country."""

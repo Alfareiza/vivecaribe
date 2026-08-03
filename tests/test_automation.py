@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
+from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
@@ -156,7 +157,7 @@ def test_getyourguide_extractor_from_fixture() -> None:
     assert ext.get_ciudad_evento() == "Cartagena"
     assert ext.get_participants() == 2
     assert ext.get_customer_name() == "Terrance Turner"
-    assert ext.get_phone().replace(" ", "") == "+16625709162"
+    assert ext.get_phone() == "+16625709162"
     assert ext.get_moneda() == "USD"
     assert ext.get_price() == Decimal("186.00")
     assert ext.get_income() == Decimal("186.00")
@@ -180,19 +181,30 @@ def test_homefans_extractor_from_fixture() -> None:
     assert ext.get_price() == Decimal("89.68")
     assert ext.get_income() == Decimal("89.68")
     assert ext.get_pais_del_visitante() == "Netherlands"
-    assert "0031641428471" in ext.get_phone().replace(" ", "")
+    assert ext.get_phone() == "0031641428471"
     assert ext.get_dt_evento() == datetime(2026, 7, 29, 17, 4, tzinfo=UTC)
 
 
-def test_viator_extractor_from_invented_fixture() -> None:
-    """Invented Viator sample works until a real email lands."""
+def test_viator_extractor_from_fixture() -> None:
+    """Real Viator confirmation HTML maps onto draft fields."""
     html = (FIXTURES / "viator.html").read_text(encoding="utf-8")
     ext = ViatorExtractor.from_html(html)
 
-    assert ext.get_reserva_reference() == "VT-ABC12345"
-    assert ext.get_participants() == 3
-    assert ext.get_price() == Decimal("150.00")
-    assert ext.get_income() == Decimal("150.00")
+    assert ext.get_reserva_reference() == "BR-1429496135"
+    assert (
+        ext.get_nombre_experiencia()
+        == "Soccer at the Metropolitan stadium with local fans"
+    )
+    assert ext.get_ciudad_evento() == "Barranquilla"
+    assert ext.get_dt_evento() == datetime(2026, 8, 1, tzinfo=UTC)
+    assert ext.get_participants() == 1
+    assert ext.get_customer_name() == "Jane Doe"
+    assert ext.get_phone() == "+18137350000"
+    assert ext.get_pais_del_visitante() == "US"
+    assert ext.get_moneda() == "USD"
+    assert ext.get_price() == Decimal("78.40")
+    assert ext.get_income() == Decimal("78.40")
+    assert ext.get_estado().value == "confirmada"
 
 
 def test_propio_extractor_is_skeleton() -> None:
@@ -267,7 +279,7 @@ async def test_pipeline_marks_read_only_when_whatsapp_succeeds(
         whatsapp=AlwaysNotifyWhatsApp(),
     )
 
-    await use_case.start()
+    await use_case.start(notify=True)
 
     assert use_case.notified == 1
     assert mailbox.marked_read == [message.mailbox_message_id]
@@ -388,6 +400,30 @@ def test_mailbox_config_falls_back_to_env_json(
     )
     assert isinstance(config.client, GmailMailbox)
     assert config.client._credentials_json is not None
+
+
+def test_gmail_refreshes_on_first_token_load_even_if_creds_look_valid(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Stale token+future expiry must still refresh (avoids Gmail HTTP 401)."""
+    from vivecaribe.infrastructure.integrations.gmail import GmailMailbox
+
+    mailbox = GmailMailbox(credentials_json='{"token":"stale"}')
+    fake_creds = MagicMock()
+    fake_creds.refresh_token = "refresh"
+    fake_creds.valid = True
+    fake_creds.expired = False
+    fake_creds.token = "fresh-token"
+
+    monkeypatch.setattr(mailbox, "_load_credentials", lambda: fake_creds)
+
+    def _fake_refresh(_request: object) -> None:
+        fake_creds.token = "fresh-token"
+
+    fake_creds.refresh.side_effect = _fake_refresh
+
+    assert mailbox._require_token() == "fresh-token"
+    fake_creds.refresh.assert_called_once()
 
 
 def test_reserva_draft_to_reserva() -> None:
