@@ -11,12 +11,13 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from vivecaribe.domain.email_message import EmailMessage
 from vivecaribe.domain.enums import BookingProvider, ReservaEstado
 from vivecaribe.domain.reserva import Reserva
 from vivecaribe.domain.user import User
-from vivecaribe.infrastructure.db.models import Base, EmailORM
+from vivecaribe.infrastructure.db.models import Base
 from vivecaribe.infrastructure.db.repositories import (
-    EmailRepository,
+    SqlAlchemyEmailMessageRepository,
     SqlAlchemyReservaRepository,
     SqlAlchemyUserRepository,
 )
@@ -83,32 +84,32 @@ async def test_user_save_and_get_by_email(session: AsyncSession) -> None:
 
 @pytest.mark.asyncio
 async def test_reserva_get_or_create_is_idempotent(session: AsyncSession) -> None:
-    """``get_or_create`` returns the same row for ``(provider, message_id)``."""
+    """``get_or_create`` is idempotent on ``(booking_provider, reserva_reference)``."""
     user_repo = SqlAlchemyUserRepository(session)
-    email_repo = EmailRepository(session)
+    email_message_repo = SqlAlchemyEmailMessageRepository(session)
     reserva_repo = SqlAlchemyReservaRepository(session)
 
     user = await user_repo.save(
         User(email="guide@vivecaribe.com", password_hash="hashed"),
     )
-    email = await email_repo.save(
-        EmailORM(
+    email_message = await email_message_repo.save(
+        EmailMessage(
             source="gmail",
-            external_message_id="ext-1",
+            mailbox_message_id="ext-1",
             sender="bookings@getyourguide.com",
             recipients=["ops@vivecaribe.com"],
             subject="New booking",
             body_text="plain",
             body_html="<p>html</p>",
             received_at=datetime(2026, 7, 1, 12, 0, tzinfo=UTC),
-            metadata_={"label": "gyg"},
+            metadata={"label": "gyg"},
         ),
     )
 
     draft = Reserva(
         source="gmail",
-        provider=BookingProvider.GETYOURGUIDE,
-        message_id="msg-idempotent-1",
+        booking_provider=BookingProvider.GETYOURGUIDE,
+        reserva_reference="msg-idempotent-1",
         sender="bookings@getyourguide.com",
         estado=ReservaEstado.EN_PROGRESO,
         subject="New booking",
@@ -123,7 +124,7 @@ async def test_reserva_get_or_create_is_idempotent(session: AsyncSession) -> Non
         moneda="USD",
         price=Decimal("120.50"),
         income=Decimal("96.40"),
-        email_id=email.id,
+        email_message_id=email_message.id,
         user_id=user.id,
     )
 
@@ -137,4 +138,4 @@ async def test_reserva_get_or_create_is_idempotent(session: AsyncSession) -> Non
     assert first.id == second.id
     assert second.customer_name == "Ada Lovelace"
     assert second.user_id == user.id
-    assert second.to_dict()["provider"] == "getyourguide"
+    assert second.to_dict()["booking_provider"] == "getyourguide"

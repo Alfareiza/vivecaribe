@@ -13,18 +13,19 @@ from vivecaribe.domain.enums import BookingProvider, ReservaEstado
 
 
 class Reserva(BaseModel):
-    """Business booking created from an ingested marketplace email.
+    """Business booking created from an ingested booking email.
 
-    Identity for idempotency is the pair ``(provider, message_id)``.
-    ``email_id`` optionally links back to an automation email row; HTML
-    body content itself does not live on this entity.
+    Identity for idempotency is the pair
+    ``(booking_provider, reserva_reference)``.
+    ``email_message_id`` optionally links back to an ingested mailbox message;
+    HTML body content itself does not live on this entity.
     """
 
     model_config = ConfigDict(from_attributes=True, validate_assignment=True)
 
     source: str
-    provider: BookingProvider
-    message_id: str
+    booking_provider: BookingProvider
+    reserva_reference: str
     sender: str
     estado: ReservaEstado
     subject: str
@@ -40,7 +41,7 @@ class Reserva(BaseModel):
     price: Decimal
     income: Decimal
     notificado_whatsapp: bool = False
-    email_id: UUID | None = None
+    email_message_id: UUID | None = None
     user_id: UUID | None = None
     id: UUID = Field(default_factory=uuid4)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

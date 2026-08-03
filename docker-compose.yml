@@ -27,9 +27,8 @@ services:
       ENVIRONMENT: local
       LOG_LEVEL: INFO
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/vivecaribe
-      ACCOUNTS_YAML_PATH: /app/accounts.yaml
     volumes:
-      - ./accounts.yaml:/app/accounts.yaml:ro
+      - ./booking_providers.yaml:/app/booking_providers.yaml:ro
     depends_on:
       db:
         condition: service_healthy

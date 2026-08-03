@@ -21,8 +21,8 @@ def _sample_reserva(**overrides: object) -> Reserva:
     """Build a minimal valid ``Reserva`` for tests."""
     data: dict[str, object] = {
         "source": "gmail",
-        "provider": BookingProvider.GETYOURGUIDE,
-        "message_id": "msg-123",
+        "booking_provider": BookingProvider.GETYOURGUIDE,
+        "reserva_reference": "msg-123",
         "sender": "bookings@getyourguide.com",
         "estado": ReservaEstado.EN_PROGRESO,
         "subject": "New booking",
@@ -38,7 +38,7 @@ def _sample_reserva(**overrides: object) -> Reserva:
         "price": Decimal("120.50"),
         "income": Decimal("96.40"),
         "notificado_whatsapp": False,
-        "email_id": uuid4(),
+        "email_message_id": uuid4(),
         "user_id": None,
     }
     data.update(overrides)
@@ -46,7 +46,7 @@ def _sample_reserva(**overrides: object) -> Reserva:
 
 
 def test_booking_provider_values() -> None:
-    """``BookingProvider`` exposes the four marketplace channels."""
+    """``BookingProvider`` exposes the four booking channels."""
     assert set(BookingProvider) == {
         BookingProvider.GETYOURGUIDE,
         BookingProvider.VIATOR,
@@ -66,20 +66,21 @@ def test_reserva_estado_includes_flow_states() -> None:
 
 def test_reserva_to_dict_serializes_enums_decimals_and_uuids() -> None:
     """``Reserva.to_dict`` produces JSON-friendly primitive values."""
-    email_id = uuid4()
+    email_message_id = uuid4()
     reserva = _sample_reserva(
-        email_id=email_id,
+        email_message_id=email_message_id,
         price=Decimal("10.00"),
         income=Decimal("8.00"),
     )
 
     data = reserva.to_dict()
 
-    assert data["provider"] == "getyourguide"
+    assert data["booking_provider"] == "getyourguide"
     assert data["estado"] == "en_progreso"
     assert data["price"] == "10.00"
     assert data["income"] == "8.00"
-    assert data["email_id"] == str(email_id)
+    assert data["email_message_id"] == str(email_message_id)
+    assert data["reserva_reference"] == "msg-123"
     assert isinstance(UUID(str(data["id"])), UUID)
     assert data["fecha_email_recibido"] == "2026-07-01T12:00:00Z"
     assert data["notificado_whatsapp"] is False

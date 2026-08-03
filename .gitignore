@@ -217,3 +217,10 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 .vercel
+
+# Mailbox OAuth / token files (authorized-user JSON, Outlook tokens)
+secrets/
+*token.json
+token.json
+credentials.json
+
