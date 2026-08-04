@@ -16,44 +16,29 @@ from vivecaribe.domain.errors import DomainError
 from vivecaribe.infrastructure.integrations.gmail import GmailMailbox
 from vivecaribe.infrastructure.integrations.outlook import OutlookMailbox
 
-# Authorized-user JSON (and Outlook token files) live here locally — never commit.
-MAILBOX_CREDENTIALS_DIR = Path("secrets")
-
 # Non-secret booking-provider / mailbox config (committed with the repo).
 BOOKING_PROVIDERS_YAML_PATH = Path("booking_providers.yaml")
 
 
-def gmail_credentials_env_name(credentials_file: str) -> str:
-    """Map ``vivecaribe_token.json`` → ``VIVECARIBE_GMAIL_TOKEN_JSON``."""
-    name = Path(credentials_file).name
-    if name.endswith("_token.json"):
-        stem = name[: -len("_token.json")]
-    else:
-        stem = Path(name).stem
-    return f"{stem.upper()}_GMAIL_TOKEN_JSON"
-
-
 class MailboxConfig(BaseModel):
-    """One booking channel's mailbox: name, credentials file, and named queries.
+    """One booking channel's mailbox: name, credential env vars, and queries.
 
-    ``credentials_file`` is the local filename under ``MAILBOX_CREDENTIALS_DIR``
-    (e.g. ``vivecaribe_token.json``). On Vercel, the same JSON is read from the
-    env var derived by ``gmail_credentials_env_name`` (e.g.
-    ``VIVECARIBE_GMAIL_TOKEN_JSON``). Multiple booking providers may share the
-    same file / env var when they share one inbox.
+    ``credentials_vars`` maps logical keys to environment-variable names, e.g.::
+
+        credentials_vars:
+          token: GYG_GMAIL_TOKEN
+          refresh_token: GYG_GMAIL_REFRESH_TOKEN
+
+    Shared OAuth app credentials (``GMAIL_CLIENT_*`` / ``OUTLOOK_CLIENT_*``)
+    live on ``Settings``.
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     mailbox_name: Literal["gmail", "outlook"]
-    credentials_file: str
+    credentials_vars: dict[str, str] = Field(default_factory=dict)
     queries: dict[str, str] = Field(default_factory=dict)
     _client: GmailMailbox | OutlookMailbox | None = PrivateAttr(default=None)
-
-    @property
-    def credentials_path(self) -> Path:
-        """Path to this mailbox's credentials file under ``secrets/``."""
-        return MAILBOX_CREDENTIALS_DIR / self.credentials_file
 
     @property
     def client(self) -> GmailMailbox | OutlookMailbox:
@@ -61,26 +46,31 @@ class MailboxConfig(BaseModel):
         if self._client is not None:
             return self._client
 
-        path = self.credentials_path
+        settings = get_settings() # loads env into Settings, being someones as None
         if self.mailbox_name == "gmail":
-            if path.exists():
-                self._client = GmailMailbox(credentials_path=path)
-            else:
-                env_name = gmail_credentials_env_name(self.credentials_file)
-                raw = os.getenv(env_name)
-                if not raw or not raw.strip():
-                    raise DomainError(
-                        f"Gmail credentials missing: no file at {path} and "
-                        f"env var {env_name} is unset (set it on Vercel)",
-                    )
-                self._client = GmailMailbox(credentials_json=raw)
+            self._client = GmailMailbox(
+                token=settings.require_env(self._var("token")),
+                refresh_token=settings.require_env(self._var("refresh_token")),
+                client_id=settings.require_gmail_client_id(),
+                client_secret=settings.require_gmail_client_secret(),
+            )
         else:
-            token = path.read_text(encoding="utf-8").strip() if path.is_file() else None
-            if token is None:
-                env_name = Path(self.credentials_file).stem.upper()
-                token = os.getenv(env_name)
-            self._client = OutlookMailbox(access_token=token)
+            self._client = OutlookMailbox(
+                client_id=settings.require_outlook_client_id(),
+                client_secret=settings.require_outlook_client_secret(),
+                refresh_token=settings.require_env(self._var("refresh_token")),
+            )
         return self._client
+
+    def _var(self, key: str) -> str:
+        """Return the env-var name mapped for ``key`` in ``credentials_vars``."""
+        name = self.credentials_vars.get(key)
+        if not name or not name.strip():
+            raise DomainError(
+                f"Mailbox credentials_vars missing key {key!r} "
+                f"for mailbox_name={self.mailbox_name!r}",
+            )
+        return name.strip()
 
 
 class BookingProviderAccount(BaseModel):
@@ -114,6 +104,11 @@ class Settings(BaseSettings):
     cron_secret: SecretStr
     sentry_dsn: str | None = None
 
+    gmail_client_id: SecretStr | None = None
+    gmail_client_secret: SecretStr | None = None
+    outlook_client_id: SecretStr | None = None
+    outlook_client_secret: SecretStr | None = None
+
     @field_validator("log_level")
     @classmethod
     def normalize_log_level(cls, value: str) -> str:
@@ -128,6 +123,52 @@ class Settings(BaseSettings):
             return None
         return value
 
+    @field_validator(
+        "gmail_client_id",
+        "gmail_client_secret",
+        "outlook_client_id",
+        "outlook_client_secret",
+        mode="before",
+    )
+    @classmethod
+    def empty_oauth_secret_as_none(cls, value: object) -> object:
+        """Treat blank OAuth secrets as unset."""
+        if value is None or (isinstance(value, str) and value.strip() == ""):
+            return None
+        return value
+
+    @staticmethod
+    def require_env(name: str) -> str:
+        """Return a required environment variable or raise ``DomainError``."""
+        value = os.getenv(name)
+        if not value or not value.strip():
+            raise DomainError(f"Environment variable {name} is unset")
+        return value.strip()
+
+    def require_gmail_client_id(self) -> str:
+        """Return ``GMAIL_CLIENT_ID`` or raise if unset."""
+        if self.gmail_client_id is None:
+            raise DomainError("GMAIL_CLIENT_ID is not configured")
+        return self.gmail_client_id.get_secret_value()
+
+    def require_gmail_client_secret(self) -> str:
+        """Return ``GMAIL_CLIENT_SECRET`` or raise if unset."""
+        if self.gmail_client_secret is None:
+            raise DomainError("GMAIL_CLIENT_SECRET is not configured")
+        return self.gmail_client_secret.get_secret_value()
+
+    def require_outlook_client_id(self) -> str:
+        """Return ``OUTLOOK_CLIENT_ID`` or raise if unset."""
+        if self.outlook_client_id is None:
+            raise DomainError("OUTLOOK_CLIENT_ID is not configured")
+        return self.outlook_client_id.get_secret_value()
+
+    def require_outlook_client_secret(self) -> str:
+        """Return ``OUTLOOK_CLIENT_SECRET`` or raise if unset."""
+        if self.outlook_client_secret is None:
+            raise DomainError("OUTLOOK_CLIENT_SECRET is not configured")
+        return self.outlook_client_secret.get_secret_value()
+
     def load_booking_providers(self) -> BookingProvidersFile:
         """Load non-secret booking-provider / mailbox config from YAML."""
         path = BOOKING_PROVIDERS_YAML_PATH
@@ -141,4 +182,8 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     """Return a process-wide cached Settings instance."""
+    from dotenv import load_dotenv
+
+    # Load undeclared per-mailbox keys into ``os.environ`` for ``require_env``.
+    load_dotenv()
     return Settings()

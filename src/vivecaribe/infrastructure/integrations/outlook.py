@@ -1,7 +1,8 @@
 """Thin Microsoft Graph (Outlook) adapter for fetching and acknowledging mail.
 
-Credentials are constructor-injected (Settings env wiring comes later).
-Without an access token, calls fail with a clear domain error.
+Auth uses MSAL ``ConfidentialClientApplication`` + refresh token (consumers
+authority). Access tokens are acquired in memory only — refresh tokens are
+never written back to disk or env.
 """
 
 from __future__ import annotations
@@ -9,6 +10,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import httpx
+import msal
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from vivecaribe.domain.email_message import EmailMessage
@@ -16,27 +18,53 @@ from vivecaribe.domain.errors import DomainError
 from vivecaribe.logging import logger
 
 _GRAPH_API = "https://graph.microsoft.com/v1.0/me"
+_AUTHORITY = "https://login.microsoftonline.com/consumers"
 
 
 class OutlookMailbox:
     """Fetch and mark messages via Microsoft Graph mail API."""
 
+    SCOPES: tuple[str, ...] = ("User.Read", "Mail.ReadWrite")
+
     def __init__(
         self,
         *,
-        access_token: str | None = None,
+        client_id: str,
+        client_secret: str,
+        refresh_token: str,
         source: str = "outlook",
         client: httpx.AsyncClient | None = None,
     ) -> None:
-        """Create a mailbox client; ``access_token`` is required for live calls."""
-        self._access_token = access_token
+        """Create a mailbox client backed by MSAL refresh-token auth."""
+        self._client_id = client_id
+        self._client_secret = client_secret
+        self._refresh_token = refresh_token
+        self._access_token: str | None = None
         self._source = source
         self._client = client
 
+    def _acquire_access_token(self) -> str:
+        """Exchange the refresh token for a Graph access token (in memory)."""
+        app = msal.ConfidentialClientApplication(
+            client_id=self._client_id,
+            client_credential=self._client_secret,
+            authority=_AUTHORITY,
+        )
+        result = app.acquire_token_by_refresh_token(
+            self._refresh_token,
+            scopes=list(self.SCOPES),
+        )
+        access_token = result.get("access_token") if isinstance(result, dict) else None
+        if not access_token:
+            error = result.get("error_description") or result.get("error") or result
+            raise DomainError(f"Outlook token refresh failed: {error}")
+        logger.info("Acquired Outlook access token via MSAL refresh token")
+        return access_token
+
     def _require_token(self) -> str:
-        """Return the access token or raise if credentials are missing."""
+        """Return a cached access token, acquiring one via MSAL when needed."""
         if not self._access_token:
-            raise DomainError("Outlook credentials not configured")
+            self._access_token = self._acquire_access_token()
         return self._access_token
 
     def _headers(self) -> dict[str, str]:

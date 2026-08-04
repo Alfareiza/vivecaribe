@@ -146,7 +146,6 @@ class ProcessBookingEmailsUseCase:
             ]
 
         for account in accounts:
-            mailbox = account.mailbox.client
             query = account.mailbox.queries.get(NEW_BOOKINGS_QUERY, "")
             if not query:
                 logger.error(
@@ -156,6 +155,7 @@ class ProcessBookingEmailsUseCase:
                 )
                 continue
 
+            mailbox = account.mailbox.client
             logger.info(
                 "Fetching booking_provider=%s mailbox_name=%s query=%s",
                 account.booking_provider,

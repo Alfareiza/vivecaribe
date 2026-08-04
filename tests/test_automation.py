@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
-from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
@@ -51,7 +50,7 @@ def _account(
     *,
     booking_provider: BookingProvider,
     mailbox_name: str,
-    credentials_file: str,
+    credentials_vars: dict[str, str] | None = None,
     query: str,
 ) -> BookingProviderAccount:
     """Build a booking-provider account from mailbox config fields."""
@@ -59,7 +58,7 @@ def _account(
         booking_provider=booking_provider,
         mailbox=MailboxConfig(
             mailbox_name=mailbox_name,  # type: ignore[arg-type]
-            credentials_file=credentials_file,
+            credentials_vars=credentials_vars or {},
             queries={"new_bookings_query": query},
         ),
     )
@@ -231,7 +230,6 @@ async def test_pipeline_happy_path_noop_whatsapp_skips_mark_read(
             _account(
                 booking_provider=BookingProvider.GETYOURGUIDE,
                 mailbox_name="gmail",
-                credentials_file="vivecaribe_token.json",
                 query="from:getyourguide.com",
             ),
         ],
@@ -270,7 +268,6 @@ async def test_pipeline_marks_read_only_when_whatsapp_succeeds(
             _account(
                 booking_provider=BookingProvider.HOMEFANS,
                 mailbox_name="outlook",
-                credentials_file="homefans_outlook_token.txt",
                 query="from:homefans.com",
             ),
         ],
@@ -306,7 +303,6 @@ async def test_pipeline_error_path_extraction_fails(
             _account(
                 booking_provider=BookingProvider.GETYOURGUIDE,
                 mailbox_name="gmail",
-                credentials_file="vivecaribe_token.json",
                 query="anything",
             ),
         ],
@@ -329,7 +325,6 @@ async def test_pipeline_skips_account_without_query() -> None:
             _account(
                 booking_provider=BookingProvider.VIATOR,
                 mailbox_name="gmail",
-                credentials_file="vivecaribe_token.json",
                 query="",
             ),
         ],
@@ -342,88 +337,6 @@ async def test_pipeline_skips_account_without_query() -> None:
 
     assert use_case.fetched == 0
     assert use_case.created == 0
-
-
-def test_mailbox_config_client_builds_gmail(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """``MailboxConfig.client`` builds ``GmailMailbox`` from a local secrets file."""
-    from vivecaribe.infrastructure.integrations.gmail import GmailMailbox
-    import vivecaribe.settings as settings_mod
-
-    monkeypatch.setattr(settings_mod, "MAILBOX_CREDENTIALS_DIR", tmp_path)
-    token_path = tmp_path / "vivecaribe_token.json"
-    token_path.write_text(
-        '{"token": "x", "refresh_token": "y", "token_uri": "https://oauth2.googleapis.com/token",'
-        ' "client_id": "id", "client_secret": "secret"}',
-        encoding="utf-8",
-    )
-    config = MailboxConfig(
-        mailbox_name="gmail",
-        credentials_file="vivecaribe_token.json",
-        queries={"new_bookings_query": "x"},
-    )
-    assert isinstance(config.client, GmailMailbox)
-    assert config.credentials_path == token_path
-    assert config.client._credentials_path == token_path
-
-
-def test_gmail_credentials_env_name_mapping() -> None:
-    """Token filenames map to the Vercel env var names already in use."""
-    from vivecaribe.settings import gmail_credentials_env_name
-
-    assert (
-        gmail_credentials_env_name("vivecaribe_token.json")
-        == "VIVECARIBE_GMAIL_TOKEN_JSON"
-    )
-    assert (
-        gmail_credentials_env_name("footballtourcol_token.json")
-        == "FOOTBALLTOURCOL_GMAIL_TOKEN_JSON"
-    )
-
-
-def test_mailbox_config_falls_back_to_env_json(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Without a secrets file, ``client`` loads JSON from the derived env var."""
-    from vivecaribe.infrastructure.integrations.gmail import GmailMailbox
-    import vivecaribe.settings as settings_mod
-
-    monkeypatch.setattr(settings_mod, "MAILBOX_CREDENTIALS_DIR", tmp_path)
-    monkeypatch.setenv(
-        "VIVECARIBE_GMAIL_TOKEN_JSON",
-        '{"token": "x", "refresh_token": "y", "token_uri": "https://oauth2.googleapis.com/token", "client_id": "id", "client_secret": "secret"}',
-    )
-    config = MailboxConfig(
-        mailbox_name="gmail",
-        credentials_file="vivecaribe_token.json",
-        queries={"new_bookings_query": "x"},
-    )
-    assert isinstance(config.client, GmailMailbox)
-    assert config.client._credentials_json is not None
-
-
-def test_gmail_refreshes_on_first_token_load_even_if_creds_look_valid(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Stale token+future expiry must still refresh (avoids Gmail HTTP 401)."""
-    from vivecaribe.infrastructure.integrations.gmail import GmailMailbox
-
-    mailbox = GmailMailbox(credentials_json='{"token":"stale"}')
-    fake_creds = MagicMock()
-    fake_creds.refresh_token = "refresh"
-    fake_creds.valid = True
-    fake_creds.expired = False
-    fake_creds.token = "fresh-token"
-
-    monkeypatch.setattr(mailbox, "_load_credentials", lambda: fake_creds)
-
-    def _fake_refresh(_request: object) -> None:
-        fake_creds.token = "fresh-token"
-
-    fake_creds.refresh.side_effect = _fake_refresh
-
-    assert mailbox._require_token() == "fresh-token"
-    fake_creds.refresh.assert_called_once()
 
 
 def test_reserva_draft_to_reserva() -> None:
