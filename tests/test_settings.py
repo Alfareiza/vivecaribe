@@ -23,5 +23,4 @@ def test_load_booking_providers_from_repo_yaml() -> None:
     first = config.booking_providers[0]
     assert first.mailbox.mailbox_name in {"gmail", "outlook"}
     assert "new_bookings_query" in first.mailbox.queries
-    assert first.mailbox.credentials_file
-    assert first.mailbox.credentials_path.name == first.mailbox.credentials_file
+    assert first.mailbox.credentials_vars

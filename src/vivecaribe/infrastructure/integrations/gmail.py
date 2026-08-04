@@ -1,17 +1,14 @@
 """Thin Gmail API adapter for fetching and acknowledging messages.
 
-Auth uses Google authorized-user JSON (``token.json`` shape) via ``google-auth``.
-Access tokens are refreshed in memory only — credentials are never written back.
+Auth uses Google OAuth refresh tokens via ``google-auth``. Access tokens are
+refreshed in memory only — credentials are never written back.
 HTTP calls stay on the Gmail REST API (same endpoints as the official client).
 """
 
 from __future__ import annotations
 
 import base64
-import json
 from datetime import UTC, datetime
-from pathlib import Path
-from typing import Any
 
 import httpx
 from google.auth.transport.requests import Request
@@ -23,56 +20,46 @@ from vivecaribe.domain.errors import DomainError
 from vivecaribe.logging import logger
 
 _GMAIL_API = "https://gmail.googleapis.com/gmail/v1/users/me"
+_TOKEN_URI = "https://oauth2.googleapis.com/token"
 
 
 class GmailMailbox:
     """Fetch and mark messages via the Gmail REST API."""
 
+    SCOPES: tuple[str, ...] = (
+        "https://www.googleapis.com/auth/gmail.modify",
+        "https://www.googleapis.com/auth/drive",
+        "https://www.googleapis.com/auth/drive.file",
+        "https://www.googleapis.com/auth/spreadsheets",
+    )
+
     def __init__(
         self,
         *,
-        credentials_path: Path | None = None,
-        credentials_json: str | None = None,
+        token: str,
+        refresh_token: str,
+        client_id: str,
+        client_secret: str,
+        client: httpx.AsyncClient | None = None,
     ) -> None:
-        """Create a mailbox client.
-
-        Prefer ``credentials_path`` (local ``secrets/*.json``) or
-        ``credentials_json`` (Vercel env var with the same JSON body).
-        ``access_token`` remains for tests / one-off callers.
-        """
-        self._credentials_path = credentials_path
-        self._credentials_json = credentials_json
-        self._access_token = None
+        """Create a mailbox client from OAuth env-derived fields."""
+        self._token = token
+        self._refresh_token = refresh_token
+        self._client_id = client_id
+        self._client_secret = client_secret
         self._creds: Credentials | None = None
-        self._client = None
+        self._client = client
 
-    def _require_token(self) -> str:
-        """Return a valid Bearer access token, refreshing in memory if needed."""
-        if self._credentials_path is not None or self._credentials_json:
-            return self._access_token_from_oauth()
-        if self._access_token:
-            return self._access_token
-        raise DomainError("Gmail credentials not configured")
-
-    def _load_credentials(self) -> Credentials:
-        """Build ``Credentials`` from a file path or an in-memory JSON string."""
-        if self._credentials_path is not None:
-            path = self._credentials_path
-            if not path.is_file():
-                raise DomainError(f"Gmail credentials file not found: {path}")
-            try:
-                return Credentials.from_authorized_user_file(str(path))
-            except (OSError, ValueError) as exc:
-                raise DomainError(
-                    f"Invalid Gmail credentials file: {path}",
-                ) from exc
-
-        assert self._credentials_json is not None
-        try:
-            info: dict[str, Any] = json.loads(self._credentials_json)
-            return Credentials.from_authorized_user_info(info)
-        except (json.JSONDecodeError, ValueError, TypeError) as exc:
-            raise DomainError("Invalid Gmail credentials JSON") from exc
+    def _build_credentials(self) -> Credentials:
+        """Assemble Google credentials from constructor fields."""
+        return Credentials(
+            token=self._token,
+            refresh_token=self._refresh_token,
+            token_uri=_TOKEN_URI,
+            client_id=self._client_id,
+            client_secret=self._client_secret,
+            scopes=list(self.SCOPES),
+        )
 
     def _refresh_credentials(self) -> None:
         """Refresh the access token in memory (never writes credentials back)."""
@@ -89,22 +76,16 @@ class GmailMailbox:
             ) from exc
         logger.info("Refreshed Gmail access token in memory")
 
-    def _access_token_from_oauth(self) -> str:
-        """Load OAuth credentials and return a usable access token.
+    def _require_token(self) -> str:
+        """Return a usable access token, refreshing in memory on first use.
 
-        Always refreshes once on first load when a ``refresh_token`` is present.
-        Stored ``token``/``expiry`` in JSON can be stale (we never rewrite the
-        file after refresh), which otherwise makes ``Credentials.valid`` trust a
-        dead access token and Gmail returns HTTP 401.
+        Always refreshes once on first load. Stored access tokens in env can be
+        stale, which otherwise makes ``Credentials.valid`` trust a dead token
+        and Gmail returns HTTP 401.
         """
         if self._creds is None:
-            self._creds = self._load_credentials()
-            if self._creds.refresh_token:
-                self._refresh_credentials()
-            elif not self._creds.valid:
-                raise DomainError(
-                    "Gmail credentials expired and cannot be refreshed; re-authorize",
-                )
+            self._creds = self._build_credentials()
+            self._refresh_credentials()
         elif not self._creds.valid:
             if self._creds.expired:
                 self._refresh_credentials()

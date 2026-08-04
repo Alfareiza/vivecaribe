@@ -1,29 +1,43 @@
-# One entry per booking provider. Locally, mailbox credentials are filenames
-# under `secrets/` (never commit those files). On Vercel, paste the same JSON
-# into an env var named from the file stem, e.g.:
-#   vivecaribe_token.json        → VIVECARIBE_GMAIL_TOKEN_JSON
-#   footballtourcol_token.json → FOOTBALLTOURCOL_GMAIL_TOKEN_JSON
-# Multiple providers may share the same credentials_file / env var when they
-# share one inbox. `queries` is a named map — pipeline uses `new_bookings_query`.
+# One entry per booking provider.
+#
+# Mailbox secrets are env-only. `credentials_vars` maps logical keys to env-var
+# names (values are names, not secrets):
+#   Gmail:
+#     token: GYG_GMAIL_TOKEN
+#     refresh_token: GYG_GMAIL_REFRESH_TOKEN
+#   Outlook:
+#     refresh_token: HOMEFANS_OUTLOOK_REFRESH_TOKEN
+#
+# Shared OAuth app credentials live in Settings / env:
+#   GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET
+#   OUTLOOK_CLIENT_ID, OUTLOOK_CLIENT_SECRET
+#
+# Multiple providers may share the same credentials_vars when they share one
+# inbox. `queries` is a named map — pipeline uses `new_bookings_query`.
 
 booking_providers:
   - booking_provider: getyourguide
     mailbox:
       mailbox_name: gmail
-      credentials_file: vivecaribe_token.json
+      credentials_vars:
+        token: GYG_GMAIL_TOKEN
+        refresh_token: GYG_GMAIL_REFRESH_TOKEN
       queries:
         new_bookings_query: 'from:do-not-reply@notification.getyourguide.com subject:(booking -"message about a booking" -"booking has been canceled" -"detail" -"first booking")'
 
   - booking_provider: viator
     mailbox:
       mailbox_name: gmail
-      credentials_file: footballtourcol_token.json
+      credentials_vars:
+        token: VIATOR_GMAIL_TOKEN
+        refresh_token: VIATOR_GMAIL_REFRESH_TOKEN
       queries:
         new_bookings_query: 'from:booking@t1.viator.com "Nueva reserva"'
 
   - booking_provider: homefans
     mailbox:
       mailbox_name: outlook
-      credentials_file: homefans_outlook_token.txt
+      credentials_vars:
+        refresh_token: HOMEFANS_OUTLOOK_REFRESH_TOKEN
       queries:
         new_bookings_query: 'from:@homefans.net subject:new order'
