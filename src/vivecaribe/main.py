@@ -26,7 +26,8 @@ def _init_sentry() -> None:
         return
 
     # Sample all traces outside prod; keep prod cheaper.
-    traces_sample_rate = 1.0 if settings.environment != "prod" else 0.2
+    # traces_sample_rate = 1.0 if settings.environment != "prod" else 0.2
+    traces_sample_rate = 1.0
 
     sentry_sdk.init(
         dsn=settings.sentry_dsn,
