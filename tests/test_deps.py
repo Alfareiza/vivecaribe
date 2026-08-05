@@ -160,3 +160,84 @@ def test_password_hasher_and_token_service_singletons() -> None:
     """Shared hasher/token helpers return the process singletons."""
     assert deps.get_password_hasher() is deps._password_hasher
     assert deps.get_token_service() is deps._token_service
+
+
+@pytest.mark.asyncio
+async def test_require_jwt_or_cron_missing_credentials() -> None:
+    """No Bearer credentials ⇒ 401."""
+    with pytest.raises(HTTPException) as exc:
+        await deps.require_jwt_or_cron(
+            None,
+            users=MagicMock(),
+            tokens=MagicMock(),
+        )
+    assert exc.value.status_code == 401
+    assert exc.value.detail == "Not authenticated"
+
+
+@pytest.mark.asyncio
+async def test_require_jwt_or_cron_accepts_cron_secret(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bearer matching CRON_SECRET returns None (no user)."""
+    get_settings.cache_clear()
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://u:p@localhost/db")
+    monkeypatch.setenv("JWT_SECRET", "secret")
+    monkeypatch.setenv("CRON_SECRET", "cron-secret-value")
+    get_settings.cache_clear()
+
+    creds = HTTPAuthorizationCredentials(
+        scheme="Bearer",
+        credentials="cron-secret-value",
+    )
+    result = await deps.require_jwt_or_cron(
+        creds,
+        users=MagicMock(),
+        tokens=MagicMock(),
+    )
+    assert result is None
+    get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_require_jwt_or_cron_rejects_wrong_secret(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Wrong Bearer that is not a JWT returns 401."""
+    get_settings.cache_clear()
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://u:p@localhost/db")
+    monkeypatch.setenv("JWT_SECRET", "secret")
+    monkeypatch.setenv("CRON_SECRET", "cron-secret-value")
+    get_settings.cache_clear()
+
+    creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials="wrong")
+    tokens = MagicMock()
+    tokens.decode_access_token.side_effect = DomainError("bad")
+    with pytest.raises(HTTPException) as exc:
+        await deps.require_jwt_or_cron(creds, users=MagicMock(), tokens=tokens)
+    assert exc.value.status_code == 401
+    get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_require_jwt_or_cron_falls_back_to_jwt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Valid JWT still authenticates when Bearer is not the cron secret."""
+    get_settings.cache_clear()
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://u:p@localhost/db")
+    monkeypatch.setenv("JWT_SECRET", "secret")
+    monkeypatch.setenv("CRON_SECRET", "cron-secret-value")
+    get_settings.cache_clear()
+
+    user = User(id=uuid4(), email="ops@vivecaribe.com", password_hash="h")
+    creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials="jwt-tok")
+    tokens = MagicMock()
+    tokens.decode_access_token.return_value = str(user.id)
+    users = MagicMock()
+    users.get_by_id = AsyncMock(return_value=user)
+
+    found = await deps.require_jwt_or_cron(creds, users=users, tokens=tokens)
+    assert found is not None
+    assert found.id == user.id
+    get_settings.cache_clear()

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 from collections.abc import AsyncIterator
 from typing import Annotated
 from uuid import UUID
@@ -32,6 +33,8 @@ _engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
 _password_hasher = Argon2PasswordHasher()
 _token_service = JwtTokenService()
+
+_UNAUTHORIZED_HEADERS = {"WWW-Authenticate": "Bearer"}
 
 
 def init_db() -> AsyncEngine:
@@ -83,6 +86,15 @@ def get_user_repository(
     return SqlAlchemyUserRepository(session)
 
 
+def _unauthorized(detail: str) -> HTTPException:
+    """Build a 401 response that advertises Bearer auth."""
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=detail,
+        headers=_UNAUTHORIZED_HEADERS,
+    )
+
+
 async def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
     users: Annotated[SqlAlchemyUserRepository, Depends(get_user_repository)],
@@ -90,30 +102,38 @@ async def get_current_user(
 ) -> User:
     """Require a valid Bearer JWT and return the authenticated user."""
     if credentials is None or credentials.scheme.lower() != "bearer":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise _unauthorized("Not authenticated")
 
     try:
         subject = tokens.decode_access_token(credentials.credentials)
         user_id = UUID(subject)
     except (DomainError, ValueError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from exc
+        raise _unauthorized("Invalid or expired token") from exc
 
     user = await users.get_by_id(user_id)
     if user is None or not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise _unauthorized("Invalid or expired token")
     return user
+
+
+async def require_jwt_or_cron(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
+    users: Annotated[SqlAlchemyUserRepository, Depends(get_user_repository)],
+    tokens: Annotated[JwtTokenService, Depends(get_token_service)],
+) -> User | None:
+    """Accept Bearer ``CRON_SECRET`` (returns ``None``) or a valid JWT user.
+
+    Used by the automation pipeline so operators (JWT) and scheduled callers
+    (``CRON_SECRET``) can share ``GET``/``POST /automation/emails/get-bookings``.
+    """
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        raise _unauthorized("Not authenticated")
+
+    cron_secret = get_settings().cron_secret.get_secret_value()
+    if hmac.compare_digest(credentials.credentials, cron_secret):
+        return None
+
+    return await get_current_user(credentials, users, tokens)
 
 
 # Alias for protected routes (JWT only).
@@ -138,6 +158,7 @@ UserRepo = Annotated[SqlAlchemyUserRepository, Depends(get_user_repository)]
 PasswordHasherDep = Annotated[Argon2PasswordHasher, Depends(get_password_hasher)]
 TokenServiceDep = Annotated[JwtTokenService, Depends(get_token_service)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
+AutomationAuth = Annotated[User | None, Depends(require_jwt_or_cron)]
 ProcessBookingEmailsDep = Annotated[
     ProcessBookingEmailsUseCase,
     Depends(get_process_booking_emails_use_case),

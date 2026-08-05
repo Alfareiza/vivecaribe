@@ -22,5 +22,5 @@ the system normalizes those bookings into a shared `Reserva` model.
 
 ## Delivery sequence
 
-Issues #1–#6 delivered scaffold, domain, persistence, auth, automation BC, and
-the pipeline API. Issue #7 hardens tests/docs. Issue #8 covers deploy/cron.
+Issues #1–#7 delivered scaffold through tests/docs. Issue #8 covers
+`Dockerfile.vercel`, dual GET/POST automation auth, and Hobby daily cron.

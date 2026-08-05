@@ -1,4 +1,4 @@
-"""API tests for POST /automation/emails/get-bookings."""
+"""API tests for GET/POST /automation/emails/get-bookings."""
 
 from __future__ import annotations
 
@@ -13,6 +13,10 @@ from vivecaribe.api import deps
 from vivecaribe.domain.enums import BookingProvider
 from vivecaribe.main import create_app
 from tests.conftest import auth_headers
+
+_CRON_HEADERS = {
+    "Authorization": "Bearer test-cron-secret-not-for-production",
+}
 
 
 def _mock_use_case() -> MagicMock:
@@ -61,8 +65,8 @@ async def automation_client(
 
 
 @pytest.mark.asyncio
-async def test_get_bookings_requires_jwt() -> None:
-    """Missing Bearer token returns 401."""
+async def test_get_bookings_post_requires_auth() -> None:
+    """Missing Bearer token on POST returns 401."""
     app = create_app()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -72,8 +76,19 @@ async def test_get_bookings_requires_jwt() -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_bookings_invalid_jwt_returns_401() -> None:
-    """A garbled Bearer token returns 401 (JWT-only auth today)."""
+async def test_get_bookings_get_requires_auth() -> None:
+    """Missing Bearer token on GET returns 401."""
+    app = create_app()
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/automation/emails/get-bookings")
+
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_get_bookings_invalid_token_returns_401() -> None:
+    """A garbled Bearer token that is not CRON_SECRET returns 401."""
     app = create_app()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -86,10 +101,53 @@ async def test_get_bookings_invalid_jwt_returns_401() -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_bookings_happy_path_maps_counters(
+async def test_get_bookings_get_accepts_cron_secret(
     automation_client: tuple[AsyncClient, MagicMock],
 ) -> None:
-    """Authenticated call with a real JWT maps use-case counters."""
+    """GET with CRON_SECRET runs the pipeline with defaults (Vercel Cron path)."""
+    client, use_case = automation_client
+    response = await client.get(
+        "/automation/emails/get-bookings",
+        headers=_CRON_HEADERS,
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "fetched": 3,
+        "created": 2,
+        "existing": 1,
+        "notified": 0,
+    }
+    use_case.start.assert_awaited_once_with(
+        booking_provider=None,
+        notify=False,
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_bookings_post_accepts_cron_secret(
+    automation_client: tuple[AsyncClient, MagicMock],
+) -> None:
+    """POST with CRON_SECRET also authenticates without a user JWT."""
+    client, use_case = automation_client
+    response = await client.post(
+        "/automation/emails/get-bookings",
+        json={"notify": False},
+        headers=_CRON_HEADERS,
+    )
+
+    assert response.status_code == 200
+    use_case.start.assert_awaited_once_with(
+        booking_provider=None,
+        notify=False,
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_bookings_post_jwt_maps_counters(
+    automation_client: tuple[AsyncClient, MagicMock],
+) -> None:
+    """POST with a real JWT maps use-case counters and body filters."""
     client, use_case = automation_client
     headers = await auth_headers(client)
 

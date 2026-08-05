@@ -1,4 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "fastapi"
+  "framework": "fastapi",
+  "crons": [
+    {
+      "path": "/automation/emails/get-bookings",
+      "schedule": "0 9 * * *"
+    }
+  ]
 }

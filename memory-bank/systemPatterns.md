@@ -37,14 +37,17 @@ Stages live in `ProcessBookingEmailsUseCase.start` (not a separate
 ## Auth pattern
 
 - Public register/login.
-- Protected routes use Bearer JWT (`get_current_user`).
-- `CRON_SECRET` exists in Settings but is **not wired** into automation auth
-  yet (JWT-only).
+- Most protected routes use Bearer JWT (`get_current_user`).
+- Automation GET/POST accept Bearer JWT **or** Bearer `CRON_SECRET`
+  (`require_jwt_or_cron`, constant-time compare). Cron returns no `User`.
+- `GET` runs defaults (all providers, `notify=false`); `POST` accepts body.
+- Hobby Vercel Cron: daily `GET /automation/emails/get-bookings` at 09:00 UTC.
 
 ## Deviations from the original architecture plan
 
-- No domain `Result` type — control flow uses exceptions (`DomainError`, etc.).
+- No domain `Result` type — deliberately dropped; exceptions (`DomainError`).
 - No `domain/ports.py` / automation ports Protocols — concrete repos/adapters.
 - Config file is `booking_providers.yaml` (not `accounts.yaml`).
 - Entity/table naming uses `EmailMessage` / `email_messages`.
 - Extractors live under `application/automation/providers/`.
+- Vercel Cron uses GET + `CRON_SECRET`; POST remains for operators with body.
