@@ -43,7 +43,7 @@ def test_init_sentry_initializes_when_dsn_set(monkeypatch: pytest.MonkeyPatch) -
     with patch("vivecaribe.main.sentry_sdk.init") as init:
         _init_sentry()
     init.assert_called_once()
-    assert init.call_args.kwargs["traces_sample_rate"] == 0.2
+    assert init.call_args.kwargs["traces_sample_rate"] == 1.0
     get_settings.cache_clear()
 
 

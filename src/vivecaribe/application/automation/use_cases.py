@@ -156,14 +156,17 @@ class ProcessBookingEmailsUseCase:
 
             mailbox = account.mailbox.client
             logger.info(
-                f"Fetching booking_provider={account.booking_provider} "
-                f"mailbox_name={account.mailbox.mailbox_name} query={query}",
+                f"Fetching emails from {account.booking_provider!r} in "
+                f"{account.mailbox.mailbox_name} with query={query!r}",
             )
             messages = await self.get_messages_from_mailbox(account, query)
             self.fetched += len(messages)
 
-            for message in messages:
+            for i, message in enumerate(messages, 1):
                 try:
+                    logger.info(f"[{account.booking_provider!r}] Processing e-mail #{i}"
+                    f" with subject {message.subject[:27]!r} "
+                    )
                     stored_message, reserva, created = (
                         await self.get_or_create_reserva_from_email_message(
                             message,
@@ -179,8 +182,8 @@ class ProcessBookingEmailsUseCase:
                         )
                 except (ValidationError, DomainError) as exc:
                     logger.warning(
-                        f"Pipeline skipped {account.booking_provider} "
-                        f"({message.subject[:27]}...): {exc.message}",
+                        f"Pipeline skipped for {account.booking_provider} with subject"
+                        f"({message.subject[:27]!r}...) because {exc.message}",
                     )
                     continue
 
@@ -192,7 +195,7 @@ class ProcessBookingEmailsUseCase:
                     self.notified += 1
 
         logger.info(
-            f"Pipeline done fetched={self.fetched} created={self.created} "
+            f"Pipeline finished. fetched={self.fetched} created={self.created} "
             f"existing={self.existing} notified={self.notified}",
         )
         return self
