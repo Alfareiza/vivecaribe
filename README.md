@@ -60,29 +60,42 @@ curl -X POST http://localhost:8000/login \
   -d '{"email":"ops@vivecaribe.com","password":"secret123"}'
 ```
 
-Protected routes use `Authorization: Bearer <access_token>` (**JWT only**
-today). `CRON_SECRET` is present in settings for a future cron auth path
-(issue #8) but is **not** accepted by the automation endpoint yet.
+Protected routes use `Authorization: Bearer <access_token>` (JWT).
+
+`GET` and `POST /automation/emails/get-bookings` also accept
+`Authorization: Bearer $CRON_SECRET`.
+
+| Method | Body | Behavior |
+|--------|------|----------|
+| `GET` | none | All providers, `notify=false` (Vercel Cron path) |
+| `POST` | optional JSON | Optional `booking_provider` / `notify` filters |
 
 ## Run automation locally
 
 1. Fill mailbox OAuth vars in `.env` (see `.env.example` and
    `booking_providers.yaml`).
 2. Start the API (Option A above).
-3. Register/login to obtain a JWT.
+3. Authenticate with a JWT **or** `CRON_SECRET`.
 4. Call the pipeline:
 
 ```bash
 TOKEN='<access_token from /login>'
+# or: TOKEN="$CRON_SECRET"
 
+# Operator POST with filters
 curl -X POST http://localhost:8000/automation/emails/get-bookings \
   -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"booking_provider":"getyourguide","notify":false}'
+
+# Cron-style GET (no body)
+curl -X GET http://localhost:8000/automation/emails/get-bookings \
+  -H "Authorization: Bearer $CRON_SECRET"
 ```
 
-Omit `booking_provider` to process every account in `booking_providers.yaml`.
-With WhatsApp still NoOp, `notify=true` will **not** mark emails as read.
+Omit `booking_provider` on POST to process every account in
+`booking_providers.yaml`. With WhatsApp still NoOp, `notify=true` will
+**not** mark emails as read.
 
 CLI alternative (no HTTP):
 
@@ -175,9 +188,28 @@ starts Postgres 16, applies migrations, and runs the same `uv run pytest` gate.
 
 Production: https://vivecaribe.vercel.app
 
-Entrypoint: `src/main.py` (re-exports `vivecaribe.main:app`).
+- Native FastAPI entrypoint: `src/main.py` (still used if no container).
+- Custom OCI image: root [`Dockerfile.vercel`](Dockerfile.vercel) — Vercel
+  detects it and serves Uvicorn on `$PORT` (default `80`). Local Compose
+  continues to use [`Dockerfile`](Dockerfile) on port `8000`.
 
-Cron scheduling and `Dockerfile.vercel` polish are tracked in issue **#8**.
+### Vercel Cron
+
+Production cron (Hobby: once daily) hits
+`GET /automation/emails/get-bookings` at **09:00 UTC** (= **04:00 Colombia**).
+Hobby may fire anytime in that UTC hour (04:00–04:59 Colombia).
+
+Vercel injects `Authorization: Bearer $CRON_SECRET` when `CRON_SECRET` is
+set in the project env.
+
+Manual check (same as cron):
+
+```bash
+curl -X GET https://vivecaribe.vercel.app/automation/emails/get-bookings \
+  -H "Authorization: Bearer $CRON_SECRET"
+```
+
+Rotate `CRON_SECRET` / `JWT_SECRET` in the Vercel project env, then redeploy.
 
 ### Vercel env vars (Production)
 
@@ -188,7 +220,7 @@ Set these under **Production** only (not required for local `.env` + Docker):
 | `ENVIRONMENT` | `prod` — **not** `production` (pydantic rejects it) |
 | `DATABASE_URL` | See [Database](#database) — async driver + Supabase pooler `:6543` |
 | `JWT_SECRET` | Long random string (≥ 32 bytes recommended) |
-| `CRON_SECRET` | Long random string (reserved for future cron auth) |
+| `CRON_SECRET` | Long random string (Bearer for automation POST) |
 | `LOG_LEVEL` | Optional, e.g. `INFO` |
 | `SENTRY_DSN` | Optional |
 | `GMAIL_CLIENT_ID` / `GMAIL_CLIENT_SECRET` | Shared Google OAuth app |

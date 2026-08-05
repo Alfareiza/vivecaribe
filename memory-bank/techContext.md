@@ -33,6 +33,8 @@ Fixtures refuse to reset any database whose name does not end with `_test`.
 
 ## Deploy target
 
-Vercel Fluid Compute entrypoint: `src/main.py`. Production DB: Supabase
+Vercel Fluid Compute: native Python via `src/main.py`, or custom OCI via
+root `Dockerfile.vercel` (Uvicorn on `$PORT`). Production DB: Supabase
 transaction pooler (`:6543`) with `NullPool` + disabled prepared statements
-when `ENVIRONMENT != local`. Full cron / Dockerfile.vercel work is issue #8.
+when `ENVIRONMENT != local`. Hobby cron: daily GET at 09:00 UTC via
+`vercel.json`.

@@ -2,26 +2,27 @@
 
 ## Current focus
 
-Issue **#7** — tests hardening, Memory Bank, `.env.example` / README polish,
-and a 90% package coverage gate. Branch: `feat/7-tests-docs`.
+Issue **#8** — Vercel container deploy (`Dockerfile.vercel`), dual auth
+(JWT / `CRON_SECRET`) on `GET`+`POST /automation/emails/get-bookings`,
+Hobby daily cron. Branch: `feat/8-deploy`.
 
 ## Recent decisions
 
-- Document (do not implement) the missing domain `Result` type.
-- Keep automation auth **JWT-only** for now; do not wire `CRON_SECRET` in #7.
-- Enforce **whole-package** statement coverage ≥ 90% (including Gmail/Outlook).
-- Ignore only `refresh_token*.txt` for local OAuth artifacts.
-- Repository `save()` refreshes ORM rows after flush so `updated_at` is safe.
+- Domain `Result` type deliberately dropped — exceptions only.
+- Booking CRUD is out of scope for #8.
+- Real WhatsApp Meta integration blocked on Meta Business approval (NoOp).
+- Automation: `GET` (no body, defaults) + `POST` (optional JSON filters).
+- Auth on both methods: JWT **or** `CRON_SECRET` (`hmac.compare_digest`).
+- Preserve unread-email behavior until WhatsApp is real (`notify=False`).
+- Hobby cron: `0 9 * * *` UTC (= 04:00 Colombia), once daily.
 
 ## Known gaps (intentional / deferred)
 
 - Propio extractor is still a skeleton.
-- `CRON_SECRET` auth for Vercel Cron → issue **#8**.
-- Real WhatsApp Meta integration → later.
+- Real WhatsApp Meta integration → after Meta authorization.
 - `correlation_id` ContextVar exists but no middleware sets it yet.
-- Domain ports / Result pattern from the early plan were never shipped.
+- Hourly Colombia-window cron needs Pro (Hobby is once/day).
 
 ## Next
 
-After #7 merges: issue **#8** (Dockerfile.vercel, `vercel.json` cron calling
-`POST /automation/emails/get-bookings`, production wiring).
+Finish #8: PR, production smoke (`/health`, GET cron auth, POST JWT).
