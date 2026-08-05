@@ -312,6 +312,10 @@ def test_mailbox_config_missing_credentials_var_raises(
     monkeypatch.setenv("CRON_SECRET", "cron")
     monkeypatch.setenv("GMAIL_CLIENT_ID", "gmail-id")
     monkeypatch.setenv("GMAIL_CLIENT_SECRET", "gmail-secret")
+    # Token env must be set so the failure is the missing credentials_vars key,
+    # not an earlier unset-token error (CI has no local .env mailbox secrets).
+    monkeypatch.setenv("GYG_GMAIL_TOKEN", "access")
+    monkeypatch.delenv("GYG_GMAIL_REFRESH_TOKEN", raising=False)
 
     config = MailboxConfig(
         mailbox_name="gmail",
