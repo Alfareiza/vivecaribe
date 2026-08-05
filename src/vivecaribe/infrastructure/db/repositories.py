@@ -50,6 +50,7 @@ class SqlAlchemyUserRepository:
         else:
             _apply_fields(row, payload)
         await self._session.flush()
+        await self._session.refresh(row)
         return User.model_validate(row)
 
 
@@ -92,6 +93,7 @@ class SqlAlchemyReservaRepository:
         else:
             _apply_fields(row, payload)
         await self._session.flush()
+        await self._session.refresh(row)
         return Reserva.model_validate(row)
 
     async def get_or_create(self, reserva: Reserva) -> tuple[Reserva, bool]:
@@ -146,6 +148,7 @@ class SqlAlchemyEmailMessageRepository:
         else:
             _apply_fields(row, payload)
         await self._session.flush()
+        await self._session.refresh(row)
         return _message_from_orm(row)
 
     async def get_or_create(

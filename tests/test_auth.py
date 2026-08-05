@@ -2,43 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-
 import pytest
-from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
-
-from vivecaribe.api import deps
-from vivecaribe.main import create_app
-
-
-@pytest.fixture
-async def auth_client(db_engine: AsyncEngine) -> AsyncIterator[AsyncClient]:
-    """HTTP client against the app using the isolated test database."""
-    factory = async_sessionmaker(
-        bind=db_engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-        autoflush=False,
-    )
-
-    async def override_get_db_session() -> AsyncIterator[AsyncSession]:
-        async with factory() as session:
-            try:
-                yield session
-                await session.commit()
-            except Exception:
-                await session.rollback()
-                raise
-
-    app = create_app()
-    app.dependency_overrides[deps.get_db_session] = override_get_db_session
-
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        yield client
-
-    app.dependency_overrides.clear()
+from httpx import AsyncClient
 
 
 @pytest.mark.asyncio
@@ -98,3 +63,41 @@ async def test_register_short_password_returns_422(auth_client: AsyncClient) -> 
         json={"email": "short@vivecaribe.com", "password": "1234567"},
     )
     assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_login_unknown_email_returns_401(auth_client: AsyncClient) -> None:
+    """Unknown email returns the same 401 as a bad password."""
+    response = await auth_client.post(
+        "/login",
+        json={"email": "missing@vivecaribe.com", "password": "secret123"},
+    )
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_login_inactive_user_returns_401(
+    auth_client: AsyncClient,
+    db_session,
+) -> None:
+    """Inactive users cannot obtain a JWT."""
+    from vivecaribe.domain.user import User
+    from vivecaribe.infrastructure.db.repositories import SqlAlchemyUserRepository
+    from vivecaribe.infrastructure.integrations.security import Argon2PasswordHasher
+
+    hasher = Argon2PasswordHasher()
+    repo = SqlAlchemyUserRepository(db_session)
+    await repo.save(
+        User(
+            email="inactive@vivecaribe.com",
+            password_hash=hasher.hash("secret123"),
+            is_active=False,
+        ),
+    )
+    await db_session.commit()
+
+    response = await auth_client.post(
+        "/login",
+        json={"email": "inactive@vivecaribe.com", "password": "secret123"},
+    )
+    assert response.status_code == 401

@@ -7,6 +7,7 @@ from sqlalchemy.pool import NullPool, QueuePool
 
 from vivecaribe.infrastructure.db.session import (
     create_engine,
+    create_session_factory,
     pooler_connect_args,
     validate_async_database_url,
 )
@@ -104,6 +105,63 @@ def test_staging_engine_uses_asyncpg_statement_cache_arg() -> None:
     kwargs = mock_create.call_args.kwargs
     assert kwargs["poolclass"] is NullPool
     assert kwargs["connect_args"] == {"statement_cache_size": 0}
+
+
+def test_validate_async_database_url_rejects_unsupported_driver() -> None:
+    """Unknown drivers get an actionable startup error."""
+    with pytest.raises(ValueError, match="not supported"):
+        validate_async_database_url("mysql+aiomysql://u:p@localhost/db")
+
+
+def test_validate_async_database_url_rejects_malformed() -> None:
+    """Malformed URLs raise a clear ValueError."""
+    with pytest.raises(ValueError, match="not a valid SQLAlchemy URL"):
+        validate_async_database_url("://broken")
+
+
+def test_pooler_connect_args_unknown_driver_returns_empty() -> None:
+    """Unrecognized drivers return no connect args."""
+    assert pooler_connect_args("sqlite+aiosqlite:///:memory:") == {}
+
+
+@pytest.mark.asyncio
+async def test_get_session_commit_and_rollback() -> None:
+    """``get_session`` commits on success and rolls back on error."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from vivecaribe.infrastructure.db.session import get_session
+
+    session = MagicMock()
+    session.commit = AsyncMock()
+    session.rollback = AsyncMock()
+
+    class _CM:
+        async def __aenter__(self) -> MagicMock:
+            return session
+
+        async def __aexit__(self, *args: object) -> None:
+            return None
+
+    factory = MagicMock(return_value=_CM())
+
+    gen = get_session(factory)
+    assert await gen.__anext__() is session
+    with pytest.raises(StopAsyncIteration):
+        await gen.__anext__()
+    session.commit.assert_awaited()
+
+    gen = get_session(factory)
+    await gen.__anext__()
+    with pytest.raises(RuntimeError):
+        await gen.athrow(RuntimeError("boom"))
+    session.rollback.assert_awaited()
+
+
+def test_create_session_factory_binds_engine() -> None:
+    """Session factory can be created from a mocked engine."""
+    engine = MagicMock()
+    factory = create_session_factory(engine)
+    assert factory.kw.get("bind") is engine or getattr(factory, "bind", None) is engine
 
 
 def test_local_engine_builds_real_queue_pool() -> None:

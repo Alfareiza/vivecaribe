@@ -8,7 +8,9 @@ from uuid import UUID, uuid4
 
 from vivecaribe.domain import (
     BookingProvider,
+    ConflictError,
     DomainError,
+    EmailMessage,
     NotFoundError,
     Reserva,
     ReservaEstado,
@@ -102,9 +104,27 @@ def test_domain_error_hierarchy() -> None:
     """Domain errors expose message metadata for API mapping later."""
     missing = NotFoundError("missing", entity="User")
     invalid = ValidationError("required", field="email")
+    conflict = ConflictError("duplicate")
 
     assert isinstance(missing, DomainError)
     assert missing.entity == "User"
     assert "User" in str(missing)
     assert invalid.field == "email"
     assert "email" in str(invalid)
+    assert isinstance(conflict, DomainError)
+    assert DomainError().message == "Domain error"
+
+
+def test_email_message_defaults() -> None:
+    """``EmailMessage`` fills optional fields with safe defaults."""
+    message = EmailMessage(
+        source="gmail",
+        mailbox_message_id="m1",
+        sender="a@b.com",
+        received_at=datetime(2026, 7, 1, 12, 0, tzinfo=UTC),
+    )
+    assert message.recipients == []
+    assert message.subject == ""
+    assert message.body_html == ""
+    assert message.metadata == {}
+    assert isinstance(message.id, UUID)

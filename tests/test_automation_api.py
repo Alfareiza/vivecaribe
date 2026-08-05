@@ -2,25 +2,17 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from unittest.mock import AsyncMock, MagicMock
-from uuid import uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from vivecaribe.api import deps
 from vivecaribe.domain.enums import BookingProvider
-from vivecaribe.domain.user import User
 from vivecaribe.main import create_app
-
-
-def _fake_user() -> User:
-    return User(
-        id=uuid4(),
-        email="ops@vivecaribe.com",
-        password_hash="not-used",
-        is_active=True,
-    )
+from tests.conftest import auth_headers
 
 
 def _mock_use_case() -> MagicMock:
@@ -31,6 +23,41 @@ def _mock_use_case() -> MagicMock:
     use_case.notified = 0
     use_case.start = AsyncMock(return_value=use_case)
     return use_case
+
+
+@pytest.fixture
+async def automation_client(
+    db_engine: AsyncEngine,
+) -> AsyncIterator[tuple[AsyncClient, MagicMock]]:
+    """App client with test DB and a mocked booking-email use case."""
+    use_case = _mock_use_case()
+    factory = async_sessionmaker(
+        bind=db_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autoflush=False,
+    )
+
+    async def override_get_db_session() -> AsyncIterator[AsyncSession]:
+        async with factory() as session:
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+
+    app = create_app()
+    app.dependency_overrides[deps.get_db_session] = override_get_db_session
+    app.dependency_overrides[deps.get_process_booking_emails_use_case] = (
+        lambda: use_case
+    )
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client, use_case
+
+    app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio
@@ -45,24 +72,32 @@ async def test_get_bookings_requires_jwt() -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_bookings_happy_path_maps_counters() -> None:
-    """Authenticated call maps use-case counters into the response body."""
-    use_case = _mock_use_case()
+async def test_get_bookings_invalid_jwt_returns_401() -> None:
+    """A garbled Bearer token returns 401 (JWT-only auth today)."""
     app = create_app()
-    app.dependency_overrides[deps.get_current_user] = _fake_user
-    app.dependency_overrides[deps.get_process_booking_emails_use_case] = (
-        lambda: use_case
-    )
-
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
             "/automation/emails/get-bookings",
-            json={"booking_provider": "getyourguide", "notify": False},
-            headers={"Authorization": "Bearer unused"},
+            headers={"Authorization": "Bearer not-a-real-token"},
         )
 
-    app.dependency_overrides.clear()
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_get_bookings_happy_path_maps_counters(
+    automation_client: tuple[AsyncClient, MagicMock],
+) -> None:
+    """Authenticated call with a real JWT maps use-case counters."""
+    client, use_case = automation_client
+    headers = await auth_headers(client)
+
+    response = await client.post(
+        "/automation/emails/get-bookings",
+        json={"booking_provider": "getyourguide", "notify": False},
+        headers=headers,
+    )
 
     assert response.status_code == 200
     assert response.json() == {
