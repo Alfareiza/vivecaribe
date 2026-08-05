@@ -107,13 +107,13 @@ class ProcessBookingEmailsUseCase:
                 mailbox_message_id=stored_message.mailbox_message_id,
             )
             logger.info(
-                "Marked message %s as read after WhatsApp notify",
-                stored_message.mailbox_message_id,
+                f"Marked message {stored_message.mailbox_message_id} "
+                "as read after WhatsApp notify",
             )
         else:
             logger.info(
-                "Skipping mark_as_read for %s (WhatsApp not confirmed)",
-                stored_message.mailbox_message_id,
+                f"Skipping mark_as_read for {stored_message.mailbox_message_id} "
+                "(WhatsApp not confirmed)",
             )
         return notified, reserva
 
@@ -149,18 +149,15 @@ class ProcessBookingEmailsUseCase:
             query = account.mailbox.queries.get(NEW_BOOKINGS_QUERY, "")
             if not query:
                 logger.error(
-                    "Missing %s for booking_provider=%s",
-                    NEW_BOOKINGS_QUERY,
-                    account.booking_provider,
+                    f"Missing {NEW_BOOKINGS_QUERY} for "
+                    f"booking_provider={account.booking_provider}",
                 )
                 continue
 
             mailbox = account.mailbox.client
             logger.info(
-                "Fetching booking_provider=%s mailbox_name=%s query=%s",
-                account.booking_provider,
-                account.mailbox.mailbox_name,
-                query,
+                f"Fetching booking_provider={account.booking_provider} "
+                f"mailbox_name={account.mailbox.mailbox_name} query={query}",
             )
             messages = await self.get_messages_from_mailbox(account, query)
             self.fetched += len(messages)
@@ -181,7 +178,10 @@ class ProcessBookingEmailsUseCase:
                             mailbox,
                         )
                 except (ValidationError, DomainError) as exc:
-                    logger.warning(f"Pipeline skipped {account.booking_provider} ({message.subject[:27]}...): {exc.message}")               
+                    logger.warning(
+                        f"Pipeline skipped {account.booking_provider} "
+                        f"({message.subject[:27]}...): {exc.message}",
+                    )
                     continue
 
                 if created:
@@ -192,11 +192,8 @@ class ProcessBookingEmailsUseCase:
                     self.notified += 1
 
         logger.info(
-            "Pipeline done fetched=%s created=%s existing=%s notified=%s",
-            self.fetched,
-            self.created,
-            self.existing,
-            self.notified,
+            f"Pipeline done fetched={self.fetched} created={self.created} "
+            f"existing={self.existing} notified={self.notified}",
         )
         return self
 
@@ -248,11 +245,9 @@ async def _run_manually() -> None:
         await session.commit()
 
     logger.info(
-        "Manual run finished fetched=%s created=%s existing=%s notified=%s",
-        use_case.fetched,
-        use_case.created,
-        use_case.existing,
-        use_case.notified,
+        f"Manual run finished fetched={use_case.fetched} "
+        f"created={use_case.created} existing={use_case.existing} "
+        f"notified={use_case.notified}",
     )
     await engine.dispose()
 

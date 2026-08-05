@@ -32,7 +32,7 @@ class RegisterUserUseCase:
             password_hash=self._password_hasher.hash(password),
         )
         saved = await self._users.save(user)
-        logger.info("Registered user %s", saved.id)
+        logger.info(f"Registered user {saved.id}")
         return saved
 
 
