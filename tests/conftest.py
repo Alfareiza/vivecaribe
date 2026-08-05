@@ -7,6 +7,7 @@ from collections.abc import AsyncIterator
 from urllib.parse import urlparse, urlunparse
 
 import pytest
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
@@ -147,3 +148,58 @@ async def db_session(db_engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
     async with factory() as session:
         yield session
         await session.commit()
+
+
+@pytest.fixture
+def settings():
+    """Return a fresh ``Settings`` instance for the current env."""
+    from vivecaribe.settings import get_settings
+
+    get_settings.cache_clear()
+    return get_settings()
+
+
+@pytest.fixture
+async def auth_client(db_engine: AsyncEngine) -> AsyncIterator[AsyncClient]:
+    """HTTP client against the app using the isolated test database."""
+    from vivecaribe.api import deps
+    from vivecaribe.main import create_app
+
+    factory = async_sessionmaker(
+        bind=db_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autoflush=False,
+    )
+
+    async def override_get_db_session() -> AsyncIterator[AsyncSession]:
+        async with factory() as session:
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+
+    app = create_app()
+    app.dependency_overrides[deps.get_db_session] = override_get_db_session
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client
+
+    app.dependency_overrides.clear()
+
+
+async def auth_headers(
+    client: AsyncClient,
+    *,
+    email: str = "ops@vivecaribe.com",
+    password: str = "secret123",
+) -> dict[str, str]:
+    """Register + login and return an Authorization bearer header dict."""
+    await client.post("/users", json={"email": email, "password": password})
+    login = await client.post("/login", json={"email": email, "password": password})
+    assert login.status_code == 200
+    token = login.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}

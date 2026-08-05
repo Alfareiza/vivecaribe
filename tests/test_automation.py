@@ -19,10 +19,16 @@ from vivecaribe.application.automation.providers import (
 from vivecaribe.application.automation.use_cases import ProcessBookingEmailsUseCase
 from vivecaribe.domain.email_message import EmailMessage
 from vivecaribe.domain.enums import BookingProvider, ReservaEstado
-from vivecaribe.domain.errors import ValidationError
-from vivecaribe.domain.reserva import Reserva
+from vivecaribe.domain.errors import DomainError, ValidationError
 from vivecaribe.infrastructure.integrations.whatsapp import NoOpWhatsAppNotifier
 from vivecaribe.settings import BookingProviderAccount, MailboxConfig
+from tests.fakes import (
+    AlwaysNotifyWhatsApp,
+    FakeEmailMessageStore,
+    FakeMailbox,
+    FakeReservaStore,
+    FailingMailbox,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures" / "emails"
 
@@ -71,79 +77,6 @@ def _bind_mailbox(monkeypatch: pytest.MonkeyPatch, mailbox: FakeMailbox) -> None
         "client",
         property(lambda self, m=mailbox: m),
     )
-
-
-class FakeMailbox:
-    """In-memory mailbox client for use-case tests."""
-
-    def __init__(self, messages: list[EmailMessage] | None = None) -> None:
-        """Store messages that ``fetch_messages`` will return."""
-        self.messages = list(messages or [])
-        self.marked_read: list[str] = []
-
-    async def fetch_messages(
-        self,
-        *,
-        query: str,
-        max_results: int = 30,
-    ) -> list[EmailMessage]:
-        """Return the preloaded messages (query ignored in tests)."""
-        return self.messages[:max_results]
-
-    async def mark_as_read(self, *, mailbox_message_id: str) -> None:
-        """Record that a message was marked read."""
-        self.marked_read.append(mailbox_message_id)
-
-
-class FakeEmailMessageStore:
-    """In-memory email-message persistence."""
-
-    def __init__(self) -> None:
-        """Create an empty store keyed by ``(source, mailbox_message_id)``."""
-        self.by_key: dict[tuple[str, str], EmailMessage] = {}
-
-    async def get_or_create(
-        self,
-        message: EmailMessage,
-    ) -> tuple[EmailMessage, bool]:
-        """Return existing message or insert the new one."""
-        key = (message.source, message.mailbox_message_id)
-        existing = self.by_key.get(key)
-        if existing is not None:
-            return existing, False
-        self.by_key[key] = message
-        return message, True
-
-
-class FakeReservaStore:
-    """In-memory reserva persistence with get_or_create."""
-
-    def __init__(self) -> None:
-        """Create an empty store keyed by ``(booking_provider, reserva_reference)``."""
-        self.by_key: dict[tuple[str, str], Reserva] = {}
-
-    async def get_or_create(self, reserva: Reserva) -> tuple[Reserva, bool]:
-        """Return existing reserva or insert the new one."""
-        key = (reserva.booking_provider.value, reserva.reserva_reference)
-        existing = self.by_key.get(key)
-        if existing is not None:
-            return existing, False
-        self.by_key[key] = reserva
-        return reserva, True
-
-    async def save(self, reserva: Reserva) -> Reserva:
-        """Upsert a reserva by booking provider / reserva_reference."""
-        key = (reserva.booking_provider.value, reserva.reserva_reference)
-        self.by_key[key] = reserva
-        return reserva
-
-
-class AlwaysNotifyWhatsApp(NoOpWhatsAppNotifier):
-    """Test double that pretends Meta send succeeded."""
-
-    async def notify(self, reserva: Reserva) -> bool:
-        """Always report a successful WhatsApp send."""
-        return True
 
 
 def test_getyourguide_extractor_from_fixture() -> None:
@@ -211,6 +144,12 @@ def test_propio_extractor_is_skeleton() -> None:
     ext = PropioExtractor.from_html("<p>propio booking</p>")
     with pytest.raises(ValidationError, match="skeleton"):
         ext.get_customer_name()
+    with pytest.raises(ValidationError, match="skeleton"):
+        ext.get_reserva_reference()
+    with pytest.raises(ValidationError, match="skeleton"):
+        ext.get_price()
+    with pytest.raises(ValidationError, match="skeleton"):
+        ext.to_draft()
 
 
 @pytest.mark.asyncio
@@ -248,6 +187,36 @@ async def test_pipeline_happy_path_noop_whatsapp_skips_mark_read(
     stored = next(iter(reservas.by_key.values()))
     assert stored.notificado_whatsapp is False
     assert stored.income == stored.price
+
+
+@pytest.mark.asyncio
+async def test_pipeline_notify_true_with_noop_still_skips_mark_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``notify=True`` with NoOp still leaves messages unread."""
+    message = _message_from_fixture(
+        "getyourguide.html",
+        sender="noreply@getyourguide.com",
+    )
+    mailbox = FakeMailbox([message])
+    _bind_mailbox(monkeypatch, mailbox)
+    use_case = ProcessBookingEmailsUseCase(
+        accounts=[
+            _account(
+                booking_provider=BookingProvider.GETYOURGUIDE,
+                mailbox_name="gmail",
+                query="from:getyourguide.com",
+            ),
+        ],
+        email_messages=FakeEmailMessageStore(),  # type: ignore[arg-type]
+        reservas=FakeReservaStore(),  # type: ignore[arg-type]
+        whatsapp=NoOpWhatsAppNotifier(),
+    )
+
+    await use_case.start(notify=True)
+
+    assert use_case.notified == 0
+    assert mailbox.marked_read == []
 
 
 @pytest.mark.asyncio
@@ -337,6 +306,137 @@ async def test_pipeline_skips_account_without_query() -> None:
 
     assert use_case.fetched == 0
     assert use_case.created == 0
+
+
+@pytest.mark.asyncio
+async def test_pipeline_filters_by_booking_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``booking_provider`` filter processes only the matching account."""
+    message = _message_from_fixture(
+        "getyourguide.html",
+        sender="noreply@getyourguide.com",
+    )
+    mailbox = FakeMailbox([message])
+    _bind_mailbox(monkeypatch, mailbox)
+    use_case = ProcessBookingEmailsUseCase(
+        accounts=[
+            _account(
+                booking_provider=BookingProvider.GETYOURGUIDE,
+                mailbox_name="gmail",
+                query="from:gyg",
+            ),
+            _account(
+                booking_provider=BookingProvider.VIATOR,
+                mailbox_name="gmail",
+                query="from:viator",
+            ),
+        ],
+        email_messages=FakeEmailMessageStore(),  # type: ignore[arg-type]
+        reservas=FakeReservaStore(),  # type: ignore[arg-type]
+        whatsapp=NoOpWhatsAppNotifier(),
+    )
+
+    await use_case.start(booking_provider=BookingProvider.GETYOURGUIDE)
+
+    assert use_case.fetched == 1
+    assert use_case.created == 1
+
+
+@pytest.mark.asyncio
+async def test_pipeline_second_run_counts_existing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reprocessing the same booking increments ``existing``, not ``created``."""
+    message = _message_from_fixture(
+        "getyourguide.html",
+        sender="noreply@getyourguide.com",
+    )
+    mailbox = FakeMailbox([message])
+    _bind_mailbox(monkeypatch, mailbox)
+    email_messages = FakeEmailMessageStore()
+    reservas = FakeReservaStore()
+    accounts = [
+        _account(
+            booking_provider=BookingProvider.GETYOURGUIDE,
+            mailbox_name="gmail",
+            query="from:gyg",
+        ),
+    ]
+    first = ProcessBookingEmailsUseCase(
+        accounts=accounts,
+        email_messages=email_messages,  # type: ignore[arg-type]
+        reservas=reservas,  # type: ignore[arg-type]
+        whatsapp=NoOpWhatsAppNotifier(),
+    )
+    second = ProcessBookingEmailsUseCase(
+        accounts=accounts,
+        email_messages=email_messages,  # type: ignore[arg-type]
+        reservas=reservas,  # type: ignore[arg-type]
+        whatsapp=NoOpWhatsAppNotifier(),
+    )
+
+    await first.start()
+    await second.start()
+
+    assert first.created == 1
+    assert second.created == 0
+    assert second.existing == 1
+
+
+@pytest.mark.asyncio
+async def test_get_messages_from_mailbox_swallows_domain_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Fetch DomainError returns an empty list and does not crash the run."""
+    _bind_mailbox(monkeypatch, FailingMailbox(DomainError("mailbox down")))
+    use_case = ProcessBookingEmailsUseCase(
+        accounts=[
+            _account(
+                booking_provider=BookingProvider.GETYOURGUIDE,
+                mailbox_name="gmail",
+                query="from:gyg",
+            ),
+        ],
+        email_messages=FakeEmailMessageStore(),  # type: ignore[arg-type]
+        reservas=FakeReservaStore(),  # type: ignore[arg-type]
+        whatsapp=NoOpWhatsAppNotifier(),
+    )
+
+    await use_case.start()
+
+    assert use_case.fetched == 0
+    assert use_case.created == 0
+
+
+def test_validate_draft_rejects_invalid_fields() -> None:
+    """``_validate_draft`` enforces required fields and non-negative price."""
+    use_case = ProcessBookingEmailsUseCase(
+        accounts=[],
+        email_messages=FakeEmailMessageStore(),  # type: ignore[arg-type]
+        reservas=FakeReservaStore(),  # type: ignore[arg-type]
+        whatsapp=NoOpWhatsAppNotifier(),
+    )
+    base = ReservaDraft(
+        booking_provider=BookingProvider.VIATOR,
+        reserva_reference="VT-1",
+        estado=ReservaEstado.CONFIRMADA,
+        nombre_experiencia="Tour",
+        ciudad_experiencia="Cartagena",
+        participants=1,
+        customer_name="Ada",
+        price=Decimal("10.00"),
+        income=Decimal("8.00"),
+    )
+
+    with pytest.raises(ValidationError, match="reserva_reference"):
+        use_case._validate_draft(base.model_copy(update={"reserva_reference": "  "}))
+    with pytest.raises(ValidationError, match="customer_name"):
+        use_case._validate_draft(base.model_copy(update={"customer_name": ""}))
+    with pytest.raises(ValidationError, match="nombre_experiencia"):
+        use_case._validate_draft(base.model_copy(update={"nombre_experiencia": ""}))
+    with pytest.raises(ValidationError, match="price"):
+        use_case._validate_draft(base.model_copy(update={"price": Decimal("-1")}))
 
 
 def test_reserva_draft_to_reserva() -> None:
