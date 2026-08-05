@@ -12,10 +12,8 @@ class NoOpWhatsAppNotifier:
     async def notify(self, reserva: Reserva) -> bool:
         """Log and return ``False`` (not a successful real send)."""
         logger.info(
-            "WhatsApp NoOp — not notifying reserva %s "
-            "(booking_provider=%s reserva_reference=%s)",
-            reserva.id,
-            reserva.booking_provider,
-            reserva.reserva_reference,
+            f"WhatsApp NoOp — not notifying reserva {reserva.id} "
+            f"(booking_provider={reserva.booking_provider} "
+            f"reserva_reference={reserva.reserva_reference})",
         )
         return False

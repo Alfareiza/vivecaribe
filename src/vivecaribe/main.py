@@ -46,9 +46,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     configure_logging(settings)
     deps.init_db()
     logger.info(
-        "ViveCaribe starting (env=%s, version=%s)",
-        settings.environment,
-        __version__,
+        f"ViveCaribe starting (env={settings.environment}, version={__version__})",
     )
     yield
     await deps.shutdown_db()

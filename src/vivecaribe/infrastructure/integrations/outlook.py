@@ -116,9 +116,7 @@ class OutlookMailbox:
                 self._to_email_message(item) for item in response.json().get("value", [])
             ]
             logger.info(
-                "Outlook fetched %s messages for query=%s",
-                len(messages),
-                query,
+                f"Outlook fetched {len(messages)} messages for query={query!r}",
             )
             return messages
         finally:
