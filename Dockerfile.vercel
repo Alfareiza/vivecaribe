@@ -41,4 +41,5 @@ USER app
 
 EXPOSE 80
 
-CMD ["sh", "-c", "uvicorn vivecaribe.main:app --host 0.0.0.0 --port ${PORT:-80}"]
+# Absolute venv path: Vercel container runtime may not inherit Dockerfile PATH.
+CMD ["sh", "-c", "/app/.venv/bin/uvicorn vivecaribe.main:app --host 0.0.0.0 --port ${PORT:-80}"]
