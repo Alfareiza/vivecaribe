@@ -5,12 +5,14 @@ from __future__ import annotations
 import base64
 import json
 from datetime import UTC, datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
+from tenacity import wait_none
 
-from vivecaribe.domain.errors import DomainError
+from vivecaribe.domain.email_message import EmailMessage
+from vivecaribe.domain.errors import DomainError, EmailNotFound
 from vivecaribe.infrastructure.integrations.gmail import (
     GmailMailbox,
     _extract_bodies,
@@ -325,3 +327,76 @@ def test_mailbox_config_missing_credentials_var_raises(
     with pytest.raises(DomainError, match="refresh_token"):
         _ = config.client
     get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_fetch_zoho_verification_code_happy_path() -> None:
+    """Newest matching Gmail message yields the OTP string."""
+    mailbox = _gmail_mailbox()
+    older = EmailMessage(
+        source="gmail",
+        mailbox_message_id="old",
+        sender="noreply@zohoaccounts.com",
+        subject="Old code 111111",
+        body_text="111111",
+        received_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+    newer = EmailMessage(
+        source="gmail",
+        mailbox_message_id="new",
+        sender="noreply@zohoaccounts.com",
+        subject="New code",
+        body_text="2223334",
+        received_at=datetime(2026, 1, 2, tzinfo=UTC),
+    )
+    with patch.object(
+        mailbox,
+        "fetch_messages",
+        AsyncMock(return_value=[older, newer]),
+    ):
+        assert await mailbox.fetch_zoho_verification_code() == "2223334"
+
+
+@pytest.mark.asyncio
+async def test_fetch_zoho_verification_code_ignores_stale_mail() -> None:
+    """OTP emails older than ``received_after`` are skipped."""
+    mailbox = _gmail_mailbox()
+    stale = EmailMessage(
+        source="gmail",
+        mailbox_message_id="stale",
+        sender="noreply@zohoaccounts.com",
+        subject="OTP",
+        body_text="1111111",
+        received_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+    fresh = EmailMessage(
+        source="gmail",
+        mailbox_message_id="fresh",
+        sender="noreply@zohoaccounts.com",
+        subject="OTP",
+        body_text="7654321",
+        received_at=datetime(2026, 1, 2, 12, 0, tzinfo=UTC),
+    )
+    with patch.object(
+        mailbox,
+        "fetch_messages",
+        AsyncMock(return_value=[stale, fresh]),
+    ):
+        code = await mailbox.fetch_zoho_verification_code(
+            received_after=datetime(2026, 1, 2, 11, 0, tzinfo=UTC),
+        )
+    assert code == "7654321"
+
+
+@pytest.mark.asyncio
+async def test_fetch_zoho_verification_code_retries_then_raises() -> None:
+    """Missing OTP email retries five times then raises EmailNotFound."""
+    mailbox = _gmail_mailbox()
+    mailbox.fetch_zoho_verification_code.retry.wait = wait_none()
+    fetch = AsyncMock(return_value=[])
+    with (
+        patch.object(mailbox, "fetch_messages", fetch),
+        pytest.raises(EmailNotFound, match="Zoho verification"),
+    ):
+        await mailbox.fetch_zoho_verification_code()
+    assert fetch.await_count == 5

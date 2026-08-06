@@ -18,21 +18,29 @@ COPY src ./src
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-editable
 
-
 FROM python:3.13-slim-bookworm AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PATH="/app/.venv/bin:$PATH"
+    PATH="/app/.venv/bin:$PATH" \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    APP_DATA_DIR=/data
 
 WORKDIR /app
 
 RUN groupadd --system --gid 1000 app \
-    && useradd --system --uid 1000 --gid app --home /app --shell /usr/sbin/nologin app
+    && useradd --system --uid 1000 --gid app --home /app --shell /usr/sbin/nologin app \
+    && mkdir -p /data \
+    && chown -R app:app /data
 
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/src /app/src
 COPY booking_providers.yaml ./booking_providers.yaml
+
+# Python package ≠ browser binaries. Install Chromium + OS libs as root,
+# then hand ownership to the non-root runtime user.
+RUN playwright install --with-deps chromium \
+    && chown -R app:app /ms-playwright
 
 USER app
 

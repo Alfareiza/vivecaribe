@@ -8,6 +8,7 @@ from vivecaribe.domain.enums import BookingProvider, ReservaEstado
 from vivecaribe.domain.errors import (
     ConflictError,
     DomainError,
+    EmailNotFound,
     NotFoundError,
     ValidationError,
 )
@@ -19,6 +20,7 @@ __all__ = [
     "ConflictError",
     "DomainError",
     "EmailMessage",
+    "EmailNotFound",
     "NotFoundError",
     "Reserva",
     "ReservaEstado",
