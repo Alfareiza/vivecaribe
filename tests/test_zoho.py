@@ -11,11 +11,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from vivecaribe.domain.errors import DomainError
+from vivecaribe.infrastructure.integrations.gmail import GmailMailbox
 from vivecaribe.infrastructure.integrations.zoho import (
     ACCOUNT_ID,
     ZohoMailClient,
     ZohoMailbox,
     ZohoSession,
+    default_session_file,
 )
 from vivecaribe.settings import MailboxConfig, get_settings
 
@@ -531,3 +533,153 @@ def test_mailbox_config_builds_zoho_from_settings(
     assert client.password == "secret"
     assert client.account_id == ACCOUNT_ID
     get_settings.cache_clear()
+
+
+def test_default_session_file_uses_app_data_dir(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """``APP_DATA_DIR`` relocates the Zoho session file off the home directory."""
+    monkeypatch.setenv("APP_DATA_DIR", str(tmp_path))
+    assert default_session_file() == tmp_path / ".zohomail_storage.json"
+    session = ZohoSession("u", "p")
+    assert session.session_file == tmp_path / ".zohomail_storage.json"
+
+
+def test_getyourguide_gmail_resolves_from_booking_providers(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Identity-challenge OTP uses the GetYourGuide Gmail mailbox client."""
+    get_settings.cache_clear()
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://u:p@localhost/db")
+    monkeypatch.setenv("JWT_SECRET", "secret")
+    monkeypatch.setenv("CRON_SECRET", "cron")
+    monkeypatch.setenv("GMAIL_CLIENT_ID", "gmail-id")
+    monkeypatch.setenv("GMAIL_CLIENT_SECRET", "gmail-secret")
+    monkeypatch.setenv("GYG_GMAIL_TOKEN", "access")
+    monkeypatch.setenv("GYG_GMAIL_REFRESH_TOKEN", "refresh")
+
+    session = _session(tmp_path)
+    gmail = session._getyourguide_gmail()
+    assert isinstance(gmail, GmailMailbox)
+    assert gmail._token == "access"
+    get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_login_completes_identity_challenge_via_email_otp(
+    tmp_path: Path,
+) -> None:
+    """When Zoho shows the verify challenge, OTP is filled from Gmail."""
+    session = _session(tmp_path)
+
+    challenge_locator = MagicMock()
+    challenge_locator.count = AsyncMock(return_value=1)
+    email_option = MagicMock()
+    email_option.click = AsyncMock()
+    otp_first = MagicMock()
+    otp_first.wait_for = AsyncMock()
+    otp_first.click = AsyncMock()
+    otp_chain = MagicMock()
+    otp_chain.first = otp_first
+    otp_chain.count = AsyncMock(return_value=7)
+
+    def get_by_text(text: str) -> MagicMock:
+        if text == "Select any of this option to verify":
+            return challenge_locator
+        if text == "Verify via email address":
+            return email_option
+        if text == "OTP sent":
+            sent = MagicMock()
+            sent.wait_for = AsyncMock()
+            return sent
+        if text == "Incorrect OTP":
+            empty = MagicMock()
+            empty.count = AsyncMock(return_value=0)
+            return empty
+        return MagicMock()
+
+    class _Page:
+        def __init__(self) -> None:
+            self.goto = AsyncMock()
+            self.fill = AsyncMock()
+            self.click = AsyncMock()
+            self.wait_for_selector = AsyncMock()
+            self.wait_for_url = AsyncMock()
+            self.wait_for_function = AsyncMock()
+            self.evaluate = AsyncMock(
+                return_value={
+                    "csrf": "csrf-1",
+                    "client_session_id": "sess-1",
+                    "static_version": "HS439.4",
+                    "acc_id": ACCOUNT_ID,
+                }
+            )
+            self.close = AsyncMock()
+            self.screenshot = AsyncMock()
+            self.get_by_text = MagicMock(side_effect=get_by_text)
+            self.locator = MagicMock(side_effect=self._locator)
+            self.keyboard = MagicMock()
+            self.keyboard.type = AsyncMock(side_effect=self._typed)
+            self._otp_done = False
+
+        def _locator(self, selector: str) -> MagicMock:
+            if selector == "input.mfa_email_otp":
+                return otp_chain
+            hidden = MagicMock()
+            hidden.evaluate = AsyncMock()
+            return hidden
+
+        async def _typed(self, code: str, delay: int = 0) -> None:
+            self._otp_done = True
+
+        @property
+        def url(self) -> str:
+            if self._otp_done:
+                return "https://mail.zoho.com/zm/"
+            return "https://accounts.zoho.com/signin?servicename=ZohoMail"
+
+    page = _Page()
+    context = MagicMock()
+    context.new_page = AsyncMock(return_value=page)
+    context.storage_state = AsyncMock(return_value={"cookies": [], "origins": []})
+
+    otp_mailbox = MagicMock()
+    otp_mailbox.fetch_zoho_verification_code = AsyncMock(return_value="6543210")
+
+    with patch.object(session, "_getyourguide_gmail", return_value=otp_mailbox):
+        await session.login(context)
+
+    email_option.click.assert_awaited()
+    page.keyboard.type.assert_awaited_with("6543210", delay=40)
+    otp_mailbox.fetch_zoho_verification_code.assert_awaited()
+    assert session.session_file.exists()
+
+
+@pytest.mark.asyncio
+async def test_login_fails_when_signin_without_challenge(tmp_path: Path) -> None:
+    """Still on signin without the verify UI is a hard login failure."""
+    session = _session(tmp_path)
+
+    class _Page:
+        def __init__(self) -> None:
+            self.url = "https://accounts.zoho.com/signin?servicename=ZohoMail"
+            self.goto = AsyncMock()
+            self.fill = AsyncMock()
+            self.click = AsyncMock()
+            self.wait_for_selector = AsyncMock()
+            self.wait_for_url = AsyncMock()
+            self.close = AsyncMock()
+            self.screenshot = AsyncMock()
+            empty = MagicMock()
+            empty.count = AsyncMock(return_value=0)
+            self.get_by_text = MagicMock(return_value=empty)
+
+    page = _Page()
+    context = MagicMock()
+    context.new_page = AsyncMock(return_value=page)
+
+    with pytest.raises(DomainError, match="Login failed"):
+        await session.login(context)
+    page.screenshot.assert_awaited()

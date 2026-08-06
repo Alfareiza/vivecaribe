@@ -8,19 +8,29 @@ HTTP calls stay on the Gmail REST API (same endpoints as the official client).
 from __future__ import annotations
 
 import base64
+import re
 from datetime import UTC, datetime
 
 import httpx
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+    wait_fixed,
+)
 
 from vivecaribe.domain.email_message import EmailMessage
-from vivecaribe.domain.errors import DomainError
+from vivecaribe.domain.errors import DomainError, EmailNotFound
 from vivecaribe.logging import logger
 
 _GMAIL_API = "https://gmail.googleapis.com/gmail/v1/users/me"
 _TOKEN_URI = "https://oauth2.googleapis.com/token"
+_ZOHO_OTP_QUERY = "from:zohoaccounts.com newer_than:1d subject:OTP"
+_ZOHO_OTP_CODE_RE = re.compile(r"\b(\d{6,8})\b")
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
 
 
 class GmailMailbox:
@@ -176,6 +186,53 @@ class GmailMailbox:
             received_at=received,
             metadata={"thread_id": payload.get("threadId")},
         )
+
+    @retry(
+        retry=retry_if_exception_type(EmailNotFound),
+        stop=stop_after_attempt(5),
+        wait=wait_fixed(5),
+        reraise=True,
+    )
+    async def fetch_zoho_verification_code(
+        self,
+        *,
+        received_after: datetime | None = None,
+    ) -> str:
+        """Poll Gmail for a Zoho identity-verification OTP and return the code.
+
+        Searches recent Zoho mail via ``fetch_messages``, extracts a 6–8 digit
+        code from the newest matching message, and retries on ``EmailNotFound``.
+
+        Args:
+            received_after: When set, ignore OTP emails older than this instant
+                (used so a just-requested code is not confused with a stale one).
+
+        Returns:
+            The verification code as a string of digits.
+
+        Raises:
+            EmailNotFound: If no matching email or parseable code is found
+                after five attempts (five seconds apart).
+        """
+        messages = await self.fetch_messages(query=_ZOHO_OTP_QUERY, max_results=5)
+        code = None
+        for message in sorted(messages, key=lambda item: item.received_at, reverse=True):
+            if received_after is not None and message.received_at < received_after:
+                continue
+            candidates = (
+                message.subject,
+                message.body_text,
+                _HTML_TAG_RE.sub(" ", message.body_html or ""),
+            )
+            for candidate in candidates:
+                match = _ZOHO_OTP_CODE_RE.search(candidate or "")
+                if match is not None:
+                    code = match.group(1)
+            
+            if code is not None:
+                logger.info("Extracted Zoho verification code from Gmail")
+                return code
+        raise EmailNotFound("Zoho verification email or OTP code not found in Gmail")
 
     @retry(
         retry=retry_if_exception_type((httpx.TransportError, httpx.TimeoutException)),

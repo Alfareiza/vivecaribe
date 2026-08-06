@@ -60,3 +60,15 @@ class NotFoundError(DomainError):
 
 class ConflictError(DomainError):
     """Raised when a unique business constraint would be violated."""
+
+
+class EmailNotFound(DomainError):
+    """Raised when an expected mailbox message cannot be found."""
+
+    def __init__(self, message: str = "Email not found") -> None:
+        """Create an email-not-found error.
+
+        Args:
+            message: Description of the missing email.
+        """
+        super().__init__(message)

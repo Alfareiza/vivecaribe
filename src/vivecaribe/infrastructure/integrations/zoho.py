@@ -9,11 +9,13 @@ from __future__ import annotations
 import asyncio
 import html
 import json
+import os
 import re
+import tempfile
 import time
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import quote
 
 from playwright.async_api import APIResponse, Browser, BrowserContext, Page, Playwright, async_playwright
@@ -22,17 +24,39 @@ from vivecaribe.domain.email_message import EmailMessage
 from vivecaribe.domain.errors import DomainError
 from vivecaribe.logging import logger
 
+if TYPE_CHECKING:
+    from vivecaribe.infrastructure.integrations.gmail import GmailMailbox
+
 TimeWindow = Literal["1h", "24h", "2d", "1m"] | None
 
 ACCOUNT_ID = "2134541000000008002"
 MD_READ_CONCURRENCY = 5
+_IDENTITY_CHALLENGE_TEXT = "Select any of this option to verify"
+_VERIFY_VIA_EMAIL_TEXT = "Verify via email address"
+_OTP_SENT_TEXT = "OTP sent"
+_OTP_SPLIT_SELECTOR = "input.mfa_email_otp"
+_OTP_INPUT_SELECTORS = (
+    _OTP_SPLIT_SELECTOR,
+    "#otp_number",
+    "#mfa_totp",
+    "#otpfield",
+    "input[name='otp']",
+    "input[name='otp_number']",
+)
+
+
+def default_session_file() -> Path:
+    """Return Zoho session path under ``APP_DATA_DIR`` or the user home."""
+    data_dir = os.environ.get("APP_DATA_DIR", "").strip()
+    root = Path(data_dir) if data_dir else Path.home()
+    return root / ".zohomail_storage.json"
 
 
 class ZohoSession:
     """Playwright login, storage_state persistence, and Zoho Mail API headers."""
 
     REGION: str = "com"
-    SESSION_FILE: Path = Path.home() / ".zohomail_storage.json"
+    SESSION_FILE: Path = default_session_file()
 
     def __init__(
         self,
@@ -45,7 +69,7 @@ class ZohoSession:
         """Create a session manager from Zoho login credentials."""
         self.username = username
         self.password = password
-        self.session_file = session_file or self.SESSION_FILE
+        self.session_file = session_file or default_session_file()
         self.account_id = account_id
         self._meta: dict[str, str] = {}
 
@@ -116,7 +140,87 @@ class ZohoSession:
             except Exception:
                 continue
 
-    async def login(self, context: BrowserContext) -> None:  # pragma: no cover
+    async def _has_identity_challenge(self, page: Page) -> bool:
+        """Return True when Zoho is asking to verify account ownership."""
+        try:
+            return await page.get_by_text(_IDENTITY_CHALLENGE_TEXT).count() > 0
+        except Exception:
+            return False
+
+    def _getyourguide_gmail(self) -> GmailMailbox:
+        """Build the GetYourGuide ``GmailMailbox`` used for Zoho email OTP."""
+        from vivecaribe.domain.enums import BookingProvider
+        from vivecaribe.infrastructure.integrations.gmail import GmailMailbox
+        from vivecaribe.settings import get_settings
+
+        for account in get_settings().load_booking_providers().booking_providers:
+            if account.booking_provider != BookingProvider.GETYOURGUIDE:
+                continue
+            client = account.mailbox.client
+            if not isinstance(client, GmailMailbox):
+                raise DomainError(
+                    "GetYourGuide mailbox must be Gmail for Zoho OTP retrieval",
+                )
+            return client
+        raise DomainError("GetYourGuide Gmail mailbox is not configured")
+
+    async def _complete_email_otp(self, page: Page) -> None:
+        """Complete Zoho's verify-via-email challenge using GetYourGuide Gmail."""
+        from datetime import timedelta
+
+        requested_at = datetime.now(UTC) - timedelta(seconds=5)
+        await page.get_by_text(_VERIFY_VIA_EMAIL_TEXT).click(timeout=10000)
+        try:
+            await page.get_by_text(_OTP_SENT_TEXT).wait_for(state="visible", timeout=15000)
+        except Exception:
+            pass
+
+        otp_inputs = page.locator(_OTP_SPLIT_SELECTOR)
+        try:
+            await otp_inputs.first.wait_for(state="visible", timeout=15000)
+        except Exception as exc:
+            raise DomainError("Zoho OTP input was not found after email verify") from exc
+
+        code = await self._getyourguide_gmail().fetch_zoho_verification_code(
+            received_after=requested_at,
+        )
+        count = await otp_inputs.count()
+        if len(code) != count:
+            logger.warning(
+                f"Zoho OTP length {len(code)} does not match {count} input boxes",
+            )
+
+        # Split inputs are opacity:0; keyboard typing drives Zoho's OTP JS.
+        await otp_inputs.first.click(force=True)
+        await page.keyboard.type(code, delay=40)
+        await page.locator("#mfa_email_full_value").evaluate(
+            "(el, value) => { el.value = value; }",
+            code,
+        )
+        await page.click("#nextbtn")
+        try:
+            await page.wait_for_url(
+                lambda url: "tfa-banner" in url
+                or "announcement" in url
+                or "signin" not in url,
+                timeout=20000,
+            )
+        except Exception:
+            pass
+        if await page.get_by_text("Incorrect OTP").count() > 0:
+            raise DomainError("Zoho rejected the email OTP as incorrect")
+
+    async def _fail_login(self, page: Page, message: str) -> None:
+        """Capture a temp screenshot and raise a login DomainError."""
+        screenshot_path = Path(tempfile.gettempdir()) / "zoho_login_failed.png"
+        try:
+            await page.screenshot(path=str(screenshot_path), full_page=True)
+            detail = f"{message} Screenshot saved to {screenshot_path}."
+        except Exception:
+            detail = message
+        raise DomainError(detail)
+
+    async def login(self, context: BrowserContext) -> None:
         """Sign in with username/password and persist storage_state + meta."""
         page = await context.new_page()
         try:
@@ -144,9 +248,14 @@ class ZohoSession:
                 await self._dismiss_post_login_prompts(page)
 
             if "signin" in page.url:
-                raise DomainError(
-                    "Login failed. Check username/password, or complete 2FA manually.",
-                )
+                if await self._has_identity_challenge(page):
+                    await self._complete_email_otp(page)
+                if "signin" in page.url:
+                    await self._fail_login(
+                        page,
+                        "Login failed. Check username/password, or complete "
+                        "identity verification.",
+                    )
 
             await page.goto(self._mail_url, wait_until="domcontentloaded")
             await page.wait_for_function(
@@ -458,7 +567,7 @@ class ZohoMailbox:
     TIME_WINDOWS_SECONDS: dict[str, int] = ZohoMailClient.TIME_WINDOWS_SECONDS
     DEFAULT_TIME_WINDOW: TimeWindow = "1m"
     DEFAULT_FOLDER_NAME: str = "NOTIFICATIONS"
-    SESSION_FILE: Path = ZohoSession.SESSION_FILE
+    SESSION_FILE: Path = default_session_file()
 
     def __init__(
         self,
@@ -470,7 +579,7 @@ class ZohoMailbox:
         """Create a mailbox client from Zoho login credentials."""
         self.username = username
         self.password = password
-        self.session_file = session_file or self.SESSION_FILE
+        self.session_file = session_file or default_session_file()
         self._session = ZohoSession(
             username,
             password,
