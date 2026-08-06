@@ -1,6 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "fastapi",
   "crons": [
     {
       "path": "/automation/emails/get-bookings",

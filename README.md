@@ -188,12 +188,12 @@ starts Postgres 16, applies migrations, and runs the same `uv run pytest` gate.
 
 Production: https://vivecaribe.vercel.app
 
-- Native FastAPI entrypoint: [`src/main.py`](src/main.py). That file prepends
-  `src/` to `sys.path` so `vivecaribe` imports on Vercel's native runtime
-  (which does not install the local package).
-- Optional OCI image: root [`Dockerfile.vercel`](Dockerfile.vercel) for
-  container deploys (Uvicorn on `$PORT`). Local Compose uses
-  [`Dockerfile`](Dockerfile) on port `8000`.
+- Production: Vercel **Container** preset + root
+  [`Dockerfile.vercel`](Dockerfile.vercel). `uv sync` installs `vivecaribe`,
+  `PYTHONPATH=/app/src`, and Uvicorn serves on `$PORT` (default `80`).
+- Local Compose uses [`Dockerfile`](Dockerfile) on port `8000`.
+- [`src/main.py`](src/main.py) is only a fallback if the native FastAPI
+  runtime is used without a container.
 
 ### Vercel Cron
 
