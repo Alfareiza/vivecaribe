@@ -45,7 +45,7 @@ booking_providers:
       credentials_vars:
         refresh_token: HOMEFANS_OUTLOOK_REFRESH_TOKEN
       queries:
-        new_bookings_query: 'from:@homefans.net subject:new order'
+        new_bookings_query: 'from:@homefans.net subject:new order received>07/07/2026'
 
   - booking_provider: propio
     mailbox:

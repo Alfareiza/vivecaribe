@@ -27,7 +27,7 @@ from vivecaribe.logging import logger
 if TYPE_CHECKING:
     from vivecaribe.infrastructure.integrations.gmail import GmailMailbox
 
-TimeWindow = Literal["1h", "24h", "2d", "1m"] | None
+TimeWindow = Literal["1h", "24h", "2d", "1m", "2m", "3m"] | None
 
 ACCOUNT_ID = "2134541000000008002"
 MD_READ_CONCURRENCY = 5
@@ -309,6 +309,8 @@ class ZohoMailClient:
         "24h": 24 * 60 * 60,
         "2d": (24 * 60 * 60) * 2,
         "1m": (24 * 60 * 60) * 30,
+        "2m": (24 * 60 * 60) * 60,
+        "3m": (24 * 60 * 60) * 90,
     }
 
     def __init__(self, session: ZohoSession) -> None:
@@ -485,9 +487,11 @@ class ZohoMailClient:
     ) -> EmailMessage:
         """Normalize a Zoho summary + detail pair into ``EmailMessage``."""
         received_at = summary.get("received_at")
-        if not isinstance(received_at, datetime):
+        if not isinstance(received_at, str):
             time_ms = int(summary.get("time_ms", 0) or 0)
-            received_at = datetime.fromtimestamp(time_ms / 1000, tz=UTC)
+            received_dt = datetime.fromtimestamp(time_ms // 1000, tz=UTC)
+            # received_at = received_dt.strftime("%Y-%m-%d %H:%M:%S%z")
+   
 
         return EmailMessage(
             source="zoho",
@@ -497,7 +501,7 @@ class ZohoMailClient:
             subject=str(summary.get("subject", "")),
             body_text=details.get("body_text", ""),
             body_html=details.get("body_html", ""),
-            received_at=received_at,
+            received_at=received_dt,
             metadata={
                 "mail_id": summary.get("mail_id", ""),
                 "unread": summary.get("unread", False),
@@ -565,7 +569,7 @@ class ZohoMailbox:
     REGION: str = ZohoSession.REGION
     LISTING_BATCH_SIZE: int = ZohoMailClient.LISTING_BATCH_SIZE
     TIME_WINDOWS_SECONDS: dict[str, int] = ZohoMailClient.TIME_WINDOWS_SECONDS
-    DEFAULT_TIME_WINDOW: TimeWindow = "1m"
+    DEFAULT_TIME_WINDOW: TimeWindow = "2m"
     DEFAULT_FOLDER_NAME: str = "NOTIFICATIONS"
     SESSION_FILE: Path = default_session_file()
 

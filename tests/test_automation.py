@@ -90,14 +90,16 @@ def test_getyourguide_extractor_from_fixture() -> None:
     assert ext.get_participants() == 2
     assert ext.get_customer_name() == "Terrance Turner"
     assert ext.get_phone() == "+16625709162"
+    assert ext.get_pais_del_visitante() == "US"
     assert ext.get_moneda() == "USD"
     assert ext.get_price() == Decimal("186.00")
-    assert ext.get_income() == Decimal("186.00")
+    assert ext.get_income() == Decimal("130.200")
     assert ext.get_dt_evento() == datetime(2026, 5, 2, 15, 25, tzinfo=UTC)
 
     draft = ext.to_draft()
     assert draft.booking_provider == BookingProvider.GETYOURGUIDE
-    assert draft.income == draft.price
+    assert draft.price == Decimal("186.00")
+    assert draft.income == Decimal("130.200")
 
 
 def test_homefans_extractor_from_fixture() -> None:
@@ -111,9 +113,9 @@ def test_homefans_extractor_from_fixture() -> None:
     assert ext.get_participants() == 1
     assert ext.get_moneda() == "EUR"
     assert ext.get_price() == Decimal("89.68")
-    assert ext.get_income() == Decimal("89.68")
-    assert ext.get_pais_del_visitante() == "Netherlands"
-    assert ext.get_phone() == "0031641428471"
+    assert ext.get_income() == Decimal("63.7500")
+    assert ext.get_pais_del_visitante() == "NL"
+    assert ext.get_phone() == "+31641428471"
     assert ext.get_dt_evento() == datetime(2026, 7, 29, 17, 4, tzinfo=UTC)
 
 
@@ -134,7 +136,7 @@ def test_viator_extractor_from_fixture() -> None:
     assert ext.get_phone() == "+18137350000"
     assert ext.get_pais_del_visitante() == "US"
     assert ext.get_moneda() == "USD"
-    assert ext.get_price() == Decimal("78.40")
+    assert ext.get_price() == Decimal("102.7040")
     assert ext.get_income() == Decimal("78.40")
     assert ext.get_estado().value == "confirmada"
 
@@ -214,7 +216,8 @@ async def test_pipeline_happy_path_noop_whatsapp_skips_mark_read(
     assert mailbox.marked_read == []
     stored = next(iter(reservas.by_key.values()))
     assert stored.notificado_whatsapp is False
-    assert stored.income == stored.price
+    assert stored.price == Decimal("186.00")
+    assert stored.income == Decimal("130.200")
 
 
 @pytest.mark.asyncio

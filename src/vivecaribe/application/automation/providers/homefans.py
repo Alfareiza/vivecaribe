@@ -4,14 +4,17 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
+from functools import lru_cache
 from typing import Self
 
 from bs4 import BeautifulSoup
+import pycountry
 
 from vivecaribe.application.automation.models import ReservaDraft
 from vivecaribe.application.automation.providers.base import BaseExtractor
 from vivecaribe.domain.enums import BookingProvider, ReservaEstado
 from vivecaribe.domain.errors import ValidationError
+from vivecaribe.logging import logger
 
 
 class HomefansExtractor(BaseExtractor):
@@ -92,8 +95,8 @@ class HomefansExtractor(BaseExtractor):
 
     def get_customer_name(self) -> str:
         """Return ``First Name`` + ``Last Name`` from customer details."""
-        first = self._after_strong("First Name")
-        last = self._after_strong("Last Name")
+        first = self._after_strong("First Name").capitalize()
+        last = self._after_strong("Last Name").capitalize()
         return f"{first} {last}".strip()
 
     def get_phone(self) -> str:
@@ -101,12 +104,22 @@ class HomefansExtractor(BaseExtractor):
         return self.normalize_phone(self._after_strong("Phone"))
 
     def get_pais_del_visitante(self) -> str:
-        """Return the customer country."""
-        return self._after_strong("Country")
+        """Return the customer country in format 2-letter codes."""
+        try:
+            country = pycountry.countries.get(name=self._after_strong("Country"))
+            return country.alpha_2
+        except AttributeError:
+            return super().get_pais_del_visitante()
 
     def get_moneda(self) -> str:
         """Return currency code for Homefans bookings."""
         return "EUR"
+
+    @lru_cache
+    def prices(self) -> list(Decimal, Decimal, Decimal, Decimal):
+        """Return the 4 detectes prices in the e-mail."""
+        all_prices = self._soup.find_all("span", class_=["woocommerce-Price-amount", "amount"])
+        return [self.parse_decimal(price.get_text(strip=True)) for price in all_prices]
 
     def get_price(self) -> Decimal:
         """Return order total (not subtotal)."""
@@ -126,9 +139,13 @@ class HomefansExtractor(BaseExtractor):
 
         Pending: booking-provider-specific commission formula.
         """
-        # TODO: Homefans income formula.
-        return self.get_price()
-
+        try:
+            income, *_ = self.prices()
+            return income * Decimal(0.75)
+        except ValueError:
+            logger.exception('Se esperaban 4 valores referentes a precio en e-mail')
+            return ""
+        
     def get_estado(self) -> ReservaEstado:
         """Return reservation lifecycle state inferred from this email."""
         return ReservaEstado.CONFIRMADA

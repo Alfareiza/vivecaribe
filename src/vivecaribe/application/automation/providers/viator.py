@@ -8,11 +8,14 @@ from decimal import Decimal
 from typing import Self
 
 from bs4 import BeautifulSoup
+from phonenumbers import NumberParseException, phonenumber
+import phonenumbers
 
 from vivecaribe.application.automation.models import ReservaDraft
 from vivecaribe.application.automation.providers.base import BaseExtractor
 from vivecaribe.domain.enums import BookingProvider, ReservaEstado
 from vivecaribe.domain.errors import ValidationError
+from vivecaribe.logging import logger
 
 
 class ViatorExtractor(BaseExtractor):
@@ -78,19 +81,14 @@ class ViatorExtractor(BaseExtractor):
     def get_phone(self) -> str:
         """Return the customer phone when present (digits only, keep leading ``+``)."""
         try:
-            raw = self._value_after_label("Teléfono")
-        except ValidationError:
+            for selector_text in "Teléfono", "Teléfono Alternativo":
+                raw = self._value_after_label(selector_text)
+                if parsed := phonenumbers.parse(raw, None):
+                    break
+        except (ValidationError, NumberParseException):
             return ""
-        return self.normalize_phone(raw)
-
-    def get_pais_del_visitante(self) -> str:
-        """Return a country hint from the phone line when present (e.g. ``US``)."""
-        try:
-            raw = self._value_after_label("Teléfono")
-        except ValidationError:
-            return ""
-        match = re.search(r"\b([A-Z]{2})\+", raw)
-        return match.group(1) if match else ""
+        else:
+            return str(phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164))
 
     def get_moneda(self) -> str:
         """Return currency code from ``Tarifa neta`` (e.g. ``USD $78.40``)."""
@@ -102,15 +100,14 @@ class ViatorExtractor(BaseExtractor):
 
     def get_price(self) -> Decimal:
         """Return the net rate (``Tarifa neta``)."""
-        return self.parse_decimal(self._value_after_label("Tarifa neta"))
+        return self.get_income() * Decimal("1.31")
 
     def get_income(self) -> Decimal:
         """Return operator income for this Viator booking.
 
         Pending: booking-provider-specific commission formula.
         """
-        # TODO: Viator income formula.
-        return self.get_price()
+        return self.parse_decimal(self._value_after_label("Tarifa neta"))
 
     def get_estado(self) -> ReservaEstado:
         """Return reservation lifecycle state inferred from this email."""

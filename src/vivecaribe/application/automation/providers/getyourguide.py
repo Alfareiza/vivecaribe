@@ -102,10 +102,6 @@ class GetYourGuideExtractor(BaseExtractor):
                 return self.normalize_phone(text.split(":", 1)[1])
         return ""
 
-    def get_pais_del_visitante(self) -> str:
-        """Return visitor country when present (often absent in GYG mail)."""
-        return ""
-
     def get_moneda(self) -> str:
         """Return currency code for GYG bookings."""
         return "USD"
@@ -120,8 +116,7 @@ class GetYourGuideExtractor(BaseExtractor):
 
         Pending: booking-provider-specific commission formula.
         """
-        # TODO: GetYourGuide income formula.
-        return self.get_price()
+        return self.get_price() * Decimal("0.7")
 
     def get_estado(self) -> ReservaEstado:
         """Return reservation lifecycle state inferred from this email."""

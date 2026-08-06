@@ -8,6 +8,8 @@ from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Self
 
+import phonenumbers
+
 from vivecaribe.application.automation.models import ReservaDraft
 from vivecaribe.domain.enums import BookingProvider
 from vivecaribe.domain.errors import ValidationError
@@ -44,7 +46,7 @@ class BaseExtractor(ABC):
         >>> BaseExtractor.normalize_phone("+1 662 570 9162")
         '+16625709162'
         >>> BaseExtractor.normalize_phone("0031 641 428 471")
-        '0031641428471'
+        '+31641428471'
         >>> BaseExtractor.normalize_phone("")
         ''
         >>> BaseExtractor.normalize_phone("no phone here")
@@ -57,13 +59,14 @@ class BaseExtractor(ABC):
         match = _PHONE_CANDIDATE.search(text)
         if match is None:
             return ""
-
+        
         candidate = match.group(0)
-        has_plus = candidate.startswith("+")
-        digits = re.sub(r"\D", "", candidate)
+        # has_plus = candidate.startswith("+")
+        digits = re.sub(r"\D", "", candidate).lstrip("0")
+   
         if not digits:
             return ""
-        return f"+{digits}" if has_plus else digits
+        return f"+{digits}"
 
     @staticmethod
     def parse_decimal(raw: str) -> Decimal:
@@ -115,3 +118,15 @@ class BaseExtractor(ABC):
         if value is None or not value.strip():
             raise ValidationError(f"Could not parse {field}", field=field)
         return value.strip()
+
+    def get_pais_del_visitante(self) -> str:
+        """Return ISO alpha-2 country inferred from the customer phone."""
+        phone = self.get_phone()
+        if not phone:
+            return ""
+        try:
+            parsed = phonenumbers.parse(phone, None)
+        except phonenumbers.NumberParseException:
+            return ""
+        region = phonenumbers.region_code_for_number(parsed)
+        return region or ""
