@@ -15,6 +15,7 @@ from vivecaribe.domain.enums import BookingProvider
 from vivecaribe.domain.errors import DomainError
 from vivecaribe.infrastructure.integrations.gmail import GmailMailbox
 from vivecaribe.infrastructure.integrations.outlook import OutlookMailbox
+from vivecaribe.infrastructure.integrations.zoho import ZohoMailbox
 
 # Non-secret booking-provider / mailbox config (committed with the repo).
 BOOKING_PROVIDERS_YAML_PATH = Path("booking_providers.yaml")
@@ -35,18 +36,20 @@ class MailboxConfig(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    mailbox_name: Literal["gmail", "outlook"]
+    mailbox_name: Literal["gmail", "outlook", "zoho"]
     credentials_vars: dict[str, str] = Field(default_factory=dict)
     queries: dict[str, str] = Field(default_factory=dict)
-    _client: GmailMailbox | OutlookMailbox | None = PrivateAttr(default=None)
+    _client: GmailMailbox | OutlookMailbox | ZohoMailbox | None = PrivateAttr(
+        default=None,
+    )
 
     @property
-    def client(self) -> GmailMailbox | OutlookMailbox:
+    def client(self) -> GmailMailbox | OutlookMailbox | ZohoMailbox:
         """Build (and cache) the mailbox client for this config."""
         if self._client is not None:
             return self._client
 
-        settings = get_settings() # loads env into Settings, being someones as None
+        settings = get_settings()
         if self.mailbox_name == "gmail":
             self._client = GmailMailbox(
                 token=settings.require_env(self._var("token")),
@@ -54,11 +57,16 @@ class MailboxConfig(BaseModel):
                 client_id=settings.require_gmail_client_id(),
                 client_secret=settings.require_gmail_client_secret(),
             )
-        else:
+        elif self.mailbox_name == "outlook":
             self._client = OutlookMailbox(
                 client_id=settings.require_outlook_client_id(),
                 client_secret=settings.require_outlook_client_secret(),
                 refresh_token=settings.require_env(self._var("refresh_token")),
+            )
+        else:
+            self._client = ZohoMailbox(
+                username=settings.require_env(self._var("username")),
+                password=settings.require_env(self._var("password")),
             )
         return self._client
 

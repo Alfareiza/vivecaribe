@@ -7,6 +7,9 @@
 #     refresh_token: GYG_GMAIL_REFRESH_TOKEN
 #   Outlook:
 #     refresh_token: HOMEFANS_OUTLOOK_REFRESH_TOKEN
+#   Zoho:
+#     username: PROPIO_ZOHO_USERNAME
+#     password: PROPIO_ZOHO_PASSWORD
 #
 # Shared OAuth app credentials live in Settings / env:
 #   GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET
@@ -14,6 +17,7 @@
 #
 # Multiple providers may share the same credentials_vars when they share one
 # inbox. `queries` is a named map — pipeline uses `new_bookings_query`.
+# Zoho folder/time-window filters are ZohoMailbox class defaults (not YAML).
 
 booking_providers:
   - booking_provider: getyourguide
@@ -41,3 +45,12 @@ booking_providers:
         refresh_token: HOMEFANS_OUTLOOK_REFRESH_TOKEN
       queries:
         new_bookings_query: 'from:@homefans.net subject:new order'
+
+  - booking_provider: propio
+    mailbox:
+      mailbox_name: zoho
+      credentials_vars:
+        username: PROPIO_ZOHO_USERNAME
+        password: PROPIO_ZOHO_PASSWORD
+      queries:
+        new_bookings_query: "You've got a new order"

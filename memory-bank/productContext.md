@@ -2,7 +2,8 @@
 
 ## Why it exists
 
-Booking confirmations arrive as HTML emails across Gmail and Outlook inboxes.
+Booking confirmations arrive as HTML emails across Gmail, Outlook, and Zoho
+inboxes.
 Manual parsing is slow and error-prone. ViveCaribe turns those emails into
 structured reservations operators can trust, while remaining an API platform
 (not a one-off script).

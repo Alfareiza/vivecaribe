@@ -8,7 +8,11 @@
 - SQLAlchemy 2.x async (`asyncpg` / `psycopg`) + Alembic
 - Argon2 (`argon2-cffi`) + PyJWT
 - httpx, Tenacity, BeautifulSoup4, PyYAML, Rich, Sentry SDK
+- Playwright (Zoho free-tier: login/cookies only — no IMAP/API)
+- phonenumbers (Propio visitor country alpha-2 from phone)
 - Gmail via Google OAuth refresh tokens; Outlook via MSAL consumers authority
+- Zoho via username/password + `storage_state` JSON; mail via
+  `context.request` to search.do / md.do
 
 ## Local tooling
 

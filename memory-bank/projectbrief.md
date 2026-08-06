@@ -4,7 +4,8 @@
 
 ViveCaribe is an API-first booking platform for guided experiences in the
 Caribbean (e.g. Cartagena / Barranquilla stadium tours). Operators receive
-booking confirmations from channels such as GetYourGuide, Viator, and Homefans;
+booking confirmations from channels such as GetYourGuide, Viator, Homefans,
+and first-party Propio (Grupo Vive Caribe / WooCommerce via Zoho Mail);
 the system normalizes those bookings into a shared `Reserva` model.
 
 ## Goals
