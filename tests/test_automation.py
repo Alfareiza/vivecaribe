@@ -139,17 +139,45 @@ def test_viator_extractor_from_fixture() -> None:
     assert ext.get_estado().value == "confirmada"
 
 
-def test_propio_extractor_is_skeleton() -> None:
-    """Propio remains a skeleton until a sample HTML exists."""
-    ext = PropioExtractor.from_html("<p>propio booking</p>")
-    with pytest.raises(ValidationError, match="skeleton"):
-        ext.get_customer_name()
-    with pytest.raises(ValidationError, match="skeleton"):
-        ext.get_reserva_reference()
-    with pytest.raises(ValidationError, match="skeleton"):
-        ext.get_price()
-    with pytest.raises(ValidationError, match="skeleton"):
-        ext.to_draft()
+def test_propio_extractor_from_fixture() -> None:
+    """Propio WooCommerce HTML sample yields booking fields via getters."""
+    html = (FIXTURES / "propio.html").read_text(encoding="utf-8")
+    ext = PropioExtractor.from_html(html)
+
+    assert ext.get_reserva_reference() == "1995"
+    assert ext.get_nombre_experiencia() == "Watch Junior de Barranquilla Match"
+    assert ext.get_ciudad_evento() == "Barranquilla"
+    assert ext.get_dt_evento() == datetime(2026, 8, 1, 12, 40, tzinfo=UTC)
+    assert ext.get_participants() == 2
+    assert ext.get_customer_name() == "Lara Oliveira"
+    assert ext.get_phone() == "+64224550339"
+    assert ext.get_pais_del_visitante() == "NZ"
+    assert ext.get_moneda() == "USD"
+    assert ext.get_price() == Decimal("190.00")
+    assert ext.get_income() == Decimal("190.00")
+    assert ext.get_estado() == ReservaEstado.CONFIRMADA
+
+    draft = ext.to_draft()
+    assert draft.booking_provider == BookingProvider.PROPIO
+    assert draft.income == draft.price
+
+
+def test_propio_ciudad_missing_from_title_returns_empty(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """City falls back to empty string and logs when title has no known city."""
+    html = """
+    <h1>New order: #1</h1>
+    <div class="email-introduction"><p>new order from Ada:</p></div>
+    <tr class="order_item"><td><h3>Watch Junior Match</h3>
+    <p>Trip Date: <strong>August 1, 2026 12:40 pm</strong></p>
+    <p>Guest x <strong>1</strong></p></td></tr>
+    <th>Total:</th><td><span class="woocommerce-Price-amount">$10.00</span></td>
+    """
+    ext = PropioExtractor.from_html(html)
+    with caplog.at_level("WARNING"):
+        assert ext.get_ciudad_evento() == ""
+    assert "ciudad_experiencia not found" in caplog.text
 
 
 @pytest.mark.asyncio
@@ -251,6 +279,56 @@ async def test_pipeline_marks_read_only_when_whatsapp_succeeds(
     assert mailbox.marked_read == [message.mailbox_message_id]
     stored = next(iter(reservas.by_key.values()))
     assert stored.notificado_whatsapp is True
+
+
+@pytest.mark.asyncio
+async def test_pipeline_skips_mark_read_when_mailbox_lacks_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Zoho-style mailboxes without ``mark_as_read`` still notify successfully."""
+
+    class _NoMarkMailbox:
+        """Mailbox client that only supports fetch."""
+
+        def __init__(self, messages: list[EmailMessage]) -> None:
+            self.messages = messages
+
+        async def fetch_messages(
+            self,
+            *,
+            query: str,
+            max_results: int = 30,
+        ) -> list[EmailMessage]:
+            return self.messages[:max_results]
+
+    message = _message_from_fixture(
+        "propio.html",
+        sender="orders@grupovivecaribe.com",
+        source="zoho",
+    )
+    mailbox = _NoMarkMailbox([message])
+    monkeypatch.setattr(
+        MailboxConfig,
+        "client",
+        property(lambda self, m=mailbox: m),
+    )
+    use_case = ProcessBookingEmailsUseCase(
+        accounts=[
+            _account(
+                booking_provider=BookingProvider.PROPIO,
+                mailbox_name="zoho",
+                query="You've got a new order",
+            ),
+        ],
+        email_messages=FakeEmailMessageStore(),  # type: ignore[arg-type]
+        reservas=FakeReservaStore(),  # type: ignore[arg-type]
+        whatsapp=AlwaysNotifyWhatsApp(),
+    )
+
+    await use_case.start(notify=True)
+
+    assert use_case.notified == 1
+    assert use_case.created == 1
 
 
 @pytest.mark.asyncio

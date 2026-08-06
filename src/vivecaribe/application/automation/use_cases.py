@@ -15,11 +15,12 @@ from vivecaribe.infrastructure.db.repositories import (
 from vivecaribe.infrastructure.integrations.gmail import GmailMailbox
 from vivecaribe.infrastructure.integrations.outlook import OutlookMailbox
 from vivecaribe.infrastructure.integrations.whatsapp import NoOpWhatsAppNotifier
+from vivecaribe.infrastructure.integrations.zoho import ZohoMailbox
 from vivecaribe.logging import logger
 from vivecaribe.settings import BookingProviderAccount
 
 NEW_BOOKINGS_QUERY = "new_bookings_query"
-MailboxClient = GmailMailbox | OutlookMailbox
+MailboxClient = GmailMailbox | OutlookMailbox | ZohoMailbox
 
 
 class ProcessBookingEmailsUseCase:
@@ -32,7 +33,7 @@ class ProcessBookingEmailsUseCase:
         email_messages: SqlAlchemyEmailMessageRepository,
         reservas: SqlAlchemyReservaRepository,
         whatsapp: NoOpWhatsAppNotifier,
-        max_results: int = 30,
+        max_results: int = 100,
     ) -> None:
         """Wire booking-provider accounts, stores, and WhatsApp."""
         self._accounts = accounts
@@ -103,13 +104,20 @@ class ProcessBookingEmailsUseCase:
         if notified:
             reserva.notificado_whatsapp = True
             reserva = await self._reservas.save(reserva)
-            await mailbox.mark_as_read(
-                mailbox_message_id=stored_message.mailbox_message_id,
-            )
-            logger.info(
-                f"Marked message {stored_message.mailbox_message_id} "
-                "as read after WhatsApp notify",
-            )
+            mark_as_read = getattr(mailbox, "mark_as_read", None)
+            if mark_as_read is not None:
+                await mark_as_read(
+                    mailbox_message_id=stored_message.mailbox_message_id,
+                )
+                logger.info(
+                    f"Marked message {stored_message.mailbox_message_id} "
+                    "as read after WhatsApp notify",
+                )
+            else:
+                logger.info(
+                    f"Skipping mark_as_read for {stored_message.mailbox_message_id} "
+                    "(mailbox does not support it)",
+                )
         else:
             logger.info(
                 f"Skipping mark_as_read for {stored_message.mailbox_message_id} "
@@ -156,7 +164,7 @@ class ProcessBookingEmailsUseCase:
 
             mailbox = account.mailbox.client
             logger.info(
-                f"Fetching emails from {account.booking_provider!r} in "
+                f"Fetching emails from {account.booking_provider.value!r} in "
                 f"{account.mailbox.mailbox_name} with query={query!r}",
             )
             messages = await self.get_messages_from_mailbox(account, query)
@@ -164,8 +172,8 @@ class ProcessBookingEmailsUseCase:
 
             for i, message in enumerate(messages, 1):
                 try:
-                    logger.info(f"[{account.booking_provider!r}] Processing e-mail #{i}"
-                    f" with subject {message.subject[:27]!r} "
+                    logger.info(f"[{account.booking_provider.value!r}] Processing e-mail #{i}"
+                    f" with subject {message.subject[:48]!r}..."
                     )
                     stored_message, reserva, created = (
                         await self.get_or_create_reserva_from_email_message(
@@ -183,7 +191,7 @@ class ProcessBookingEmailsUseCase:
                 except (ValidationError, DomainError) as exc:
                     logger.warning(
                         f"Pipeline skipped for {account.booking_provider} with subject"
-                        f"({message.subject[:27]!r}...) because {exc.message}",
+                        f"({message.subject[:48]!r}...) because {exc.message}",
                     )
                     continue
 

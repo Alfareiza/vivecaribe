@@ -26,7 +26,7 @@ def test_load_booking_providers_from_repo_yaml() -> None:
 
     assert len(config.booking_providers) >= 1
     first = config.booking_providers[0]
-    assert first.mailbox.mailbox_name in {"gmail", "outlook"}
+    assert first.mailbox.mailbox_name in {"gmail", "outlook", "zoho"}
     assert "new_bookings_query" in first.mailbox.queries
     assert first.mailbox.credentials_vars
 
@@ -86,3 +86,21 @@ def test_load_booking_providers_missing_file_returns_empty(
         cron_secret="cron",
     )
     assert settings.load_booking_providers().booking_providers == []
+
+
+def test_load_booking_providers_includes_propio_zoho() -> None:
+    """Repository YAML includes the Propio / Zoho mailbox entry."""
+    settings = Settings(
+        database_url="postgresql+psycopg://u:p@localhost/db",
+        jwt_secret="secret",
+        cron_secret="cron",
+    )
+    config = settings.load_booking_providers()
+    propio = next(
+        account
+        for account in config.booking_providers
+        if account.booking_provider.value == "propio"
+    )
+    assert propio.mailbox.mailbox_name == "zoho"
+    assert propio.mailbox.credentials_vars["username"] == "PROPIO_ZOHO_USERNAME"
+    assert propio.mailbox.queries["new_bookings_query"] == "You've got a new order"
