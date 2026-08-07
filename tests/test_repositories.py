@@ -100,6 +100,11 @@ async def test_reserva_get_or_create_is_idempotent(db_session: AsyncSession) -> 
     updated = await reserva_repo.save(first)
     assert updated.customer_name == "Updated Name"
 
+    items, total = await reserva_repo.list(skip=0, limit=10)
+    assert total == 1
+    assert items[0].id == first.id
+    assert items[0].customer_name == "Updated Name"
+
 
 @pytest.mark.asyncio
 async def test_email_message_get_or_create_is_idempotent(

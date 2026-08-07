@@ -126,3 +126,53 @@ async def test_get_reserva_unauthenticated_returns_401(
     """Missing Bearer token returns 401."""
     response = await auth_client.get(f"/reservas/{uuid4()}")
     assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_list_reservas_paginates(auth_client: AsyncClient) -> None:
+    """List returns total and a skip/limit page slice."""
+    headers = await auth_headers(auth_client)
+    for i in range(3):
+        created = await auth_client.post(
+            "/reservas",
+            json=_reserva_payload(reserva_reference=f"GYG-LIST-{i}"),
+            headers=headers,
+        )
+        assert created.status_code == 201
+
+    page = await auth_client.get(
+        "/reservas",
+        params={"skip": 0, "limit": 2},
+        headers=headers,
+    )
+    assert page.status_code == 200
+    body = page.json()
+    assert body["total"] == 3
+    assert len(body["items"]) == 2
+
+    rest = await auth_client.get(
+        "/reservas",
+        params={"skip": 2, "limit": 2},
+        headers=headers,
+    )
+    assert rest.status_code == 200
+    assert rest.json()["total"] == 3
+    assert len(rest.json()["items"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_list_reservas_empty(auth_client: AsyncClient) -> None:
+    """Empty database returns total 0 and empty items."""
+    headers = await auth_headers(auth_client)
+    response = await auth_client.get("/reservas", headers=headers)
+    assert response.status_code == 200
+    assert response.json() == {"total": 0, "items": []}
+
+
+@pytest.mark.asyncio
+async def test_list_reservas_unauthenticated_returns_401(
+    auth_client: AsyncClient,
+) -> None:
+    """Missing Bearer token returns 401."""
+    response = await auth_client.get("/reservas")
+    assert response.status_code == 401

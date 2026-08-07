@@ -64,3 +64,10 @@ class ReservaResponse(BaseModel):
     user_id: UUID | None
     created_at: datetime
     updated_at: datetime
+
+
+class ReservaListResponse(BaseModel):
+    """Paginated reservation list."""
+
+    total: int
+    items: list[ReservaResponse]
