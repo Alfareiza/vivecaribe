@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient
@@ -90,3 +91,38 @@ async def test_create_reserva_invalid_payload_returns_422(
         headers=headers,
     )
     assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_get_reserva_returns_200(auth_client: AsyncClient) -> None:
+    """Authenticated get-by-id returns the created reserva."""
+    headers = await auth_headers(auth_client)
+    created = await auth_client.post(
+        "/reservas",
+        json=_reserva_payload(reserva_reference="GYG-GET-1"),
+        headers=headers,
+    )
+    assert created.status_code == 201
+    reserva_id = created.json()["id"]
+
+    response = await auth_client.get(f"/reservas/{reserva_id}", headers=headers)
+    assert response.status_code == 200
+    assert response.json()["id"] == reserva_id
+    assert response.json()["reserva_reference"] == "GYG-GET-1"
+
+
+@pytest.mark.asyncio
+async def test_get_reserva_missing_returns_404(auth_client: AsyncClient) -> None:
+    """Unknown UUID returns 404."""
+    headers = await auth_headers(auth_client)
+    response = await auth_client.get(f"/reservas/{uuid4()}", headers=headers)
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_reserva_unauthenticated_returns_401(
+    auth_client: AsyncClient,
+) -> None:
+    """Missing Bearer token returns 401."""
+    response = await auth_client.get(f"/reservas/{uuid4()}")
+    assert response.status_code == 401

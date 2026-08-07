@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from uuid import UUID
+
 from fastapi import APIRouter, HTTPException, status
 
 from vivecaribe.api.deps import CurrentUser, ReservaRepo
@@ -38,3 +40,19 @@ async def create_reserva(
             ),
         )
     return ReservaResponse.model_validate(saved)
+
+
+@router.get("/reservas/{reserva_id}", response_model=ReservaResponse)
+async def get_reserva(
+    reserva_id: UUID,
+    reservas: ReservaRepo,
+    _current_user: CurrentUser,
+) -> ReservaResponse:
+    """Return a single reservation by id (JWT required)."""
+    reserva = await reservas.get_by_id(reserva_id)
+    if reserva is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Reserva {reserva_id} not found",
+        )
+    return ReservaResponse.model_validate(reserva)
