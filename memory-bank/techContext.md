@@ -9,10 +9,18 @@
 - Argon2 (`argon2-cffi`) + PyJWT
 - httpx, Tenacity, BeautifulSoup4, PyYAML, Rich, Sentry SDK
 - Playwright (Zoho free-tier: login/cookies only — no IMAP/API)
-- phonenumbers (Propio visitor country alpha-2 from phone)
+- phonenumbers (phone normalize + visitor country alpha-2)
+- pycountry (Homefans country name → alpha-2)
 - Gmail via Google OAuth refresh tokens; Outlook via MSAL consumers authority
 - Zoho via username/password + `storage_state` JSON; mail via
-  `context.request` to search.do / md.do
+  `context.request` to search.do / md.do; OTP via GYG Gmail when challenged
+
+## Runtime data dir
+
+- `APP_DATA_DIR` — writable root for Zoho session JSON (Docker/Vercel).
+  Falls back to user home when unset.
+- Docker images keep `/app` immutable for non-root; mount/persist data dir
+  separately (`Dockerfile` / `Dockerfile.vercel` / `docker-compose.yml`).
 
 ## Local tooling
 
@@ -37,8 +45,7 @@ Fixtures refuse to reset any database whose name does not end with `_test`.
 
 ## Deploy target
 
-Vercel Fluid Compute: native Python via `src/main.py`, or custom OCI via
-root `Dockerfile.vercel` (Uvicorn on `$PORT`). Production DB: Supabase
-transaction pooler (`:6543`) with `NullPool` + disabled prepared statements
-when `ENVIRONMENT != local`. Hobby cron: daily GET at 09:00 UTC via
-`vercel.json`.
+Vercel Fluid Compute: custom OCI via root `Dockerfile.vercel` (absolute
+`uvicorn` on `$PORT`). Production DB: Supabase transaction pooler (`:6543`)
+with `NullPool` + disabled prepared statements when `ENVIRONMENT != local`.
+Hobby cron: daily GET at 09:00 UTC via `vercel.json`.

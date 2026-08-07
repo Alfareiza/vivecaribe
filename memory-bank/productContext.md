@@ -13,7 +13,8 @@ structured reservations operators can trust, while remaining an API platform
 1. Operator (`POST` + JWT/body) or Vercel Cron (`GET` + `CRON_SECRET`)
    calls `/automation/emails/get-bookings`.
 2. Pipeline fetches unread/matching messages per `booking_providers.yaml`.
-3. Provider-specific extractors map HTML → `ReservaDraft` → `Reserva`.
+3. Provider-specific extractors map HTML → `ReservaDraft` → `Reserva`
+   (`pais_del_visitante` as ISO alpha-2; `price`/`income` per channel).
 4. Idempotent persistence on `(booking_provider, reserva_reference)`.
 5. WhatsApp notify is optional; with NoOp, emails stay unread for reprocessing.
 

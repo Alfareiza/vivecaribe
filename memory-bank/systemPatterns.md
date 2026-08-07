@@ -38,9 +38,24 @@ YAML fields — YAML only supplies the subject query string.
 
 | mailbox_name | Auth | Notes |
 |--------------|------|-------|
-| `gmail` | OAuth token + refresh | Shared `GMAIL_CLIENT_*` |
+| `gmail` | OAuth token + refresh | Shared `GMAIL_CLIENT_*`; also Zoho OTP poller |
 | `outlook` | MSAL refresh | Shared `OUTLOOK_CLIENT_*` |
 | `zoho` | username + password | Playwright login + HTTP search.do/md.do |
+
+### Zoho OTP coupling
+
+When Zoho shows an identity email challenge, `ZohoSession` uses the
+**GetYourGuide** Gmail mailbox from `booking_providers.yaml` to poll
+`from:zohoaccounts.com` OTP mail (`GmailMailbox.wait_for_zoho_otp`).
+Failure raises `EmailNotFound`. Session JSON lives under `APP_DATA_DIR`
+(or `~` locally).
+
+## Extractor patterns
+
+- Shared: `BaseExtractor.normalize_phone` → E.164; `get_pais_del_visitante`
+  from phone (alpha-2) unless overridden.
+- Homefans overrides country via `pycountry` on the Country label.
+- `price` vs `income` are provider-specific (see activeContext formulas).
 
 ## Persistence
 

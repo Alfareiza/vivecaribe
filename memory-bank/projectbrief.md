@@ -23,5 +23,6 @@ the system normalizes those bookings into a shared `Reserva` model.
 
 ## Delivery sequence
 
-Issues #1–#7 delivered scaffold through tests/docs. Issue #8 covers
-`Dockerfile.vercel`, dual GET/POST automation auth, and Hobby daily cron.
+Issues #1–#8 delivered scaffold through Vercel container deploy / cron auth.
+Follow-on on main: Propio via Zoho Mail, Zoho OTP via GYG Gmail, extractor
+income/country hardening.
