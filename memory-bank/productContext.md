@@ -21,6 +21,7 @@ structured reservations operators can trust, while remaining an API platform
 ## UX goals for API consumers
 
 - Predictable auth (`POST /users`, `POST /login` → Bearer JWT).
+- Reserva CRUD under `/reservas` (JWT; soft delete; paginated list).
 - Structured pipeline counters (`fetched`, `created`, `existing`, `notified`).
 - Clear env docs (`.env.example`) and Memory Bank for future agents.
 - Safe local tests that never touch the developer Postgres database.

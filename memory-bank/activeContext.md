@@ -2,40 +2,36 @@
 
 ## Current focus
 
-On **`main`**. Propio + Zoho Mail is merged. Latest follow-ups:
-
-1. Zoho identity OTP completed via GetYourGuide Gmail poller; warm sessions
-   under `APP_DATA_DIR` (Docker `/app` stays immutable for non-root).
-2. Extractor hardening (`90e77c7`): shared phone→country, income formulas,
-   Homefans `pycountry`, Viator E.164 phones.
+On **`main`**. Reserva CRUD API is merged (#25–#33 / PRs #26–#34).
 
 ## Recent decisions
 
-### Zoho mailbox
+### Reserva CRUD API
+
+- Thin routers call `SqlAlchemyReservaRepository` directly (no use-case
+  layer; persistence + idempotency only).
+- JWT required on all `/reservas` routes; no per-user ownership scoping
+  (`user_id` remains optional / unused by the pipeline).
+- Soft delete via nullable `deleted_at`; `get_by_id` / `list` exclude
+  soft-deleted rows. Migration: `a1b2c3d4e5f6`.
+- List pagination: `skip`/`limit` + `{total, items}`; order `created_at`
+  desc; default limit 20, max 100.
+- PATCH allows business fields only; identity/audit fields immutable.
+
+### Zoho mailbox (prior)
 
 - Public API: `ZohoMailbox.fetch_messages(*, query, max_results)`.
-- Internals: `ZohoSession` (login / `storage_state` / headers) +
-  `ZohoMailClient` (search / read / fetch) in `integrations/zoho.py`.
+- Internals: `ZohoSession` + `ZohoMailClient` in `integrations/zoho.py`.
 - Session file: `APP_DATA_DIR/.zohomail_storage.json` (fallback `~`).
-- Sporadic Zoho email-OTP challenge: poll GYG Gmail
-  (`from:zohoaccounts.com` OTP) via `GmailMailbox.wait_for_zoho_otp`;
-  raises `EmailNotFound` when missing.
-- Defaults: folder `NOTIFICATIONS`, `time_window="2m"` (also `1h`/`24h`/
-  `2d`/`1m`/`3m`).
+- Sporadic Zoho email-OTP: poll GYG Gmail via
+  `GmailMailbox.wait_for_zoho_otp`; raises `EmailNotFound` when missing.
 - No `mark_as_read` on Zoho; use case calls it only when present.
-- Root `zoho.py` prototype is local/experiments only (untracked).
 
-### Extractors
+### Extractors (prior)
 
-- `BaseExtractor.get_pais_del_visitante()` — ISO alpha-2 from phone via
-  `phonenumbers` (GYG / Propio / Viator default).
-- `normalize_phone` always returns E.164 (`+…`); strips leading zeros.
-- Homefans country: `pycountry` name → alpha-2, else phone fallback.
-- Income (operator):
-  - GYG: `price * 0.7`
-  - Homefans: first WooCommerce amount `* 0.75`
-  - Viator: `Tarifa neta` = income; `price = income * 1.31`
-  - Propio: `income == price`
+- `BaseExtractor.get_pais_del_visitante()` — ISO alpha-2 from phone.
+- Income formulas: GYG `* 0.7`, Homefans `* 0.75`, Viator net/1.31,
+  Propio `income == price`.
 
 ## Known gaps (intentional / deferred)
 
@@ -44,8 +40,11 @@ On **`main`**. Propio + Zoho Mail is merged. Latest follow-ups:
 - Real WhatsApp Meta integration (NoOp until Meta approval).
 - `correlation_id` ContextVar — no middleware sets it yet.
 - Hourly Colombia-window cron needs Pro (Hobby is once/day).
+- Per-user ownership / role scoping on reservas (not introduced).
 
 ## Next
 
-Ops smoke: Zoho warm/cold + OTP path in Docker/Vercel; watch Homefans
-`prices()` / income edge cases.
+- Ops: run `alembic upgrade head` where the new `deleted_at` migration
+  is not yet applied (Supabase / local).
+- Ops smoke: Zoho warm/cold + OTP path in Docker/Vercel.
+- Real WhatsApp Meta notifier after Meta authorization.
