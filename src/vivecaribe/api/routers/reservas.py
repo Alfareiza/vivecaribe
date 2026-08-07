@@ -102,3 +102,21 @@ async def update_reserva(
     )
     saved = await reservas.save(updated)
     return ReservaResponse.model_validate(saved)
+
+
+@router.delete(
+    "/reservas/{reserva_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_reserva(
+    reserva_id: UUID,
+    reservas: ReservaRepo,
+    _current_user: CurrentUser,
+) -> None:
+    """Soft-delete a reservation (JWT required)."""
+    deleted = await reservas.soft_delete(reserva_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Reserva {reserva_id} not found",
+        )

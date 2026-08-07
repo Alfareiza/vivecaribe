@@ -246,3 +246,44 @@ async def test_patch_reserva_unauthenticated_returns_401(
         json={"estado": "confirmada"},
     )
     assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_delete_reserva_soft_deletes(auth_client: AsyncClient) -> None:
+    """DELETE soft-deletes; subsequent GET returns 404."""
+    headers = await auth_headers(auth_client)
+    created = await auth_client.post(
+        "/reservas",
+        json=_reserva_payload(reserva_reference="GYG-DEL-1"),
+        headers=headers,
+    )
+    assert created.status_code == 201
+    reserva_id = created.json()["id"]
+
+    deleted = await auth_client.delete(f"/reservas/{reserva_id}", headers=headers)
+    assert deleted.status_code == 204
+
+    missing = await auth_client.get(f"/reservas/{reserva_id}", headers=headers)
+    assert missing.status_code == 404
+
+    listed = await auth_client.get("/reservas", headers=headers)
+    assert listed.status_code == 200
+    assert listed.json()["total"] == 0
+    assert listed.json()["items"] == []
+
+
+@pytest.mark.asyncio
+async def test_delete_reserva_missing_returns_404(auth_client: AsyncClient) -> None:
+    """Unknown or already-deleted UUID returns 404."""
+    headers = await auth_headers(auth_client)
+    response = await auth_client.delete(f"/reservas/{uuid4()}", headers=headers)
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_delete_reserva_unauthenticated_returns_401(
+    auth_client: AsyncClient,
+) -> None:
+    """Missing Bearer token returns 401."""
+    response = await auth_client.delete(f"/reservas/{uuid4()}")
+    assert response.status_code == 401

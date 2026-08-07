@@ -43,6 +43,7 @@ class Reserva(BaseModel):
     notificado_whatsapp: bool = False
     email_message_id: UUID | None = None
     user_id: UUID | None = None
+    deleted_at: datetime | None = None
     id: UUID = Field(default_factory=uuid4)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
