@@ -86,6 +86,13 @@ def get_user_repository(
     return SqlAlchemyUserRepository(session)
 
 
+def get_reserva_repository(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> SqlAlchemyReservaRepository:
+    """Build a reserva repository for the current request session."""
+    return SqlAlchemyReservaRepository(session)
+
+
 def _unauthorized(detail: str) -> HTTPException:
     """Build a 401 response that advertises Bearer auth."""
     return HTTPException(
@@ -155,6 +162,10 @@ def get_process_booking_emails_use_case(
 
 DbSession = Annotated[AsyncSession, Depends(get_db_session)]
 UserRepo = Annotated[SqlAlchemyUserRepository, Depends(get_user_repository)]
+ReservaRepo = Annotated[
+    SqlAlchemyReservaRepository,
+    Depends(get_reserva_repository),
+]
 PasswordHasherDep = Annotated[Argon2PasswordHasher, Depends(get_password_hasher)]
 TokenServiceDep = Annotated[JwtTokenService, Depends(get_token_service)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
