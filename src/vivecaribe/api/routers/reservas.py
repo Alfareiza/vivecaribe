@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 
 from vivecaribe.api.deps import CurrentUser, ReservaRepo
-from vivecaribe.api.schemas.reservas import ReservaCreate, ReservaResponse
+from vivecaribe.api.schemas.reservas import (
+    ReservaCreate,
+    ReservaListResponse,
+    ReservaResponse,
+)
 from vivecaribe.domain.reserva import Reserva
 
 router = APIRouter(tags=["reservas"])
@@ -40,6 +45,21 @@ async def create_reserva(
             ),
         )
     return ReservaResponse.model_validate(saved)
+
+
+@router.get("/reservas", response_model=ReservaListResponse)
+async def list_reservas(
+    reservas: ReservaRepo,
+    _current_user: CurrentUser,
+    skip: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> ReservaListResponse:
+    """Return a paginated list of reservations (JWT required)."""
+    items, total = await reservas.list(skip=skip, limit=limit)
+    return ReservaListResponse(
+        total=total,
+        items=[ReservaResponse.model_validate(item) for item in items],
+    )
 
 
 @router.get("/reservas/{reserva_id}", response_model=ReservaResponse)

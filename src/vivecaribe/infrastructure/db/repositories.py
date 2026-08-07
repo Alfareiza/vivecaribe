@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from vivecaribe.domain.email_message import EmailMessage
@@ -109,6 +109,26 @@ class SqlAlchemyReservaRepository:
         if existing is not None:
             return existing, False
         return await self.save(reserva), True
+
+    async def list(
+        self,
+        *,
+        skip: int = 0,
+        limit: int = 20,
+    ) -> tuple[list[Reserva], int]:
+        """Return a page of reservations ordered by ``created_at`` desc."""
+        total_result = await self._session.execute(
+            select(func.count()).select_from(ReservaORM),
+        )
+        total = total_result.scalar_one()
+        result = await self._session.execute(
+            select(ReservaORM)
+            .order_by(ReservaORM.created_at.desc())
+            .offset(skip)
+            .limit(limit),
+        )
+        items = [Reserva.model_validate(row) for row in result.scalars()]
+        return items, total
 
 
 class SqlAlchemyEmailMessageRepository:
