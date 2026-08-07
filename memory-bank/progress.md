@@ -15,6 +15,11 @@
 | Propio + Zoho | Merged on main | HTTP search/md, PropioExtractor, YAML |
 | Zoho OTP + data dir | Merged | GYG Gmail OTP poller; `APP_DATA_DIR` sessions; Docker harden |
 | Extractor income/country | Merged | Shared phone→alpha-2; GYG/Homefans/Viator formulas |
+| #25 POST /reservas | Closed (PR #26) | Create + schemas/deps/router scaffolding |
+| #27 GET /reservas/{id} | Closed (PR #28) | Fetch one reservation |
+| #29 GET /reservas | Closed (PR #30) | Paginated list (`skip`/`limit`) |
+| #31 PATCH /reservas/{id} | Closed (PR #32) | Partial update of business fields |
+| #33 DELETE /reservas/{id} | Closed (PR #34) | Soft delete via `deleted_at` |
 
 ## In progress
 
@@ -23,6 +28,8 @@ Nothing major tracked — on `main`.
 ## Works today
 
 - Register/login and JWT-protected routes.
+- Reserva CRUD: `POST/GET/PATCH/DELETE /reservas` (+ paginated list).
+- Soft-deleted reservas are hidden from get/list.
 - Automation POST accepts JWT **or** `CRON_SECRET`; GET (cron) same auth, no body.
 - Pipeline with GYG / Viator / Homefans / Propio (Zoho) extractors.
 - Zoho free-tier: Playwright login + search.do/md.do; OTP via GYG Gmail when challenged.
@@ -33,9 +40,9 @@ Nothing major tracked — on `main`.
 ## Left to build
 
 - Real WhatsApp Meta notifier after Meta authorization (replace NoOp).
-- Optional future booking CRUD.
 - Zoho mark-as-read (deferred).
 - Optional: skip Chromium launch on warm Zoho path.
+- Optional: per-user ownership / filters on reservas.
 
 ## Known issues / deliberate non-goals
 

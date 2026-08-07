@@ -63,9 +63,12 @@ Failure raises `EmailNotFound`. Session JSON lives under `APP_DATA_DIR`
 |-------|-----|
 | `users` | `email` unique |
 | `email_messages` | `(source, mailbox_message_id)` |
-| `reservas` | `(booking_provider, reserva_reference)` |
+| `reservas` | `(booking_provider, reserva_reference)`; soft delete via `deleted_at` |
 
 `body_html` is stored on `email_messages` (no separate HTML table).
+
+Reserva HTTP CRUD lives in `api/routers/reservas.py` (thin router →
+`SqlAlchemyReservaRepository`). List uses `skip`/`limit` pagination.
 
 ## Auth pattern
 
