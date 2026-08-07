@@ -176,3 +176,73 @@ async def test_list_reservas_unauthenticated_returns_401(
     """Missing Bearer token returns 401."""
     response = await auth_client.get("/reservas")
     assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_patch_reserva_partial_update(auth_client: AsyncClient) -> None:
+    """PATCH updates only the provided fields."""
+    headers = await auth_headers(auth_client)
+    created = await auth_client.post(
+        "/reservas",
+        json=_reserva_payload(reserva_reference="GYG-PATCH-1"),
+        headers=headers,
+    )
+    assert created.status_code == 201
+    reserva_id = created.json()["id"]
+
+    response = await auth_client.patch(
+        f"/reservas/{reserva_id}",
+        json={"estado": "confirmada", "customer_name": "Grace Hopper"},
+        headers=headers,
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["estado"] == "confirmada"
+    assert body["customer_name"] == "Grace Hopper"
+    assert body["reserva_reference"] == "GYG-PATCH-1"
+    assert body["participants"] == 2
+
+
+@pytest.mark.asyncio
+async def test_patch_reserva_missing_returns_404(auth_client: AsyncClient) -> None:
+    """Unknown UUID returns 404."""
+    headers = await auth_headers(auth_client)
+    response = await auth_client.patch(
+        f"/reservas/{uuid4()}",
+        json={"estado": "confirmada"},
+        headers=headers,
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_patch_reserva_invalid_estado_returns_422(
+    auth_client: AsyncClient,
+) -> None:
+    """Invalid enum values are rejected by the schema."""
+    headers = await auth_headers(auth_client)
+    created = await auth_client.post(
+        "/reservas",
+        json=_reserva_payload(reserva_reference="GYG-PATCH-422"),
+        headers=headers,
+    )
+    assert created.status_code == 201
+
+    response = await auth_client.patch(
+        f"/reservas/{created.json()['id']}",
+        json={"estado": "not-valid"},
+        headers=headers,
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_patch_reserva_unauthenticated_returns_401(
+    auth_client: AsyncClient,
+) -> None:
+    """Missing Bearer token returns 401."""
+    response = await auth_client.patch(
+        f"/reservas/{uuid4()}",
+        json={"estado": "confirmada"},
+    )
+    assert response.status_code == 401
