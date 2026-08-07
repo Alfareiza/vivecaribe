@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID
 
@@ -12,6 +13,7 @@ from vivecaribe.api.schemas.reservas import (
     ReservaCreate,
     ReservaListResponse,
     ReservaResponse,
+    ReservaUpdate,
 )
 from vivecaribe.domain.reserva import Reserva
 
@@ -76,3 +78,27 @@ async def get_reserva(
             detail=f"Reserva {reserva_id} not found",
         )
     return ReservaResponse.model_validate(reserva)
+
+
+@router.patch("/reservas/{reserva_id}", response_model=ReservaResponse)
+async def update_reserva(
+    reserva_id: UUID,
+    payload: ReservaUpdate,
+    reservas: ReservaRepo,
+    _current_user: CurrentUser,
+) -> ReservaResponse:
+    """Partially update a reservation (JWT required)."""
+    existing = await reservas.get_by_id(reserva_id)
+    if existing is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Reserva {reserva_id} not found",
+        )
+    updated = existing.model_copy(
+        update={
+            **payload.model_dump(exclude_unset=True),
+            "updated_at": datetime.now(UTC),
+        },
+    )
+    saved = await reservas.save(updated)
+    return ReservaResponse.model_validate(saved)
