@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -62,8 +63,14 @@ class SqlAlchemyReservaRepository:
         self._session = session
 
     async def get_by_id(self, reserva_id: UUID) -> Reserva | None:
-        """Return a reservation by primary key, or ``None`` if missing."""
-        row = await self._session.get(ReservaORM, reserva_id)
+        """Return a non-deleted reservation by primary key, or ``None``."""
+        result = await self._session.execute(
+            select(ReservaORM).where(
+                ReservaORM.id == reserva_id,
+                ReservaORM.deleted_at.is_(None),
+            ),
+        )
+        row = result.scalar_one_or_none()
         return Reserva.model_validate(row) if row else None
 
     async def get_by_booking_provider_reserva_reference(
@@ -76,6 +83,7 @@ class SqlAlchemyReservaRepository:
             select(ReservaORM).where(
                 ReservaORM.booking_provider == booking_provider.value,
                 ReservaORM.reserva_reference == reserva_reference,
+                ReservaORM.deleted_at.is_(None),
             ),
         )
         row = result.scalar_one_or_none()
@@ -116,19 +124,38 @@ class SqlAlchemyReservaRepository:
         skip: int = 0,
         limit: int = 20,
     ) -> tuple[list[Reserva], int]:
-        """Return a page of reservations ordered by ``created_at`` desc."""
+        """Return a page of non-deleted reservations by ``created_at`` desc."""
+        active = ReservaORM.deleted_at.is_(None)
         total_result = await self._session.execute(
-            select(func.count()).select_from(ReservaORM),
+            select(func.count()).select_from(ReservaORM).where(active),
         )
         total = total_result.scalar_one()
         result = await self._session.execute(
             select(ReservaORM)
+            .where(active)
             .order_by(ReservaORM.created_at.desc())
             .offset(skip)
             .limit(limit),
         )
         items = [Reserva.model_validate(row) for row in result.scalars()]
         return items, total
+
+    async def soft_delete(self, reserva_id: UUID) -> bool:
+        """Mark a reservation as deleted. Return ``False`` if missing."""
+        result = await self._session.execute(
+            select(ReservaORM).where(
+                ReservaORM.id == reserva_id,
+                ReservaORM.deleted_at.is_(None),
+            ),
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            return False
+        now = datetime.now(UTC)
+        row.deleted_at = now
+        row.updated_at = now
+        await self._session.flush()
+        return True
 
 
 class SqlAlchemyEmailMessageRepository:
