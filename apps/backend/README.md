@@ -8,3 +8,4 @@ FastAPI backend for booking automation and the business API.
 
 Monorepo docs and Compose live in the repository root
 [`README.md`](../../README.md).
+
