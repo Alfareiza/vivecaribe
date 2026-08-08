@@ -58,13 +58,24 @@ export default function ReservationsTable({
   const [dateTo, setDateTo] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
-    return reservations.filter((r) => {
-      if (estadoFilter !== ALL && r.estado !== estadoFilter) return false;
-      if (providerFilter !== ALL && r.booking_provider !== providerFilter) {
-        return false;
-      }
-      return reservationInDateRange(r, { from: dateFrom, to: dateTo });
-    });
+    return reservations
+      .filter((r) => {
+        if (estadoFilter !== ALL && r.estado !== estadoFilter) return false;
+        if (providerFilter !== ALL && r.booking_provider !== providerFilter) {
+          return false;
+        }
+        return reservationInDateRange(r, { from: dateFrom, to: dateTo });
+      })
+      .sort((a, b) => {
+        // Ascending by event date; nulls last
+        if (!a.fecha_evento && !b.fecha_evento) return 0;
+        if (!a.fecha_evento) return 1;
+        if (!b.fecha_evento) return -1;
+        return (
+          new Date(a.fecha_evento).getTime() -
+          new Date(b.fecha_evento).getTime()
+        );
+      });
   }, [reservations, estadoFilter, providerFilter, dateFrom, dateTo]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
