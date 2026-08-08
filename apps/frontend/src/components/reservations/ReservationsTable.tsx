@@ -67,13 +67,13 @@ export default function ReservationsTable({
         return reservationInDateRange(r, { from: dateFrom, to: dateTo });
       })
       .sort((a, b) => {
-        // Ascending by event date; nulls last
+        // Descending by event date; nulls last
         if (!a.fecha_evento && !b.fecha_evento) return 0;
         if (!a.fecha_evento) return 1;
         if (!b.fecha_evento) return -1;
         return (
-          new Date(a.fecha_evento).getTime() -
-          new Date(b.fecha_evento).getTime()
+          new Date(b.fecha_evento).getTime() -
+          new Date(a.fecha_evento).getTime()
         );
       });
   }, [reservations, estadoFilter, providerFilter, dateFrom, dateTo]);
