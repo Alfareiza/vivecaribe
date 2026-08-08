@@ -52,12 +52,19 @@ jobs:
       - name: Run tests with coverage
         run: uv run pytest
 
-  changes:
+  frontend:
     runs-on: ubuntu-latest
-    outputs:
-      frontend: ${{ steps.filter.outputs.frontend }}
+    permissions:
+      contents: read
+      pull-requests: read
+    defaults:
+      run:
+        working-directory: apps/frontend
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - uses: dorny/paths-filter@v3
         id: filter
         with:
@@ -66,17 +73,8 @@ jobs:
               - 'apps/frontend/**'
               - '.github/workflows/test.yml'
 
-  frontend:
-    needs: changes
-    if: needs.changes.outputs.frontend == 'true'
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/frontend
-    steps:
-      - uses: actions/checkout@v4
-
       - name: Setup Node
+        if: steps.filter.outputs.frontend == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -84,7 +82,9 @@ jobs:
           cache-dependency-path: apps/frontend/package-lock.json
 
       - name: Install dependencies
+        if: steps.filter.outputs.frontend == 'true'
         run: npm ci
 
       - name: Build
+        if: steps.filter.outputs.frontend == 'true'
         run: npm run build
