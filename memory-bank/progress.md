@@ -15,16 +15,13 @@
 | Propio + Zoho | Merged on main | HTTP search/md, PropioExtractor, YAML |
 | Zoho OTP + data dir | Merged | GYG Gmail OTP poller; `APP_DATA_DIR` sessions; Docker harden |
 | Extractor income/country | Merged | Shared phone→alpha-2; GYG/Homefans/Viator formulas |
-| #25 POST /reservas | Closed (PR #26) | Create + schemas/deps/router scaffolding |
-| #27 GET /reservas/{id} | Closed (PR #28) | Fetch one reservation |
-| #29 GET /reservas | Closed (PR #30) | Paginated list (`skip`/`limit`) |
-| #31 PATCH /reservas/{id} | Closed (PR #32) | Partial update of business fields |
-| #33 DELETE /reservas/{id} | Closed (PR #34) | Soft delete via `deleted_at` |
-| #36 Monorepo layout | In progress | `apps/backend` + empty `apps/frontend`; root Docker/Vercel |
+| #25–#33 Reserva CRUD | Closed | POST/GET/PATCH/DELETE + paginated list |
+| #36 Monorepo layout | Closed | `apps/backend` + frontend placeholder; root Docker/Vercel |
 
 ## In progress
 
-- #36 — move API under `apps/backend`, empty frontend placeholder, CI/docs.
+- #38 — Next.js in `apps/frontend`, per-app Dockerfiles, dual Vercel projects,
+  Compose `frontend`, docs/Memory Bank.
 
 ## Works today
 
@@ -36,16 +33,16 @@
 - Zoho free-tier: Playwright login + search.do/md.do; OTP via GYG Gmail when challenged.
 - Idempotent `email_messages` + `reservas` persistence.
 - Isolated Postgres test suite with ≥ 90% statement coverage.
-- Local Docker Compose Postgres + optional full API container.
+- Local Docker Compose Postgres + API (+ frontend image after #38).
 
 ## Left to build
 
-- Next.js scaffold in `apps/frontend` (+ decide static-export vs other
-  single-container approach later).
+- Wire frontend to live auth / reservas (CORS + `NEXT_PUBLIC_API_URL` usage).
 - Real WhatsApp Meta notifier after Meta authorization (replace NoOp).
 - Zoho mark-as-read (deferred).
 - Optional: skip Chromium launch on warm Zoho path.
 - Optional: per-user ownership / filters on reservas.
+- Optional: frontend CI job.
 
 ## Known issues / deliberate non-goals
 
@@ -56,3 +53,4 @@
   search.do / md.do (`context.request`).
 - Homefans `get_income` still has a rough error path (logs + empty return) —
   watch in production.
+- Single-container UI+API on Vercel explicitly rejected (#38): dual projects.

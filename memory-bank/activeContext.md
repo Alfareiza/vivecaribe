@@ -2,64 +2,56 @@
 
 ## Current focus
 
-Monorepo layout on branch `chore/monorepo-apps-layout` (issue #36):
-`apps/backend` (FastAPI) + empty `apps/frontend` placeholder.
+Issue **#38** — Next.js under `apps/frontend`, dual Vercel projects, per-app
+Dockerfiles, Compose `db` + `api` + `frontend`. Branch
+`feat/frontend-monorepo-deploy`.
 
 ## Recent decisions
 
+### Dual Vercel + portable Docker (#38)
+
+- **Two** Vercel projects, same GitHub repo:
+  - `vivecaribe` → Root Directory `apps/backend` → Container
+    (`Dockerfile.vercel`) + cron.
+  - `vivecaribe-frontend` → Root Directory `apps/frontend` → Next.js native.
+- Frontend on Vercel is **not** containerized; portable
+  `apps/frontend/Dockerfile` is for Compose / AWS.
+- Backend keeps container (Playwright/Chromium).
+- Per-app Dockerfiles under `apps/{backend,frontend}/`; root Dockerfiles removed.
+- Compose: `db` unchanged; `api` builds from `./apps/backend`; `frontend`
+  on `:3000` with `NEXT_PUBLIC_API_URL`.
+- Skip Unaffected Projects **not** used (no JS workspaces). Use **Ignored
+  Build Step** / “changes in folder” per project.
+- CI remains backend-only for this PR; frontend validated on Vercel preview.
+- Frontend production deploy deferred until explicitly requested (preview OK).
+
 ### Monorepo (#36)
 
-- Root keeps `Dockerfile`, `Dockerfile.vercel`, `vercel.json`,
-  `docker-compose.yml`, CI, README, Memory Bank, `.dockerignore`.
-- Backend package lives under `apps/backend/` (`pyproject`, `src`, `tests`,
-  `migrations`, `booking_providers.yaml`).
-- Frontend is empty (`.gitkeep` + README). Next.js not scaffolded yet.
-- One Vercel **container** project remains API-only (C3). Cron path unchanged:
-  `GET /automation/emails/get-bookings`.
-- UI-in-container (static export or multi-process) deferred to a later issue.
+- Backend under `apps/backend/`; frontend was empty placeholder, now TailAdmin.
 - Local OAuth/scratch scripts: leave alone (do not move).
 
 ### Reserva CRUD API (prior)
 
-- Thin routers call `SqlAlchemyReservaRepository` directly (no use-case
-  layer; persistence + idempotency only).
-- JWT required on all `/reservas` routes; no per-user ownership scoping
-  (`user_id` remains optional / unused by the pipeline).
-- Soft delete via nullable `deleted_at`; `get_by_id` / `list` exclude
-  soft-deleted rows. Migration: `a1b2c3d4e5f6`.
-- List pagination: `skip`/`limit` + `{total, items}`; order `created_at`
-  desc; default limit 20, max 100.
-- PATCH allows business fields only; identity/audit fields immutable.
+- Thin routers → `SqlAlchemyReservaRepository`; JWT on all `/reservas`.
+- Soft delete via `deleted_at`; list `skip`/`limit`; PATCH business fields only.
 
-### Zoho mailbox (prior)
+### Zoho / extractors (prior)
 
-- Public API: `ZohoMailbox.fetch_messages(*, query, max_results)`.
-- Internals: `ZohoSession` + `ZohoMailClient` in `integrations/zoho.py`.
-- Session file: `APP_DATA_DIR/.zohomail_storage.json` (fallback `~`).
-- Sporadic Zoho email-OTP: poll GYG Gmail via
-  `GmailMailbox.wait_for_zoho_otp`; raises `EmailNotFound` when missing.
-- No `mark_as_read` on Zoho; use case calls it only when present.
-
-### Extractors (prior)
-
-- `BaseExtractor.get_pais_del_visitante()` — ISO alpha-2 from phone.
-- Income formulas: GYG `* 0.7`, Homefans `* 0.75`, Viator net/1.31,
-  Propio `income == price`.
+- Zoho Playwright + search.do/md.do; OTP via GYG Gmail.
+- Income formulas: GYG `* 0.7`, Homefans `* 0.75`, Viator net/1.31, Propio `= price`.
 
 ## Known gaps (intentional / deferred)
 
-- Next.js scaffold under `apps/frontend`.
-- Serving frontend from the Vercel API container (C1/C2).
-- Zoho `mark_as_read`.
-- Long-lived browser / skip Chromium on warm path.
+- Wire TailAdmin UI to live auth / reservas APIs.
+- CORS allowlist for frontend origin on the API (when wiring starts).
 - Real WhatsApp Meta integration (NoOp until Meta approval).
+- Zoho `mark_as_read`; long-lived browser / skip Chromium on warm path.
 - `correlation_id` ContextVar — no middleware sets it yet.
 - Hourly Colombia-window cron needs Pro (Hobby is once/day).
-- Per-user ownership / role scoping on reservas (not introduced).
+- Per-user ownership / role scoping on reservas.
 
 ## Next
 
-- Land #36 (CI green), then scaffold Next.js when ready.
-- Ops: run `alembic upgrade head` from `apps/backend` where needed.
-- Ops smoke: Zoho warm/cold + OTP path in Docker/Vercel.
-- Real WhatsApp Meta notifier after Meta authorization.
+- Land #38 (CI green, Vercel Root Directories + Ignored Build Step).
+- Ops: confirm API health + cron after Root Directory move.
+- Later: connect UI to API; optional frontend CI job.

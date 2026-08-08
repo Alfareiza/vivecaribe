@@ -218,6 +218,10 @@ __marimo__/
 .streamlit/secrets.toml
 .vercel
 
+# macOS
+.DS_Store
+**/.DS_Store
+
 # Next.js (apps/frontend)
 apps/frontend/node_modules/
 apps/frontend/.next/

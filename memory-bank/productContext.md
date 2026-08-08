@@ -18,11 +18,21 @@ structured reservations operators can trust, while remaining an API platform
 4. Idempotent persistence on `(booking_provider, reserva_reference)`.
 5. WhatsApp notify is optional; with NoOp, emails stay unread for reprocessing.
 
-## UX goals for API consumers
+## UX goals
+
+### API consumers
 
 - Predictable auth (`POST /users`, `POST /login` → Bearer JWT).
 - Reserva CRUD under `/reservas` (JWT; soft delete; paginated list).
 - Structured pipeline counters (`fetched`, `created`, `existing`, `notified`).
 - Clear env docs (`.env.example`) and Memory Bank for future agents.
 - Safe local tests that never touch the developer Postgres database.
-- Clear monorepo layout (`apps/backend` vs empty `apps/frontend`).
+- Clear monorepo layout (`apps/backend` vs `apps/frontend`).
+
+### Frontend (operators)
+
+- Admin dashboard for day-to-day booking operations (layouts, tables, charts
+  from TailAdmin starter under `apps/frontend`).
+- Talks to the API via `NEXT_PUBLIC_API_URL` (not embedded in the API image).
+- Local: `npm run dev` or Compose `frontend` on `:3000`.
+- Production: separate Vercel project from the API.
