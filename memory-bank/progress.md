@@ -20,10 +20,11 @@
 | #29 GET /reservas | Closed (PR #30) | Paginated list (`skip`/`limit`) |
 | #31 PATCH /reservas/{id} | Closed (PR #32) | Partial update of business fields |
 | #33 DELETE /reservas/{id} | Closed (PR #34) | Soft delete via `deleted_at` |
+| #36 Monorepo layout | In progress | `apps/backend` + empty `apps/frontend`; root Docker/Vercel |
 
 ## In progress
 
-Nothing major tracked — on `main`.
+- #36 — move API under `apps/backend`, empty frontend placeholder, CI/docs.
 
 ## Works today
 
@@ -39,6 +40,8 @@ Nothing major tracked — on `main`.
 
 ## Left to build
 
+- Next.js scaffold in `apps/frontend` (+ decide static-export vs other
+  single-container approach later).
 - Real WhatsApp Meta notifier after Meta authorization (replace NoOp).
 - Zoho mark-as-read (deferred).
 - Optional: skip Chromium launch on warm Zoho path.

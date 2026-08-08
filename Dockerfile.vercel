@@ -13,8 +13,8 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml uv.lock README.md ./
-COPY src ./src
+COPY apps/backend/pyproject.toml apps/backend/uv.lock apps/backend/README.md ./
+COPY apps/backend/src ./src
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-editable
@@ -38,7 +38,7 @@ RUN groupadd --system --gid 1000 app \
 
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/src /app/src
-COPY booking_providers.yaml ./booking_providers.yaml
+COPY apps/backend/booking_providers.yaml ./booking_providers.yaml
 
 # Python package ≠ browser binaries. Install Chromium + OS libs as root,
 # then hand ownership to the non-root runtime user.
