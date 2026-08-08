@@ -2,6 +2,8 @@
 
 ## Stack
 
+### Backend
+
 - Python **3.13+**, packaged with **uv** (`apps/backend/pyproject.toml` /
   `uv.lock`)
 - FastAPI + Uvicorn
@@ -10,29 +12,27 @@
 - Argon2 (`argon2-cffi`) + PyJWT
 - httpx, Tenacity, BeautifulSoup4, PyYAML, Rich, Sentry SDK
 - Playwright (Zoho free-tier: login/cookies only — no IMAP/API)
-- phonenumbers (phone normalize + visitor country alpha-2)
-- pycountry (Homefans country name → alpha-2)
-- Gmail via Google OAuth refresh tokens; Outlook via MSAL consumers authority
-- Zoho via username/password + `storage_state` JSON; mail via
-  `context.request` to search.do / md.do; OTP via GYG Gmail when challenged
-- Frontend (planned): Next.js under `apps/frontend` (empty placeholder)
+- phonenumbers, pycountry
+- Gmail (Google OAuth), Outlook (MSAL), Zoho (Playwright + HTTP mail)
+
+### Frontend
+
+- Next.js **16**, React **19**, TypeScript, Tailwind CSS **v4**
+- TailAdmin starter (ApexCharts, FullCalendar, jvectormap, etc.)
+- Package manager: npm (`package-lock.json`)
+- `output: 'standalone'` for Docker
 
 ## Monorepo layout
 
-- `apps/backend` — API package, tests, migrations, YAML config
-- `apps/frontend` — reserved for Next.js (not scaffolded)
-- Repo root — Compose, CI, `Dockerfile` / `Dockerfile.vercel`, `vercel.json`,
-  docs, Memory Bank
-- Root `.dockerignore` excludes `apps/frontend` and local artifacts from the
-  API image build
+- `apps/backend` — API package, tests, migrations, YAML, Dockerfiles, `vercel.json`
+- `apps/frontend` — Next.js admin UI + portable Dockerfile
+- Repo root — Compose, CI, README, Memory Bank (no root Docker/Vercel files)
 
-## Runtime data dir
+## Runtime data dir (API)
 
 - `APP_DATA_DIR` — writable root for Zoho session JSON (Docker/Vercel).
   Falls back to user home when unset.
-- Docker images keep `/app` immutable for non-root; mount/persist data dir
-  separately (`Dockerfile` / `Dockerfile.vercel` / `docker-compose.yml`).
-- Image build copies from `apps/backend/` into `/app` (venv + `src` + YAML).
+- Images keep `/app` immutable for non-root; persist `/data` separately.
 
 ## Local tooling
 
@@ -43,11 +43,16 @@ uv sync --group dev
 uv run alembic upgrade head
 uv run uvicorn vivecaribe.main:app --reload
 uv run pytest                    # 90% coverage gate
+
+cd apps/frontend
+npm install
+npm run dev                      # :3000
 ```
 
-`booking_providers.yaml` is resolved relative to the process CWD — run API
-commands from `apps/backend` (Compose mounts the file into `/app` for the
-container).
+Full stack: `docker compose up --build` → `db` + `api` + `frontend`.
+
+`booking_providers.yaml` is resolved relative to process CWD — run API
+commands from `apps/backend` (Compose mounts the file into `/app`).
 
 ## Test database
 
@@ -57,15 +62,26 @@ Fixtures refuse to reset any database whose name does not end with `_test`.
 
 ## CI
 
-`.github/workflows/test.yml` — Postgres 16 service on 5433;
+`.github/workflows/test.yml` — Postgres 16 on 5433;
 `defaults.run.working-directory: apps/backend`; `uv sync`,
 `alembic upgrade head`, `uv run pytest` with coverage fail-under 90.
+Frontend CI not required for #38 (Vercel preview builds the UI).
 
-## Deploy target
+## Deploy targets
 
-Vercel Fluid Compute: custom OCI via root `Dockerfile.vercel` (absolute
-`uvicorn` on `$PORT`). Build context is the **repo root**; sources come from
-`apps/backend`. Production DB: Supabase transaction pooler (`:6543`)
-with `NullPool` + disabled prepared statements when `ENVIRONMENT != local`.
-Hobby cron: daily GET at 09:00 UTC via root `vercel.json`.
-One Vercel container project = API only until a later frontend-in-image issue.
+| App | Vercel project | Root Directory | Mechanism |
+|-----|----------------|----------------|-----------|
+| API | `vivecaribe` | `apps/backend` | `Dockerfile.vercel` → Fluid Compute; cron in `vercel.json` |
+| UI | `vivecaribe-frontend` | `apps/frontend` | Next.js native |
+
+Production DB for API: Supabase transaction pooler (`:6543`) with `NullPool`
++ disabled prepared statements when `ENVIRONMENT != local`.
+
+Ignored Build Step (not Skip Unaffected Projects): polyglot monorepo without
+JS workspaces. Command pattern:
+`git diff HEAD^ HEAD --quiet -- .` (runs inside Root Directory).
+
+Portable images (Compose / future AWS):
+
+- `apps/backend/Dockerfile` → uvicorn `:8000`
+- `apps/frontend/Dockerfile` → Next standalone `:3000`

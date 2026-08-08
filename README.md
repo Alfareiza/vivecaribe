@@ -7,19 +7,20 @@ reservations, and optionally notifies WhatsApp.
 
 ## Project structure
 
-Monorepo: one Git repo, apps under `apps/`. Root holds Compose, CI, and the
-Vercel container entrypoints. The production Vercel project is still **API-only**
-(`Dockerfile.vercel`); `apps/frontend` is a placeholder for a future Next.js UI.
+Monorepo: one GitHub repo, two apps. Each app owns its portable `Dockerfile`.
+Root holds Compose, CI, and docs. **Two Vercel projects** share the same repo
+with different Root Directories (API container + Next.js native).
 
 ```text
 vivecaribe/
 ├── apps/
 │   ├── backend/                 # FastAPI (uv, tests, migrations)
-│   └── frontend/                # Next.js (empty for now)
-├── Dockerfile                   # local API image
-├── Dockerfile.vercel            # Vercel Fluid Compute API image
-├── vercel.json                  # cron → GET /automation/emails/get-bookings
-├── docker-compose.yml           # db + api
+│   │   ├── Dockerfile           # portable API image (Compose / AWS)
+│   │   ├── Dockerfile.vercel    # Vercel Fluid Compute API image
+│   │   └── vercel.json          # cron → GET /automation/emails/get-bookings
+│   └── frontend/                # Next.js admin UI (TailAdmin-based)
+│       └── Dockerfile           # portable Next standalone image
+├── docker-compose.yml           # db + api + frontend
 ├── .github/workflows/           # CI (backend tests)
 ├── memory-bank/                 # project context for agents
 └── README.md
@@ -29,17 +30,18 @@ vivecaribe/
 
 - Python **3.13+**
 - [uv](https://docs.astral.sh/uv/)
-- Docker (Postgres for local persistence and tests)
+- Node.js **20+** (frontend)
+- Docker (Postgres + optional full stack)
 
 Run backend tooling from `apps/backend` (that directory owns `pyproject.toml`
-and `booking_providers.yaml`).
+and `booking_providers.yaml`). Frontend tooling from `apps/frontend`.
 
-Pick **one** local path (not both at once):
+Pick **one** local path (not both at once for the API):
 
 ### Option A — API on your machine (recommended for development)
 
 Runs only the Postgres container. The FastAPI app runs with `uv` on the host
-(hot reload, easy debugging).
+(hot reload, easy debugging). Frontend can run with `npm run dev` separately.
 
 ```bash
 cp .env.example .env
@@ -50,21 +52,29 @@ cd apps/backend
 uv sync --group dev
 uv run alembic upgrade head   # apply DB migrations (creates tables like users)
 uv run uvicorn vivecaribe.main:app --reload --host 0.0.0.0 --port 8000
+
+# optional UI (another terminal)
+cd apps/frontend && npm install && npm run dev
 ```
 
-### Option B — API + Postgres both in Docker
+### Option B — Full stack in Docker
 
-Builds and starts every Compose service (`db` and `api`). Use this when you
-want a fully containerized stack (no local `uvicorn`).
+Builds and starts Compose services `db`, `api`, and `frontend`.
 
 ```bash
 cp .env.example .env
 # edit .env with local secrets
 
-docker compose up --build   # start db + api (foreground; Ctrl+C to stop)
+docker compose up --build   # db + api + frontend (foreground; Ctrl+C to stop)
 ```
 
-Health check (either option):
+| Service | URL |
+|---------|-----|
+| API | http://localhost:8000 |
+| Frontend | http://localhost:3000 |
+| Postgres | localhost:5433 |
+
+Health check (API):
 
 ```bash
 curl http://localhost:8000/health
@@ -215,24 +225,33 @@ runs from `apps/backend` (Postgres 16, migrations, `uv run pytest`).
 
 ## Deploy (Vercel)
 
-Production: https://vivecaribe.vercel.app
+Same GitHub repo → **two** Vercel projects (independent Root Directories):
 
-- Production: Vercel **Container** preset + root
-  [`Dockerfile.vercel`](Dockerfile.vercel) (build context = repo root; sources
-  copied from `apps/backend`). `uv sync` installs `vivecaribe`,
-  `PYTHONPATH=/app/src`, and Uvicorn serves on `$PORT` (default `80`).
-- Local Compose uses [`Dockerfile`](Dockerfile) on port `8000`.
-- [`apps/backend/src/main.py`](apps/backend/src/main.py) is only a fallback if
-  the native FastAPI runtime is used without a container.
+| Project | Root Directory | Runtime | URL |
+|---------|----------------|---------|-----|
+| `vivecaribe` | `apps/backend` | Container (`Dockerfile.vercel`) | https://vivecaribe.vercel.app |
+| `vivecaribe-frontend` | `apps/frontend` | Next.js (native) | (preview / project domain) |
 
-### Vercel Cron
+Portable images for Compose / AWS live next to each app
+([`apps/backend/Dockerfile`](apps/backend/Dockerfile),
+[`apps/frontend/Dockerfile`](apps/frontend/Dockerfile)).
+
+**Ignored Build Step** (each project): only build when that app’s folder
+changes — e.g. `git diff HEAD^ HEAD --quiet -- .` with Root Directory set
+(or the dashboard preset “Only build if there are changes in a folder”).
+Skip Unaffected Projects needs JS workspaces; this polyglot monorepo uses
+Ignored Build Step instead.
+
+### Vercel Cron (API project only)
+
+Config: [`apps/backend/vercel.json`](apps/backend/vercel.json).
 
 Production cron (Hobby: once daily) hits
 `GET /automation/emails/get-bookings` at **09:00 UTC** (= **04:00 Colombia**).
 Hobby may fire anytime in that UTC hour (04:00–04:59 Colombia).
 
 Vercel injects `Authorization: Bearer $CRON_SECRET` when `CRON_SECRET` is
-set in the project env.
+set in the **API** project env.
 
 Manual check (same as cron):
 
@@ -241,9 +260,9 @@ curl -X GET https://vivecaribe.vercel.app/automation/emails/get-bookings \
   -H "Authorization: Bearer $CRON_SECRET"
 ```
 
-Rotate `CRON_SECRET` / `JWT_SECRET` in the Vercel project env, then redeploy.
+Rotate `CRON_SECRET` / `JWT_SECRET` in the API project env, then redeploy.
 
-### Vercel env vars (Production)
+### Vercel env vars — API (`vivecaribe`)
 
 Set these under **Production** only (not required for local `.env` + Docker):
 
@@ -252,12 +271,18 @@ Set these under **Production** only (not required for local `.env` + Docker):
 | `ENVIRONMENT` | `prod` — **not** `production` (pydantic rejects it) |
 | `DATABASE_URL` | See [Database](#database) — async driver + Supabase pooler `:6543` |
 | `JWT_SECRET` | Long random string (≥ 32 bytes recommended) |
-| `CRON_SECRET` | Long random string (Bearer for automation POST) |
+| `CRON_SECRET` | Long random string (Bearer for automation) |
 | `LOG_LEVEL` | Optional, e.g. `INFO` |
 | `SENTRY_DSN` | Optional |
 | `GMAIL_CLIENT_ID` / `GMAIL_CLIENT_SECRET` | Shared Google OAuth app |
 | `OUTLOOK_CLIENT_ID` / `OUTLOOK_CLIENT_SECRET` | Shared Microsoft app |
 | Per-mailbox tokens | Names listed in `apps/backend/booking_providers.yaml` (`credentials_vars`) |
+
+### Vercel env vars — Frontend (`vivecaribe-frontend`)
+
+| Variable | Notes |
+|----------|--------|
+| `NEXT_PUBLIC_API_URL` | Public API origin, e.g. `https://vivecaribe.vercel.app` |
 
 Example `DATABASE_URL` (replace `<ref>`, `<password>`, `<region>`):
 
@@ -273,7 +298,7 @@ DATABASE_URL='postgresql+asyncpg://postgres.<ref>:<password>@aws-<region>.pooler
   uv run alembic upgrade head
 ```
 
-Verify after deploy:
+Verify after API deploy:
 
 ```bash
 curl https://vivecaribe.vercel.app/health

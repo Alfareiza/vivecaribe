@@ -2,6 +2,8 @@
 
 ## Architecture
 
+### Backend
+
 API-first Clean Architecture under `apps/backend/src/vivecaribe/`:
 
 - `domain/` — durable business types (`Reserva`, `User`, `EmailMessage`, errors).
@@ -12,14 +14,31 @@ API-first Clean Architecture under `apps/backend/src/vivecaribe/`:
 - `api/` — thin FastAPI routers + `deps.py` composition root.
 - Package-level `settings.py` and `logging.py`.
 
-Monorepo: `apps/backend` (API) + `apps/frontend` (Next.js placeholder). Root
-owns Docker/Vercel entrypoints and Compose/CI. Frontend is not served from the
-container yet (API-only Vercel project).
+### Frontend
+
+Next.js 16 App Router under `apps/frontend/src/`:
+
+- `app/` — routes (admin dashboard, auth pages, UI element demos).
+- `components/` — TailAdmin UI primitives (forms, tables, charts, etc.).
+- `layout/` — sidebar / header shell.
+- `context/` — theme + sidebar state.
+- `output: 'standalone'` in `next.config.ts` for the portable Docker image.
+
+### Monorepo deploy topology
+
+```text
+GitHub monorepo
+├── apps/frontend  → Dockerfile (portable) + Vercel project (Next native)
+├── apps/backend   → Dockerfile + Dockerfile.vercel + Vercel project (container)
+└── docker-compose → db (Postgres 16) + api + frontend
+```
+
+Root no longer owns Docker/Vercel entrypoints. Cron lives in
+`apps/backend/vercel.json`.
 
 ## Pipeline (automation BC)
 
-Stages live in `ProcessBookingEmailsUseCase.start` (not a separate
-`pipeline.py`):
+Stages live in `ProcessBookingEmailsUseCase.start`:
 
 1. Fetch messages (Gmail / Outlook / Zoho adapters).
 2. Extract via registry (`EXTRACTORS`).
@@ -31,14 +50,9 @@ Stages live in `ProcessBookingEmailsUseCase.start` (not a separate
 
 ## Mailbox contract
 
-All mailbox clients expose:
-
 ```python
 async def fetch_messages(*, query: str, max_results: int = 30) -> list[EmailMessage]
 ```
-
-Zoho-specific knobs (`folder_name`, `time_window`) are **class defaults**, not
-YAML fields — YAML only supplies the subject query string.
 
 | mailbox_name | Auth | Notes |
 |--------------|------|-------|
@@ -50,16 +64,13 @@ YAML fields — YAML only supplies the subject query string.
 
 When Zoho shows an identity email challenge, `ZohoSession` uses the
 **GetYourGuide** Gmail mailbox from `booking_providers.yaml` to poll
-`from:zohoaccounts.com` OTP mail (`GmailMailbox.wait_for_zoho_otp`).
-Failure raises `EmailNotFound`. Session JSON lives under `APP_DATA_DIR`
-(or `~` locally).
+`from:zohoaccounts.com` OTP mail. Session JSON under `APP_DATA_DIR` (or `~`).
 
 ## Extractor patterns
 
-- Shared: `BaseExtractor.normalize_phone` → E.164; `get_pais_del_visitante`
-  from phone (alpha-2) unless overridden.
-- Homefans overrides country via `pycountry` on the Country label.
-- `price` vs `income` are provider-specific (see activeContext formulas).
+- Shared: phone → E.164; `get_pais_del_visitante` alpha-2 unless overridden.
+- Homefans overrides country via `pycountry`.
+- `price` vs `income` are provider-specific.
 
 ## Persistence
 
@@ -69,25 +80,15 @@ Failure raises `EmailNotFound`. Session JSON lives under `APP_DATA_DIR`
 | `email_messages` | `(source, mailbox_message_id)` |
 | `reservas` | `(booking_provider, reserva_reference)`; soft delete via `deleted_at` |
 
-`body_html` is stored on `email_messages` (no separate HTML table).
-
-Reserva HTTP CRUD lives in `api/routers/reservas.py` (thin router →
-`SqlAlchemyReservaRepository`). List uses `skip`/`limit` pagination.
-
 ## Auth pattern
 
-- Public register/login.
-- Most protected routes use Bearer JWT (`get_current_user`).
-- Automation GET/POST accept Bearer JWT **or** Bearer `CRON_SECRET`
-  (`require_jwt_or_cron`, constant-time compare). Cron returns no `User`.
-- `GET` runs defaults (all providers, `notify=false`); `POST` accepts body.
+- Public register/login; `/reservas` Bearer JWT.
+- Automation GET/POST: JWT **or** `CRON_SECRET`.
 - Hobby Vercel Cron: daily `GET /automation/emails/get-bookings` at 09:00 UTC.
 
 ## Deviations from the original architecture plan
 
-- No domain `Result` type — deliberately dropped; exceptions (`DomainError`).
-- No `domain/ports.py` / automation ports Protocols — concrete repos/adapters.
+- No domain `Result` type — exceptions (`DomainError`).
+- No `domain/ports.py` Protocols — concrete repos/adapters.
 - Config file is `booking_providers.yaml` (not `accounts.yaml`).
-- Entity/table naming uses `EmailMessage` / `email_messages`.
-- Extractors live under `application/automation/providers/`.
-- Vercel Cron uses GET + `CRON_SECRET`; POST remains for operators with body.
+- Dual Vercel projects (not single container serving UI + API).
