@@ -2,7 +2,7 @@
 
 ## Architecture
 
-API-first Clean Architecture with a compact layout:
+API-first Clean Architecture under `apps/backend/src/vivecaribe/`:
 
 - `domain/` — durable business types (`Reserva`, `User`, `EmailMessage`, errors).
 - `application/auth/` — register/login use cases.
@@ -11,6 +11,10 @@ API-first Clean Architecture with a compact layout:
 - `infrastructure/integrations/` — Gmail, Outlook, Zoho, WhatsApp NoOp, Argon2/JWT.
 - `api/` — thin FastAPI routers + `deps.py` composition root.
 - Package-level `settings.py` and `logging.py`.
+
+Monorepo: `apps/backend` (API) + `apps/frontend` (Next.js placeholder). Root
+owns Docker/Vercel entrypoints and Compose/CI. Frontend is not served from the
+container yet (API-only Vercel project).
 
 ## Pipeline (automation BC)
 

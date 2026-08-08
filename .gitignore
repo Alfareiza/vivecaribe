@@ -218,6 +218,15 @@ __marimo__/
 .streamlit/secrets.toml
 .vercel
 
+# Next.js (apps/frontend)
+apps/frontend/node_modules/
+apps/frontend/.next/
+apps/frontend/out/
+apps/frontend/.turbo/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
 # Mailbox OAuth / token files (authorized-user JSON, Outlook tokens)
 secrets/
 *token.json

@@ -29,7 +29,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/vivecaribe
       APP_DATA_DIR: /data
     volumes:
-      - ./booking_providers.yaml:/app/booking_providers.yaml:ro
+      - ./apps/backend/booking_providers.yaml:/app/booking_providers.yaml:ro
       - vivecaribe_data:/data
     depends_on:
       db:

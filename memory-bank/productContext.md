@@ -25,3 +25,4 @@ structured reservations operators can trust, while remaining an API platform
 - Structured pipeline counters (`fetched`, `created`, `existing`, `notified`).
 - Clear env docs (`.env.example`) and Memory Bank for future agents.
 - Safe local tests that never touch the developer Postgres database.
+- Clear monorepo layout (`apps/backend` vs empty `apps/frontend`).

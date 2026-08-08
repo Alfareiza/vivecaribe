@@ -5,11 +5,34 @@ API-first booking platform for ViveCaribe experiences. The business core
 ingests booking emails (Gmail / Outlook), extracts fields, persists
 reservations, and optionally notifies WhatsApp.
 
+## Project structure
+
+Monorepo: one Git repo, apps under `apps/`. Root holds Compose, CI, and the
+Vercel container entrypoints. The production Vercel project is still **API-only**
+(`Dockerfile.vercel`); `apps/frontend` is a placeholder for a future Next.js UI.
+
+```text
+vivecaribe/
+├── apps/
+│   ├── backend/                 # FastAPI (uv, tests, migrations)
+│   └── frontend/                # Next.js (empty for now)
+├── Dockerfile                   # local API image
+├── Dockerfile.vercel            # Vercel Fluid Compute API image
+├── vercel.json                  # cron → GET /automation/emails/get-bookings
+├── docker-compose.yml           # db + api
+├── .github/workflows/           # CI (backend tests)
+├── memory-bank/                 # project context for agents
+└── README.md
+```
+
 ## Requirements
 
 - Python **3.13+**
 - [uv](https://docs.astral.sh/uv/)
 - Docker (Postgres for local persistence and tests)
+
+Run backend tooling from `apps/backend` (that directory owns `pyproject.toml`
+and `booking_providers.yaml`).
 
 Pick **one** local path (not both at once):
 
@@ -23,6 +46,7 @@ cp .env.example .env
 # edit .env with local secrets
 
 docker compose up -d db   # start Postgres only (background)
+cd apps/backend
 uv sync --group dev
 uv run alembic upgrade head   # apply DB migrations (creates tables like users)
 uv run uvicorn vivecaribe.main:app --reload --host 0.0.0.0 --port 8000
@@ -73,7 +97,7 @@ Protected routes use `Authorization: Bearer <access_token>` (JWT).
 ## Run automation locally
 
 1. Fill mailbox OAuth vars in `.env` (see `.env.example` and
-   `booking_providers.yaml`).
+   `apps/backend/booking_providers.yaml`).
 2. Start the API (Option A above).
 3. Authenticate with a JWT **or** `CRON_SECRET`.
 4. Call the pipeline:
@@ -94,10 +118,10 @@ curl -X GET http://localhost:8000/automation/emails/get-bookings \
 ```
 
 Omit `booking_provider` on POST to process every account in
-`booking_providers.yaml`. With WhatsApp still NoOp, `notify=true` will
-**not** mark emails as read.
+`apps/backend/booking_providers.yaml`. With WhatsApp still NoOp, `notify=true`
+will **not** mark emails as read.
 
-CLI alternative (no HTTP):
+CLI alternative (no HTTP), from `apps/backend`:
 
 ```bash
 uv run python -m vivecaribe.application.automation.use_cases
@@ -122,7 +146,7 @@ into Vercel. If the password contains `@`, `#`, `/`, or other reserved character
 | `email_messages` | `(source, mailbox_message_id)` | Includes `body_html` (no separate HTML table) |
 | `reservas` | `(booking_provider, reserva_reference)` | FK `email_message_id → email_messages.id` |
 
-Migrations:
+Migrations (from `apps/backend`):
 
 ```bash
 uv run alembic upgrade head   # apply pending revisions (creates/updates tables)
@@ -138,62 +162,68 @@ uv run alembic stamp base
 uv run alembic upgrade head
 ```
 
-## Project layout
+## Backend layout
 
 ```text
-src/vivecaribe/
-├── main.py                 # FastAPI app factory + lifespan
-├── settings.py             # pydantic-settings BaseSettings + YAML load
-├── logging.py              # shared logger (Rich local / JSON elsewhere)
-├── api/                    # thin HTTP routers, schemas, deps
-├── domain/                 # Reserva, User, EmailMessage, errors
-├── application/
-│   ├── auth/               # register / login use cases
-│   └── automation/         # pipeline + HTML extractors (providers/)
-└── infrastructure/
-    ├── db/                 # SQLAlchemy session, ORM, repositories
-    └── integrations/       # Gmail, Outlook, WhatsApp NoOp, security
-booking_providers.yaml      # non-secret mailbox queries / credential var names
-memory-bank/                # agent/project context
-tests/                      # pytest suite (90% package coverage gate)
+apps/backend/
+├── pyproject.toml / uv.lock
+├── alembic.ini
+├── booking_providers.yaml   # non-secret mailbox queries / credential var names
+├── migrations/
+├── tests/                   # pytest suite (90% package coverage gate)
+└── src/vivecaribe/
+    ├── main.py              # FastAPI app factory + lifespan
+    ├── settings.py          # pydantic-settings BaseSettings + YAML load
+    ├── logging.py           # shared logger (Rich local / JSON elsewhere)
+    ├── api/                 # thin HTTP routers, schemas, deps
+    ├── domain/              # Reserva, User, EmailMessage, errors
+    ├── application/
+    │   ├── auth/            # register / login use cases
+    │   └── automation/      # pipeline + HTML extractors (providers/)
+    └── infrastructure/
+        ├── db/              # SQLAlchemy session, ORM, repositories
+        └── integrations/    # Gmail, Outlook, WhatsApp NoOp, security
 ```
 
 ## Config
 
 | Source | Purpose |
 |--------|---------|
-| `.env` | Secrets and runtime settings (`DATABASE_URL`, `JWT_SECRET`, OAuth tokens, …) |
-| `booking_providers.yaml` | Non-secret booking-provider mailboxes and search queries |
+| `.env` (repo root) | Secrets and runtime settings (`DATABASE_URL`, `JWT_SECRET`, OAuth tokens, …) |
+| `apps/backend/booking_providers.yaml` | Non-secret booking-provider mailboxes and search queries |
 
 ## Tests
 
 Unit tests always run. Persistence / auth API tests need Postgres (Compose `db`
 on port **5433**). Pytest forces an isolated `vivecaribe_test` database
-(see `tests/conftest.py`); override host/port with `TEST_DATABASE_URL` if needed.
+(see `apps/backend/tests/conftest.py`); override host/port with
+`TEST_DATABASE_URL` if needed.
 
 ```bash
 docker compose up -d db
+cd apps/backend
 uv sync --group dev
 uv run alembic upgrade head
 uv run pytest
 ```
 
 Coverage is enforced at **90%** statement coverage for `src/vivecaribe`
-(`pytest-cov` via `pyproject.toml` addopts).
+(`pytest-cov` via `apps/backend/pyproject.toml` addopts).
 
 CI: GitHub Actions workflow [`.github/workflows/test.yml`](.github/workflows/test.yml)
-starts Postgres 16, applies migrations, and runs the same `uv run pytest` gate.
+runs from `apps/backend` (Postgres 16, migrations, `uv run pytest`).
 
 ## Deploy (Vercel)
 
 Production: https://vivecaribe.vercel.app
 
 - Production: Vercel **Container** preset + root
-  [`Dockerfile.vercel`](Dockerfile.vercel). `uv sync` installs `vivecaribe`,
+  [`Dockerfile.vercel`](Dockerfile.vercel) (build context = repo root; sources
+  copied from `apps/backend`). `uv sync` installs `vivecaribe`,
   `PYTHONPATH=/app/src`, and Uvicorn serves on `$PORT` (default `80`).
 - Local Compose uses [`Dockerfile`](Dockerfile) on port `8000`.
-- [`src/main.py`](src/main.py) is only a fallback if the native FastAPI
-  runtime is used without a container.
+- [`apps/backend/src/main.py`](apps/backend/src/main.py) is only a fallback if
+  the native FastAPI runtime is used without a container.
 
 ### Vercel Cron
 
@@ -227,7 +257,7 @@ Set these under **Production** only (not required for local `.env` + Docker):
 | `SENTRY_DSN` | Optional |
 | `GMAIL_CLIENT_ID` / `GMAIL_CLIENT_SECRET` | Shared Google OAuth app |
 | `OUTLOOK_CLIENT_ID` / `OUTLOOK_CLIENT_SECRET` | Shared Microsoft app |
-| Per-mailbox tokens | Names listed in `booking_providers.yaml` (`credentials_vars`) |
+| Per-mailbox tokens | Names listed in `apps/backend/booking_providers.yaml` (`credentials_vars`) |
 
 Example `DATABASE_URL` (replace `<ref>`, `<password>`, `<region>`):
 
@@ -235,7 +265,8 @@ Example `DATABASE_URL` (replace `<ref>`, `<password>`, `<region>`):
 postgresql+asyncpg://postgres.<ref>:<password>@aws-<region>.pooler.supabase.com:6543/postgres
 ```
 
-Apply migrations to Supabase **once** from your machine (same URL):
+Apply migrations to Supabase **once** from your machine (same URL), from
+`apps/backend`:
 
 ```bash
 DATABASE_URL='postgresql+asyncpg://postgres.<ref>:<password>@aws-<region>.pooler.supabase.com:6543/postgres' \

@@ -1,0 +1,32 @@
+# Git / IDE
+.git
+.github
+.cursor
+.vercel
+.DS_Store
+**/.DS_Store
+
+# Python local artifacts
+.venv
+.pytest_cache
+.coverage
+__pycache__
+**/__pycache__
+**/*.pyc
+
+# Docs / agent context (not needed in image)
+memory-bank
+
+# Frontend (never bake into API image)
+apps/frontend
+**/node_modules
+**/.next
+
+# Secrets / local OAuth helpers
+.env
+.env.*
+!.env.example
+secrets
+credentials.json
+refresh_token*.txt
+*.pem

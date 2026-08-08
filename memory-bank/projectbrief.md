@@ -17,7 +17,8 @@ the system normalizes those bookings into a shared `Reserva` model.
 
 ## Non-goals (current phase)
 
-- Full frontend / customer portal.
+- Scaffolded Next.js admin UI (folder `apps/frontend` exists empty only).
+- Serving the frontend from the Vercel API container.
 - Real Meta WhatsApp Cloud API sends (NoOp stub only).
 - Multi-tenant SaaS for other operators.
 

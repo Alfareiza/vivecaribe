@@ -2,11 +2,24 @@
 
 ## Current focus
 
-On **`main`**. Reserva CRUD API is merged (#25–#33 / PRs #26–#34).
+Monorepo layout on branch `chore/monorepo-apps-layout` (issue #36):
+`apps/backend` (FastAPI) + empty `apps/frontend` placeholder.
 
 ## Recent decisions
 
-### Reserva CRUD API
+### Monorepo (#36)
+
+- Root keeps `Dockerfile`, `Dockerfile.vercel`, `vercel.json`,
+  `docker-compose.yml`, CI, README, Memory Bank, `.dockerignore`.
+- Backend package lives under `apps/backend/` (`pyproject`, `src`, `tests`,
+  `migrations`, `booking_providers.yaml`).
+- Frontend is empty (`.gitkeep` + README). Next.js not scaffolded yet.
+- One Vercel **container** project remains API-only (C3). Cron path unchanged:
+  `GET /automation/emails/get-bookings`.
+- UI-in-container (static export or multi-process) deferred to a later issue.
+- Local OAuth/scratch scripts: leave alone (do not move).
+
+### Reserva CRUD API (prior)
 
 - Thin routers call `SqlAlchemyReservaRepository` directly (no use-case
   layer; persistence + idempotency only).
@@ -35,6 +48,8 @@ On **`main`**. Reserva CRUD API is merged (#25–#33 / PRs #26–#34).
 
 ## Known gaps (intentional / deferred)
 
+- Next.js scaffold under `apps/frontend`.
+- Serving frontend from the Vercel API container (C1/C2).
 - Zoho `mark_as_read`.
 - Long-lived browser / skip Chromium on warm path.
 - Real WhatsApp Meta integration (NoOp until Meta approval).
@@ -44,7 +59,7 @@ On **`main`**. Reserva CRUD API is merged (#25–#33 / PRs #26–#34).
 
 ## Next
 
-- Ops: run `alembic upgrade head` where the new `deleted_at` migration
-  is not yet applied (Supabase / local).
+- Land #36 (CI green), then scaffold Next.js when ready.
+- Ops: run `alembic upgrade head` from `apps/backend` where needed.
 - Ops smoke: Zoho warm/cold + OTP path in Docker/Vercel.
 - Real WhatsApp Meta notifier after Meta authorization.
