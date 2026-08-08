@@ -1,0 +1,58 @@
+import type { BadgeColor } from "@/components/ui/badge/Badge";
+import type { Reservation } from "@/types/reservation";
+
+export function getEstadoBadgeColor(estado: string): BadgeColor {
+  switch (estado.trim().toLowerCase()) {
+    case "confirmada":
+      return "success";
+    case "en_progreso":
+      return "warning";
+    case "cancelada":
+    case "error":
+      return "error";
+    default:
+      return "light";
+  }
+}
+
+export function formatDisplayDateTime(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return new Intl.DateTimeFormat("es-CO", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+export function formatPrice(price: string, moneda: string): string {
+  return `${moneda} ${price}`;
+}
+
+/** Local calendar YYYY-MM-DD for inclusive range checks. */
+export function toLocalDateKey(iso: string): string {
+  const date = new Date(iso);
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+export type DateRangeFilter = {
+  from: string | null;
+  to: string | null;
+};
+
+export function reservationInDateRange(
+  reservation: Reservation,
+  range: DateRangeFilter
+): boolean {
+  const { from, to } = range;
+  if (!from && !to) return true;
+  if (!reservation.fecha_evento) return false;
+
+  const key = toLocalDateKey(reservation.fecha_evento);
+  if (from && key < from) return false;
+  if (to && key > to) return false;
+  return true;
+}
