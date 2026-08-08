@@ -1,7 +1,10 @@
 # ViveCaribe Frontend
 
-Admin UI for ViveCaribe (booking operations). Next.js App Router app under
-`apps/frontend` in the monorepo.
+Admin UI for ViveCaribe booking operations. Next.js App Router app in the
+monorepo.
+
+Monorepo overview: [`README.md`](../../README.md) · API:
+[`apps/backend/README.md`](../backend/README.md).
 
 ## Tech stack
 
@@ -13,6 +16,9 @@ Admin UI for ViveCaribe (booking operations). Next.js App Router app under
 
 ## Local development
 
+API + Postgres must be available (see [backend local
+dev](../backend/README.md#local-development) or root Compose).
+
 ```bash
 cd apps/frontend
 npm install
@@ -21,26 +27,10 @@ npm run dev
 
 App: http://localhost:3000
 
-Point the UI at the API with:
-
 ```bash
 # .env.local (not committed)
 NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
-
-Run the API + Postgres from the repo root (`docker compose up -d db` and
-uvicorn, or full Compose — see root README).
-
-## Docker (portable)
-
-```bash
-# from repo root
-docker compose up --build frontend
-# or
-docker build -t vivecaribe-frontend ./apps/frontend
-```
-
-Image uses Next.js `output: 'standalone'` and listens on port **3000**.
 
 ## Scripts
 
@@ -51,10 +41,27 @@ Image uses Next.js `output: 'standalone'` and listens on port **3000**.
 | `npm start` | Serve production build |
 | `npm run lint` | ESLint |
 
+## Docker (portable)
+
+```bash
+# from repo root
+docker compose up --build frontend
+# or
+docker build -t vivecaribe-frontend ./apps/frontend
+```
+
+Uses Next.js `output: 'standalone'` and listens on **3000**.
+
 ## Deploy
 
-- **Vercel:** project `vivecaribe-frontend`, Root Directory `apps/frontend`,
-  Framework Next.js (native — not the container image).
-- **AWS / other:** reuse `apps/frontend/Dockerfile`.
+- **Vercel project:** `vivecaribe-frontend` · Root Directory `apps/frontend` ·
+  Framework **Next.js** (native — not the container image)
+- **Portable / AWS:** [`Dockerfile`](Dockerfile)
+- **Ignored Build Step:** `git diff HEAD^ HEAD --quiet -- .`
 
-API project remains separate (`vivecaribe` → `apps/backend`).
+| Variable | Notes |
+|----------|--------|
+| `NEXT_PUBLIC_API_URL` | Public API origin, e.g. `https://vivecaribe.vercel.app` |
+
+Production promotion for this project is intentional (preview-first). See the
+root README deploy table and PR / release process.
