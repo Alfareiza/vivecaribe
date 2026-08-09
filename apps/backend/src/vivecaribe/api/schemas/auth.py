@@ -34,7 +34,7 @@ class UserResponse(BaseModel):
 
 
 class TokenResponse(BaseModel):
-    """JWT returned after a successful login."""
+    """Access JWT returned after login or refresh (refresh stays in cookie)."""
 
     access_token: str
     token_type: str = "bearer"

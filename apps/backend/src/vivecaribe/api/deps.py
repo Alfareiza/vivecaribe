@@ -16,6 +16,7 @@ from vivecaribe.domain.errors import DomainError
 from vivecaribe.domain.user import User
 from vivecaribe.infrastructure.db.repositories import (
     SqlAlchemyEmailMessageRepository,
+    SqlAlchemyRefreshTokenRepository,
     SqlAlchemyReservaRepository,
     SqlAlchemyUserRepository,
 )
@@ -84,6 +85,13 @@ def get_user_repository(
 ) -> SqlAlchemyUserRepository:
     """Build a user repository for the current request session."""
     return SqlAlchemyUserRepository(session)
+
+
+def get_refresh_token_repository(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> SqlAlchemyRefreshTokenRepository:
+    """Build a refresh-token repository for the current request session."""
+    return SqlAlchemyRefreshTokenRepository(session)
 
 
 def get_reserva_repository(
@@ -162,6 +170,10 @@ def get_process_booking_emails_use_case(
 
 DbSession = Annotated[AsyncSession, Depends(get_db_session)]
 UserRepo = Annotated[SqlAlchemyUserRepository, Depends(get_user_repository)]
+RefreshTokenRepo = Annotated[
+    SqlAlchemyRefreshTokenRepository,
+    Depends(get_refresh_token_repository),
+]
 ReservaRepo = Annotated[
     SqlAlchemyReservaRepository,
     Depends(get_reserva_repository),

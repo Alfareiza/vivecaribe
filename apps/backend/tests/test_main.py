@@ -16,6 +16,8 @@ def test_create_app_includes_routers() -> None:
     assert "/health" in paths
     assert "/users" in paths
     assert "/login" in paths
+    assert "/refresh" in paths
+    assert "/logout" in paths
     assert "/automation/emails/get-bookings" in paths
 
 
