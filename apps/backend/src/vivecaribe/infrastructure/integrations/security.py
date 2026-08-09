@@ -1,7 +1,9 @@
-"""Argon2 password hashing and JWT access tokens."""
+"""Argon2 password hashing, JWT access tokens, and opaque refresh tokens."""
 
 from __future__ import annotations
 
+import hashlib
+import secrets
 from datetime import UTC, datetime, timedelta
 
 import jwt
@@ -39,13 +41,14 @@ class JwtTokenService:
         self._settings = settings or get_settings()
 
     def create_access_token(self, *, subject: str, email: str) -> str:
-        """Create a signed access token with ``sub``, ``email``, and ``exp``."""
+        """Create a signed access token with ``sub``, ``email``, ``jti``, and ``exp``."""
         expires = datetime.now(UTC) + timedelta(
             minutes=self._settings.jwt_expire_minutes,
         )
         payload = {
             "sub": subject,
             "email": email,
+            "jti": secrets.token_urlsafe(16),
             "exp": expires,
         }
         return jwt.encode(
@@ -73,3 +76,13 @@ class JwtTokenService:
         if not subject or not isinstance(subject, str):
             raise ValidationError("Token missing subject", field="sub")
         return subject
+
+    @staticmethod
+    def generate_refresh_token() -> str:
+        """Return a new opaque refresh token (store only its hash)."""
+        return secrets.token_urlsafe(32)
+
+    @staticmethod
+    def hash_refresh_token(raw_token: str) -> str:
+        """Return the SHA-256 hex digest of ``raw_token``."""
+        return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()

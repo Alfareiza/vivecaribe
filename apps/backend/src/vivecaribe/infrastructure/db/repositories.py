@@ -10,9 +10,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from vivecaribe.domain.email_message import EmailMessage
 from vivecaribe.domain.enums import BookingProvider
+from vivecaribe.domain.refresh_token import RefreshToken
 from vivecaribe.domain.reserva import Reserva
 from vivecaribe.domain.user import User
-from vivecaribe.infrastructure.db.models import EmailMessageORM, ReservaORM, UserORM
+from vivecaribe.infrastructure.db.models import (
+    EmailMessageORM,
+    RefreshTokenORM,
+    ReservaORM,
+    UserORM,
+)
 
 
 def _apply_fields(row: object, data: dict[str, object]) -> None:
@@ -53,6 +59,71 @@ class SqlAlchemyUserRepository:
         await self._session.flush()
         await self._session.refresh(row)
         return User.model_validate(row)
+
+
+class SqlAlchemyRefreshTokenRepository:
+    """Refresh-token persistence backed by PostgreSQL."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        """Bind this repository to an open async session."""
+        self._session = session
+
+    async def get_by_token_hash(self, token_hash: str) -> RefreshToken | None:
+        """Return a refresh token by its SHA-256 hash, or ``None``."""
+        result = await self._session.execute(
+            select(RefreshTokenORM).where(RefreshTokenORM.token_hash == token_hash),
+        )
+        row = result.scalar_one_or_none()
+        return RefreshToken.model_validate(row) if row else None
+
+    async def save(self, token: RefreshToken) -> RefreshToken:
+        """Insert or update a refresh token and return the persisted entity."""
+        row = await self._session.get(RefreshTokenORM, token.id)
+        payload = token.model_dump()
+        if row is None:
+            row = RefreshTokenORM(**payload)
+            self._session.add(row)
+        else:
+            _apply_fields(row, payload)
+        await self._session.flush()
+        await self._session.refresh(row)
+        return RefreshToken.model_validate(row)
+
+    async def revoke(
+        self,
+        token_id: UUID,
+        *,
+        replaced_by_id: UUID | None = None,
+        revoked_at: datetime | None = None,
+    ) -> None:
+        """Mark a single refresh token as revoked."""
+        row = await self._session.get(RefreshTokenORM, token_id)
+        if row is None:
+            return
+        row.revoked_at = revoked_at or datetime.now(UTC)
+        if replaced_by_id is not None:
+            row.replaced_by_id = replaced_by_id
+        await self._session.flush()
+
+    async def revoke_family(
+        self,
+        family_id: UUID,
+        *,
+        revoked_at: datetime | None = None,
+    ) -> int:
+        """Revoke all non-revoked tokens in a rotation family. Return count."""
+        when = revoked_at or datetime.now(UTC)
+        result = await self._session.execute(
+            select(RefreshTokenORM).where(
+                RefreshTokenORM.family_id == family_id,
+                RefreshTokenORM.revoked_at.is_(None),
+            ),
+        )
+        rows = result.scalars().all()
+        for row in rows:
+            row.revoked_at = when
+        await self._session.flush()
+        return len(rows)
 
 
 class SqlAlchemyReservaRepository:

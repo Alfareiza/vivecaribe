@@ -62,3 +62,13 @@ def test_jwt_decode_missing_sub_raises_validation_error() -> None:
     service = JwtTokenService(settings)
     with pytest.raises(ValidationError, match="subject"):
         service.decode_access_token(token)
+
+
+def test_generate_and_hash_refresh_token() -> None:
+    """Opaque refresh tokens are unique and hash stably to 64 hex chars."""
+    first = JwtTokenService.generate_refresh_token()
+    second = JwtTokenService.generate_refresh_token()
+    assert first != second
+    digest = JwtTokenService.hash_refresh_token(first)
+    assert len(digest) == 64
+    assert digest == JwtTokenService.hash_refresh_token(first)

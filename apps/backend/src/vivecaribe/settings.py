@@ -109,6 +109,7 @@ class Settings(BaseSettings):
     database_url: SecretStr
     jwt_secret: SecretStr
     jwt_expire_minutes: int = 60
+    jwt_refresh_expire_days: int = 7
     cron_secret: SecretStr
     sentry_dsn: str | None = None
 

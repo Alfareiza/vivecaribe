@@ -1,5 +1,17 @@
-"""Auth application use cases."""
+"""Application-layer authentication use cases."""
 
-from vivecaribe.application.auth.use_cases import LoginUserUseCase, RegisterUserUseCase
+from vivecaribe.application.auth.use_cases import (
+    AuthTokenPair,
+    LoginUserUseCase,
+    LogoutUserUseCase,
+    RefreshAccessTokenUseCase,
+    RegisterUserUseCase,
+)
 
-__all__ = ["LoginUserUseCase", "RegisterUserUseCase"]
+__all__ = [
+    "AuthTokenPair",
+    "LoginUserUseCase",
+    "LogoutUserUseCase",
+    "RefreshAccessTokenUseCase",
+    "RegisterUserUseCase",
+]

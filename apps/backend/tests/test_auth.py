@@ -1,14 +1,16 @@
-"""API tests for register and login."""
+"""API tests for register, login, refresh, and logout."""
 
 from __future__ import annotations
 
 import pytest
 from httpx import AsyncClient
 
+from vivecaribe.api.cookies import REFRESH_COOKIE_NAME
+
 
 @pytest.mark.asyncio
 async def test_register_and_login_happy_path(auth_client: AsyncClient) -> None:
-    """Register returns 201 without hash; login returns a bearer token."""
+    """Register returns 201 without hash; login returns bearer + refresh cookie."""
     register = await auth_client.post(
         "/users",
         json={"email": "ops@vivecaribe.com", "password": "secret123"},
@@ -27,6 +29,8 @@ async def test_register_and_login_happy_path(auth_client: AsyncClient) -> None:
     token_body = login.json()
     assert token_body["token_type"] == "bearer"
     assert token_body["access_token"]
+    assert "refresh_token" not in token_body
+    assert REFRESH_COOKIE_NAME in login.cookies
 
 
 @pytest.mark.asyncio
@@ -101,3 +105,89 @@ async def test_login_inactive_user_returns_401(
         json={"email": "inactive@vivecaribe.com", "password": "secret123"},
     )
     assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_refresh_returns_new_access_and_rotates_cookie(
+    auth_client: AsyncClient,
+) -> None:
+    """``POST /refresh`` mints a new access token and rotates the cookie."""
+    await auth_client.post(
+        "/users",
+        json={"email": "refresh@vivecaribe.com", "password": "secret123"},
+    )
+    login = await auth_client.post(
+        "/login",
+        json={"email": "refresh@vivecaribe.com", "password": "secret123"},
+    )
+    assert login.status_code == 200
+    old_cookie = login.cookies[REFRESH_COOKIE_NAME]
+    old_access = login.json()["access_token"]
+
+    refreshed = await auth_client.post("/refresh")
+    assert refreshed.status_code == 200
+    assert refreshed.json()["access_token"]
+    assert refreshed.json()["access_token"] != old_access
+    assert "refresh_token" not in refreshed.json()
+    new_cookie = refreshed.cookies.get(REFRESH_COOKIE_NAME)
+    assert new_cookie
+    assert new_cookie != old_cookie
+
+
+@pytest.mark.asyncio
+async def test_refresh_without_cookie_returns_401(auth_client: AsyncClient) -> None:
+    """Missing refresh cookie yields 401."""
+    response = await auth_client.post("/refresh")
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_refresh_reuse_of_rotated_cookie_returns_401(
+    auth_client: AsyncClient,
+) -> None:
+    """Presenting a rotated refresh cookie fails and revokes the family."""
+    await auth_client.post(
+        "/users",
+        json={"email": "reuse@vivecaribe.com", "password": "secret123"},
+    )
+    login = await auth_client.post(
+        "/login",
+        json={"email": "reuse@vivecaribe.com", "password": "secret123"},
+    )
+    old_cookie = login.cookies[REFRESH_COOKIE_NAME]
+
+    first = await auth_client.post("/refresh")
+    assert first.status_code == 200
+    current_cookie = first.cookies[REFRESH_COOKIE_NAME]
+
+    # Force the jar back to the rotated (old) cookie.
+    auth_client.cookies.set(REFRESH_COOKIE_NAME, old_cookie)
+    reuse = await auth_client.post("/refresh")
+    assert reuse.status_code == 401
+
+    auth_client.cookies.set(REFRESH_COOKIE_NAME, current_cookie)
+    after_reuse = await auth_client.post("/refresh")
+    assert after_reuse.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_logout_clears_cookie_and_blocks_refresh(
+    auth_client: AsyncClient,
+) -> None:
+    """``POST /logout`` clears the cookie and revokes the refresh family."""
+    await auth_client.post(
+        "/users",
+        json={"email": "logout@vivecaribe.com", "password": "secret123"},
+    )
+    login = await auth_client.post(
+        "/login",
+        json={"email": "logout@vivecaribe.com", "password": "secret123"},
+    )
+    cookie = login.cookies[REFRESH_COOKIE_NAME]
+
+    logout = await auth_client.post("/logout")
+    assert logout.status_code == 204
+
+    auth_client.cookies.set(REFRESH_COOKIE_NAME, cookie)
+    refreshed = await auth_client.post("/refresh")
+    assert refreshed.status_code == 401
