@@ -65,15 +65,17 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
     settings = get_settings()
-    origins = settings.cors_origin_list()
-    if origins:
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=origins,
-            allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
-        )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            part.strip()
+            for part in settings.cors_origins.split(",")
+            if part.strip()
+        ],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     app.include_router(health.router)
     app.include_router(auth.router)
     app.include_router(automation.router)

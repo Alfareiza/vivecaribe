@@ -149,10 +149,6 @@ class Settings(BaseSettings):
             return None
         return value
 
-    def cors_origin_list(self) -> list[str]:
-        """Return parsed CORS allowlist origins."""
-        return [part.strip() for part in self.cors_origins.split(",") if part.strip()]
-
     @staticmethod
     def require_env(name: str) -> str:
         """Return a required environment variable or raise ``DomainError``."""

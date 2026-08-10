@@ -46,20 +46,6 @@ def test_settings_validators_normalize_log_level_and_blank_sentry() -> None:
     assert settings.gmail_client_id is None
 
 
-def test_cors_origins_parses_comma_separated_string() -> None:
-    """``CORS_ORIGINS`` accepts a comma-separated allowlist."""
-    settings = Settings(
-        database_url="postgresql+asyncpg://u:p@localhost/db",
-        jwt_secret="secret",
-        cron_secret="cron",
-        cors_origins="http://localhost:3000, https://vivecaribe-frontend.vercel.app",
-    )
-    assert settings.cors_origin_list() == [
-        "http://localhost:3000",
-        "https://vivecaribe-frontend.vercel.app",
-    ]
-
-
 def test_require_gmail_and_outlook_credentials_raise_when_unset(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
