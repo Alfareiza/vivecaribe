@@ -70,6 +70,13 @@ Fixtures refuse to reset any database whose name does not end with `_test`.
 - **Frontend job:** path-filtered (`apps/frontend/**`); `npm ci` +
   `npm run build` (Node 22).
 
+`.github/workflows/migrate.yml` (prod schema):
+
+- On push to `main` when `apps/backend/migrations/**` or `alembic.ini` change
+  (also `workflow_dispatch`).
+- Runs `uv run alembic upgrade head` against repository secret `DATABASE_URL`
+  (prod Supabase). Not run in Vercel or Docker Compose entrypoints.
+
 ## Env vars (auth / CORS / UI)
 
 | Variable | App | Notes |

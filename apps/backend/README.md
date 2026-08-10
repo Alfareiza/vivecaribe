@@ -232,7 +232,15 @@ curl -X GET https://vivecaribe.vercel.app/automation/emails/get-bookings \
 | `GMAIL_CLIENT_*` / `OUTLOOK_CLIENT_*` | Shared OAuth apps |
 | Per-mailbox tokens | Names in `booking_providers.yaml` |
 
-Apply migrations to Supabase once from this directory:
+### Database migrations (prod)
+
+On merge to `main`, [`.github/workflows/migrate.yml`](../../.github/workflows/migrate.yml)
+runs `alembic upgrade head` when `apps/backend/migrations/**` (or `alembic.ini`)
+changes. Set the repository secret **`DATABASE_URL`** to the same async Supabase
+URL used on Vercel. You can also run the workflow manually via **Actions →
+Migrate → Run workflow**.
+
+Manual fallback from this directory:
 
 ```bash
 DATABASE_URL='postgresql+asyncpg://postgres.<ref>:<password>@aws-<region>.pooler.supabase.com:6543/postgres' \
