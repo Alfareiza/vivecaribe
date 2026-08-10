@@ -1,6 +1,5 @@
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
-import ReservationsTable from "@/components/reservations/ReservationsTable";
-import { mockReservations } from "@/data/mockReservations";
+import ReservationsLoader from "@/components/reservations/ReservationsLoader";
 import type { Metadata } from "next";
 import React from "react";
 
@@ -13,7 +12,7 @@ export default function ReservasPage() {
   return (
     <div>
       <PageBreadcrumb pageTitle="Reservas" />
-      <ReservationsTable reservations={mockReservations} />
+      <ReservationsLoader />
     </div>
   );
 }

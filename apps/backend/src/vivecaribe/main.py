@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 
 import sentry_sdk
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from vivecaribe import __version__
 from vivecaribe.api import deps
@@ -62,6 +63,18 @@ def create_app() -> FastAPI:
         title="ViveCaribe",
         version=__version__,
         lifespan=lifespan,
+    )
+    settings = get_settings()
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            part.strip()
+            for part in settings.cors_origins.split(",")
+            if part.strip()
+        ],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
     app.include_router(health.router)
     app.include_router(auth.router)

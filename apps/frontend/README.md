@@ -28,8 +28,9 @@ npm run dev
 App: http://localhost:3000
 
 ```bash
-# .env.local (not committed)
+# .env.local (not committed) — see `.env.example`
 NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_LOGIN_REDIRECT_URL=/reservas
 ```
 
 ## Scripts
@@ -62,6 +63,9 @@ Uses Next.js `output: 'standalone'` and listens on **3000**.
 | Variable | Notes |
 |----------|--------|
 | `NEXT_PUBLIC_API_URL` | Public API origin, e.g. `https://vivecaribe.vercel.app` |
+| `NEXT_PUBLIC_LOGIN_REDIRECT_URL` | Post-login path, default `/reservas` |
 
-Production promotion for this project is intentional (preview-first). See the
-root README deploy table and PR / release process.
+API project must allow this origin via `CORS_ORIGINS` (see backend README).
+
+Production: https://vivecaribe-frontend.vercel.app
+

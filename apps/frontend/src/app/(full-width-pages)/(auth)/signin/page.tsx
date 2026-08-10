@@ -1,11 +1,25 @@
 import SignInForm from "@/components/auth/SignInForm";
-import { Metadata } from "next";
+import { SignInGate } from "@/context/AuthContext";
+import type { Metadata } from "next";
+import { Suspense } from "react";
 
 export const metadata: Metadata = {
-  title: "Next.js SignIn Page | Football tours and travel",
-  description: "This is Next.js Signin Page | Bienvenido a vive caribe, football tours and travel around Colombia",
+  title: "Iniciar sesión | ViveCaribe",
+  description: "Acceso al panel de operaciones ViveCaribe",
 };
 
 export default function SignIn() {
-  return <SignInForm />;
+  return (
+    <Suspense
+      fallback={
+        <div className="flex flex-1 items-center justify-center text-sm text-gray-500">
+          Cargando…
+        </div>
+      }
+    >
+      <SignInGate>
+        <SignInForm />
+      </SignInGate>
+    </Suspense>
+  );
 }

@@ -112,6 +112,9 @@ class Settings(BaseSettings):
     jwt_refresh_expire_days: int = 7
     cron_secret: SecretStr
     sentry_dsn: str | None = None
+    # Comma-separated browser origins (env ``CORS_ORIGINS``). Kept as ``str`` so
+    # pydantic-settings does not JSON-decode the value.
+    cors_origins: str = ""
 
     gmail_client_id: SecretStr | None = None
     gmail_client_secret: SecretStr | None = None
