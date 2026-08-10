@@ -1,6 +1,7 @@
 "use client";
 
 import ReservationsTable from "@/components/reservations/ReservationsTable";
+import InlineLoading from "@/components/ui/loading/InlineLoading";
 import { fetchAllReservas } from "@/lib/reservas";
 import type { Reservation } from "@/types/reservation";
 import React, { useEffect, useState } from "react";
@@ -37,11 +38,7 @@ export default function ReservationsLoader() {
   }, []);
 
   if (!loaded) {
-    return (
-      <p className="text-sm text-gray-500 dark:text-gray-400">
-        Cargando reservas…
-      </p>
-    );
+    return <InlineLoading label="Cargando reservas…" />;
   }
 
   if (error) {

@@ -4,6 +4,7 @@ import Checkbox from "@/components/form/input/Checkbox";
 import Input from "@/components/form/input/InputField";
 import Label from "@/components/form/Label";
 import Button from "@/components/ui/button/Button";
+import PulseLoader from "@/components/ui/loading/PulseLoader";
 import { ApiError, login } from "@/lib/api";
 import { safeCallbackUrl } from "@/lib/config";
 import { ChevronLeftIcon, EyeCloseIcon, EyeIcon } from "@/icons";
@@ -36,7 +37,8 @@ export default function SignInForm() {
             : err.message || "No se pudo iniciar sesión",
         );
       } else {
-        setError("No se pudo conectar con el servidor");
+        console.log(err)
+        setError("No se pudo conectar con el servidor ");
       }
     } finally {
       setSubmitting(false);
@@ -186,7 +188,18 @@ export default function SignInForm() {
                     size="sm"
                     disabled={submitting}
                   >
-                    {submitting ? "Entrando…" : "Iniciar sesión"}
+                    {submitting ? (
+                      <span role="status" aria-label="Entrando…">
+                        <PulseLoader
+                          size={18}
+                          speed={1.5}
+                          color="#ffffff"
+                          darkColor="#ffffff"
+                        />
+                      </span>
+                    ) : (
+                      "Iniciar sesión"
+                    )}
                   </Button>
                 </div>
               </div>
