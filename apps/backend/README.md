@@ -198,6 +198,7 @@ curl -X GET https://vivecaribe.vercel.app/automation/emails/get-bookings \
 | `DATABASE_URL` | Async driver + Supabase pooler `:6543` |
 | `JWT_SECRET` | Long random string |
 | `CRON_SECRET` | Bearer for automation / cron |
+| `CORS_ORIGINS` | Comma-separated browser origins (e.g. `http://localhost:3000,https://vivecaribe-frontend.vercel.app`) |
 | `LOG_LEVEL` / `SENTRY_DSN` | Optional |
 | `GMAIL_CLIENT_*` / `OUTLOOK_CLIENT_*` | Shared OAuth apps |
 | Per-mailbox tokens | Names in `booking_providers.yaml` |

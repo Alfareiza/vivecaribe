@@ -21,6 +21,26 @@ def test_create_app_includes_routers() -> None:
     assert "/automation/emails/get-bookings" in paths
 
 
+def test_create_app_adds_cors_when_origins_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CORS middleware is mounted when ``CORS_ORIGINS`` is set."""
+    get_settings.cache_clear()
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://u:p@localhost/db")
+    monkeypatch.setenv("JWT_SECRET", "secret")
+    monkeypatch.setenv("CRON_SECRET", "cron")
+    monkeypatch.setenv(
+        "CORS_ORIGINS",
+        "http://localhost:3000,https://vivecaribe-frontend.vercel.app",
+    )
+    app = create_app()
+    assert any(
+        getattr(middleware.cls, "__name__", "") == "CORSMiddleware"
+        for middleware in app.user_middleware
+    )
+    get_settings.cache_clear()
+
+
 def test_init_sentry_skips_when_dsn_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     """Blank Sentry DSN leaves the SDK uninitialized."""
     get_settings.cache_clear()
