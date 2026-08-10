@@ -34,7 +34,9 @@ structured reservations operators can trust, while remaining an API platform
 - Admin dashboard for day-to-day booking operations (TailAdmin under
   `apps/frontend`).
 - Auth: email/password sign-in; access token in memory; refresh via HttpOnly
-  cookie on the API; live `/reservas` list (epic #41 Phases 0–2).
+  cookie on the API; live `/reservas` list (epic #41 Phases 0–2 + #50).
+- Loading UX: shared pulse spinner (page / inline / button); Spanish labels
+  for assistive tech only.
 - Talks to the API via `NEXT_PUBLIC_API_URL` with credentialed CORS
   (`CORS_ORIGINS` on the API).
 - Local: `npm run dev` or Compose `frontend` on `:3000`.

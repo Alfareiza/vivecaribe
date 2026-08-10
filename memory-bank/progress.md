@@ -20,7 +20,8 @@
 | #38 Dual Vercel / frontend app | Closed | Next in `apps/frontend`, Compose frontend |
 | #42 Phase 0 list UI | Closed | `/reservas` mock table + frontend CI (PR #43) |
 | #44 / #45 Refresh tokens | Closed | Opaque refresh + HttpOnly cookie; `/refresh` `/logout` |
-| #41 Phases 1–2 | PR #49 | CORS, sign-in, live GET `/reservas` |
+| #41 Phases 1–2 | Merged (#49) | CORS, sign-in, live GET `/reservas` |
+| #50 Shared loading UI | Closed | PulseLoader / PageLoading / InlineLoading |
 
 ## In progress / open children of #41
 
@@ -28,13 +29,13 @@
 - #46 — Server-side filters on `GET /reservas`
 - #47 — Sign Up / `POST /users` from UI (low priority)
 - #48 — Detail modal UX + share (WhatsApp / Google Calendar)
-- #50 — Shared loading UI (replace temporary text states)
 
 ## Works today
 
 - Register/login; access JWT + refresh cookie rotation.
 - Reserva CRUD + paginated list; soft-delete hidden from get/list.
-- Admin UI: authenticated `/reservas` against live API (after #49 merge).
+- Admin UI: authenticated `/reservas` against live API.
+- Shared pulse loading for auth gate, reservas fetch, and sign-in submit.
 - Automation POST accepts JWT **or** `CRON_SECRET`; GET (cron) same auth.
 - Pipeline GYG / Viator / Homefans / Propio (Zoho); idempotent persistence.
 - Isolated Postgres tests ≥ 90% coverage; frontend CI path-filtered build.
@@ -42,7 +43,7 @@
 
 ## Left to build
 
-- Remaining #41 children (#40, #46–#48, #50).
+- Remaining #41 children (#40, #46–#48).
 - Real WhatsApp Meta notifier after Meta authorization.
 - Zoho mark-as-read (deferred).
 - Optional: per-user ownership on reservas.

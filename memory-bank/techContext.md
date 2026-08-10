@@ -19,6 +19,7 @@
 
 - Next.js **16**, React **19**, TypeScript, Tailwind CSS **v4**
 - TailAdmin starter (ApexCharts, FullCalendar, jvectormap, etc.)
+- Shared loading: `apps/frontend/src/components/ui/loading/` (#50)
 - Package manager: npm (`package-lock.json`)
 - `output: 'standalone'` for Docker
 

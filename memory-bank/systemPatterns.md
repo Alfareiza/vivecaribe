@@ -20,8 +20,11 @@ Next.js 16 App Router under `apps/frontend/src/`:
 
 - `app/` — routes (admin dashboard, auth pages, UI element demos).
 - `components/` — TailAdmin UI primitives (forms, tables, charts, etc.).
+- `components/ui/loading/` — shared pulse loaders (#50): `PulseLoader`,
+  `PageLoading` (full viewport / `className` hatch), `InlineLoading`.
+  Spanish `label` is required and screen-reader-only; `color` + `darkColor`.
 - `layout/` — sidebar / header shell.
-- `context/` — theme + sidebar state.
+- `context/` — theme + sidebar + auth session gate.
 - `output: 'standalone'` in `next.config.ts` for the portable Docker image.
 
 ### Monorepo deploy topology

@@ -26,11 +26,11 @@ Vercel projects from the same GitHub monorepo.
 - Serving frontend and API from a single container / single `$PORT`.
 - Real Meta WhatsApp Cloud API sends (NoOp stub only).
 - Multi-tenant SaaS for other operators.
-- Wiring TailAdmin screens to live Reserva/auth APIs (scaffold only for now).
 
 ## Delivery sequence
 
 Issues #1–#8 delivered scaffold through Vercel container deploy / cron auth.
 Follow-on on main: Propio via Zoho Mail, Zoho OTP via GYG Gmail, extractor
-income/country hardening, monorepo `#36`, frontend scaffold + dual Vercel
-deploy `#38`.
+income/country hardening, monorepo `#36`, frontend + dual Vercel `#38`,
+reservas list + auth wiring `#41` / `#49`, shared loading UI `#50`.
+Open `#41` children: Edit `#40`, filters `#46`, signup `#47`, modal `#48`.

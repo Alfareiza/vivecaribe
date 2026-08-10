@@ -2,12 +2,25 @@
 
 ## Current focus
 
-Epic **#41** — frontend ↔ API reservas wiring. **Phases 0–2 landed**
-(list shell, refresh tokens, auth + live list). Remaining children: Edit
-(#40), server list filters (#46), signup (#47), modal share/UX (#48),
-shared loading UI (#50).
+Epic **#41** — frontend ↔ API reservas wiring. **Phases 0–2 + #50
+landed** (list shell, refresh tokens, auth + live list, shared loading UI).
+Remaining children: Edit (#40), server list filters (#46), signup (#47),
+modal share/UX (#48).
 
 ## Recent decisions
+
+### Shared loading UI (#50)
+
+- `PulseLoader` + `PageLoading` + `InlineLoading` under
+  `apps/frontend/src/components/ui/loading/` (CSS module).
+- Props: `size` / `speed` / `color` / `darkColor`; wrappers always pass
+  size/speed; `label` required and SR-only (no visible Spanish copy).
+- `PageLoading` default `min-h-screen`; layout via `className` (e.g.
+  `flex-1` in auth shell).
+- Sign-in busy: call-site spinner-only + `aria-label="Entrando…"` (no
+  `Button` API change).
+- Wired: auth boot, `SignInGate`, sign-in Suspense, reservas fetch,
+  submit button.
 
 ### Operator auth (Q1 + #44 / #45)
 
@@ -47,8 +60,7 @@ shared loading UI (#50).
 ## Known gaps (intentional / deferred)
 
 - #40 Edit (PATCH) · #46 GET `/reservas` filters · #47 signup wire ·
-  #48 modal share (WhatsApp / Google Calendar) + UX · #50 replace text
-  “Cargando…” / “Verificando sesión…” with shared loading UI.
+  #48 modal share (WhatsApp / Google Calendar) + UX.
 - Real WhatsApp Meta integration (NoOp until Meta approval).
 - Zoho `mark_as_read`; per-user ownership / RBAC on reservas.
 - `correlation_id` ContextVar — no middleware sets it yet.
@@ -56,5 +68,4 @@ shared loading UI (#50).
 
 ## Next
 
-- Merge/verify #49 on prod (CORS_ORIGINS live on API redeploy).
 - Pick next #41 child (#40 Edit or #46 filters).
