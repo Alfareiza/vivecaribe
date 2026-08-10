@@ -41,7 +41,7 @@ export default function ShareMenu({
         aria-haspopup="menu"
         aria-expanded={isOpen}
         onClick={() => setIsOpen((open) => !open)}
-        className="dropdown-toggle inline-flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-white/90"
+        className="dropdown-toggle inline-flex h-9 w-9 mr-4 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-white/90"
       >
         <MoreDotIcon className="size-5" />
       </button>
@@ -55,7 +55,7 @@ export default function ShareMenu({
             const content = (
               <span className="flex items-center gap-2.5">
                 {option.icon ? (
-                  <span className="inline-flex size-5 shrink-0 items-center justify-center [&>svg]:size-5">
+                  <span className="inline-flex size-5 shrink-0 items-center justify-center overflow-visible [&>svg]:h-5 [&>svg]:w-5 [&>svg]:overflow-visible [&>svg]:shrink-0">
                     {option.icon}
                   </span>
                 ) : null}

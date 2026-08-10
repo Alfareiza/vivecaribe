@@ -4,10 +4,12 @@ import React, { useEffect, useState } from "react";
 import Badge from "@/components/ui/badge/Badge";
 import Button from "@/components/ui/button/Button";
 import { Modal } from "@/components/ui/modal";
-import { CalendarIcon, WhatsappIcon } from "@/icons";
+import { AngleDownIcon, CalendarIcon, WhatsappIcon } from "@/icons";
 import { ApiError } from "@/lib/api";
 import { fetchReservaById } from "@/lib/reservas";
 import type { Reservation } from "@/types/reservation";
+import EstadoStatusDot from "./EstadoStatusDot";
+import ProviderLogo from "./ProviderLogo";
 import ShareMenu from "./ShareMenu";
 import {
   buildGoogleCalendarUrl,
@@ -16,7 +18,6 @@ import {
 import {
   formatDisplayDateTime,
   formatPrice,
-  getEstadoBadgeColor,
 } from "./reservationUtils";
 
 type ReservationDetailModalProps = {
@@ -27,11 +28,11 @@ type ReservationDetailModalProps = {
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-1 gap-0.5 sm:grid-cols-3 sm:gap-3 sm:items-baseline">
+    <div className="grid grid-cols-1 gap-0.5 sm:grid-cols-3 sm:items-baseline sm:gap-3">
       <dt className="text-theme-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">
         {label}
       </dt>
-      <dd className="text-sm text-gray-800 sm:col-span-2 dark:text-white/90 break-words">
+      <dd className="break-words text-sm text-gray-800 sm:col-span-2 dark:text-white/90">
         {value}
       </dd>
     </div>
@@ -53,6 +54,52 @@ function DetailSection({
       <dl className="space-y-3 border-t border-gray-100 pt-3 dark:border-gray-800">
         {children}
       </dl>
+    </section>
+  );
+}
+
+function CollapsibleOrigen({
+  source,
+  children,
+}: {
+  source: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <section className="rounded-xl border border-gray-100 bg-gray-50/60 dark:border-gray-800 dark:bg-white/[0.02]">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left"
+      >
+        <span className="min-w-0">
+          <span className="block text-theme-sm font-semibold text-gray-800 dark:text-white/90">
+            Origen
+          </span>
+          <span className="mt-0.5 block truncate text-theme-xs text-gray-500 dark:text-gray-400">
+            {source}
+          </span>
+        </span>
+        <AngleDownIcon
+          className={`size-5 shrink-0 text-gray-400 transition-transform duration-200 ${
+            open ? "rotate-180" : ""
+          }`}
+        />
+      </button>
+      <div
+        className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+        }`}
+      >
+        <div className="overflow-hidden">
+          <dl className="space-y-3 border-t border-gray-100 px-3.5 py-3 dark:border-gray-800">
+            {children}
+          </dl>
+        </div>
+      </div>
     </section>
   );
 }
@@ -111,17 +158,29 @@ export default function ReservationDetailModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      className="max-w-[700px] m-4 p-5 lg:p-8"
+      className="m-4 max-w-[700px] overflow-visible p-5 lg:p-8"
     >
       <div className="pr-8">
-        <div className="mb-1 flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h4 className="text-title-sm font-semibold text-gray-800 dark:text-white/90">
-              Reserva {detail.reserva_reference}
-            </h4>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400 line-clamp-2">
-              {detail.subject}
-            </p>
+        <div className="mb-5 flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <ProviderLogo provider={detail.booking_provider} size={40} />
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h4 className="text-title-sm font-semibold text-gray-800 dark:text-white/90">
+                  Reserva {detail.reserva_reference}
+                </h4>
+                <EstadoStatusDot estado={detail.estado} />
+              </div>
+              {isRefreshing ? (
+                <p
+                  role="status"
+                  aria-live="polite"
+                  className="mt-1 text-theme-xs text-gray-400 dark:text-gray-500"
+                >
+                  Actualizando…
+                </p>
+              ) : null}
+            </div>
           </div>
           <ShareMenu
             className="shrink-0"
@@ -144,24 +203,6 @@ export default function ReservationDetailModal({
           />
         </div>
 
-        <div className="mb-5 flex flex-wrap items-center gap-2">
-          <Badge size="sm" color={getEstadoBadgeColor(detail.estado)}>
-            {detail.estado}
-          </Badge>
-          <span className="text-theme-xs text-gray-400 dark:text-gray-500">
-            {detail.booking_provider} · {detail.source}
-          </span>
-          {isRefreshing ? (
-            <span
-              role="status"
-              aria-live="polite"
-              className="text-theme-xs text-gray-400 dark:text-gray-500"
-            >
-              Actualizando…
-            </span>
-          ) : null}
-        </div>
-
         {refreshError ? (
           <p
             role="alert"
@@ -177,16 +218,7 @@ export default function ReservationDetailModal({
             <DetailRow label="Ciudad" value={detail.ciudad_experiencia} />
             <DetailRow
               label="Fecha evento"
-              value={
-                <>
-                  <span>{formatDisplayDateTime(detail.fecha_evento)}</span>
-                  {detail.fecha_evento ? (
-                    <span className="mt-0.5 block text-theme-xs text-gray-400">
-                      {detail.fecha_evento}
-                    </span>
-                  ) : null}
-                </>
-              }
+              value={formatDisplayDateTime(detail.fecha_evento)}
             />
             <DetailRow label="Participantes" value={detail.participants} />
           </DetailSection>
@@ -222,22 +254,14 @@ export default function ReservationDetailModal({
             />
           </DetailSection>
 
-          <DetailSection title="Origen">
+          <CollapsibleOrigen source={detail.source}>
+            <DetailRow label="Fuente" value={detail.source} />
             <DetailRow label="ID" value={detail.id} />
             <DetailRow label="Referencia" value={detail.reserva_reference} />
             <DetailRow label="Remitente" value={detail.sender} />
             <DetailRow
               label="Email recibido"
-              value={
-                <>
-                  <span>
-                    {formatDisplayDateTime(detail.fecha_email_recibido)}
-                  </span>
-                  <span className="mt-0.5 block text-theme-xs text-gray-400">
-                    {detail.fecha_email_recibido}
-                  </span>
-                </>
-              }
+              value={formatDisplayDateTime(detail.fecha_email_recibido)}
             />
             <DetailRow
               label="Email message ID"
@@ -252,7 +276,7 @@ export default function ReservationDetailModal({
               label="Actualizado"
               value={formatDisplayDateTime(detail.updated_at)}
             />
-          </DetailSection>
+          </CollapsibleOrigen>
         </div>
 
         <div className="mt-8 flex items-center justify-end gap-3">
