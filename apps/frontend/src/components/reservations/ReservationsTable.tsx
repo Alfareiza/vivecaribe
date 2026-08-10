@@ -1,11 +1,9 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import Image from 'next/image';
 import DatePicker from "@/components/form/date-picker";
 import Select from "@/components/form/Select";
 import Pagination from "@/components/tables/Pagination";
-import Badge from "@/components/ui/badge/Badge";
 import {
   Table,
   TableBody,
@@ -15,11 +13,12 @@ import {
 } from "@/components/ui/table";
 import { useModal } from "@/hooks/useModal";
 import type { Reservation } from "@/types/reservation";
+import EstadoStatusDot from "./EstadoStatusDot";
+import ProviderLogo from "./ProviderLogo";
 import ReservationDetailModal from "./ReservationDetailModal";
 import {
   formatDisplayDateTime,
   formatPrice,
-  getEstadoBadgeColor,
   reservationInDateRange,
 } from "./reservationUtils";
 
@@ -162,7 +161,7 @@ export default function ReservationsTable({
                 {[
                   // "Ref",
                   // "Fuente",
-                  "Estado",
+                  // "Estado",
                   "Experiencia",
                   "Cliente",
                   "Fecha evento",
@@ -184,7 +183,7 @@ export default function ReservationsTable({
               {pageItems.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={8}
+                    colSpan={5}
                     className="px-5 py-8 text-center text-theme-sm text-gray-500 dark:text-gray-400"
                   >
                     No hay reservas que coincidan con los filtros.
@@ -205,34 +204,33 @@ export default function ReservationsTable({
                     {/* <TableCell className="px-4 py-3 text-start text-theme-sm text-gray-500 dark:text-gray-400">
                       {reservation.booking_provider}
                     </TableCell> */}
-                    <TableCell className="px-4 py-3 text-start">
+                    {/* <TableCell className="px-4 py-3 text-start">
                       <Badge
                         size="sm"
                         color={getEstadoBadgeColor(reservation.estado)}
                       >
                         {reservation.estado}
                       </Badge>
-                    </TableCell>
+                    </TableCell> */}
                     <TableCell className="px-4 py-3 text-start">
-                      <div className="flex flex-col items-center w-full gap-4 xl:flex-row">
-                        <div className="w-7 h-7 overflow-hidden border border-gray-200 rounded-full dark:border-gray-800">
-                          <Image
-                            width={44}
-                            height={44}
-                            src={`/images/providers/${reservation.booking_provider}.svg`}
-                            alt="User"
-                          />
-                        </div>
-                        <div className="order-3 xl:order-2">
+                      <div className="flex flex-col items-center gap-3 xl:flex-row xl:items-center">
+                        <ProviderLogo
+                          provider={reservation.booking_provider}
+                          size={28}
+                        />
+                        <div className="order-3 flex min-w-0 items-center gap-2 xl:order-2">
                           <span className="block font-medium text-theme-sm text-gray-800 dark:text-white/90">
                             {reservation.nombre_experiencia}
                           </span>
-                          
-                          <span className="block text-theme-xs text-gray-500 dark:text-gray-400">
-                            {reservation.ciudad_experiencia}
-                          </span>
+                          <EstadoStatusDot
+                            estado={reservation.estado}
+                            tooltipSide="right"
+                          />
                         </div>
                       </div>
+                      <span className="mt-1 block text-theme-xs text-gray-500 dark:text-gray-400 xl:pl-10">
+                        {reservation.ciudad_experiencia}
+                      </span>
                     </TableCell>
                     <TableCell className="px-4 py-3 text-start">
                       <span className="block font-medium text-theme-sm text-gray-800 dark:text-white/90">

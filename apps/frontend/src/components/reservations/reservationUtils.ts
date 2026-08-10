@@ -15,11 +15,28 @@ export function getEstadoBadgeColor(estado: string): BadgeColor {
   }
 }
 
+/** Title-case Spanish label for operator-facing estado display. */
+export function formatEstadoLabel(estado: string): string {
+  switch (estado.trim().toLowerCase()) {
+    case "confirmada":
+      return "Confirmada";
+    case "en_progreso":
+      return "En progreso";
+    case "cancelada":
+      return "Cancelada";
+    case "error":
+      return "Error";
+    default:
+      return estado;
+  }
+}
+
 export function formatDisplayDateTime(iso: string | null | undefined): string {
   if (!iso) return "—";
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
   return new Intl.DateTimeFormat("es-CO", {
+    timeZone: "America/Bogota",
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
