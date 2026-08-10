@@ -57,13 +57,13 @@ export function buildWhatsAppShareUrl(reservation: Reservation): string | null {
     : "Sin fecha";
 
   const lines = [
-    `Reserva ${reservation.reserva_reference}`,
-    `Experiencia: ${reservation.nombre_experiencia}`,
-    `Fecha: ${fecha}`,
-    `Cliente: ${reservation.customer_name}`,
-    `Teléfono: ${reservation.phone}`,
-    `Ciudad: ${reservation.ciudad_experiencia}`,
-    `Participantes: ${reservation.participants}`,
+    `Hi ${reservation.customer_name}, today is the day. Let's enjoy the experience of ${reservation.nombre_experiencia}`,
+    // `----`,
+    // `Fecha: ${fecha}`,
+    // `Cliente: ${reservation.customer_name}`,
+    // `Teléfono: ${reservation.phone}`,
+    // `Ciudad: ${reservation.ciudad_experiencia}`,
+    // `Participantes: ${reservation.participants}`,
   ];
 
   const text = encodeURIComponent(lines.join("\n"));
