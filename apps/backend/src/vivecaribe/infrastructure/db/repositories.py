@@ -154,7 +154,7 @@ class SqlAlchemyReservaRepository:
             select(ReservaORM).where(
                 ReservaORM.booking_provider == booking_provider.value,
                 ReservaORM.reserva_reference == reserva_reference,
-                ReservaORM.deleted_at.is_(None),
+                # ReservaORM.deleted_at.is_(None),  # Si la reserva ha sido eliminada igual la deberia retornar
             ),
         )
         row = result.scalar_one_or_none()

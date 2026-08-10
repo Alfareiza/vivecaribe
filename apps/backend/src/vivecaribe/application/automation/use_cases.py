@@ -87,6 +87,8 @@ class ProcessBookingEmailsUseCase:
             notificado_whatsapp=False,
         )
         saved, created = await self._reservas.get_or_create(reserva)
+        if not saved:
+            logger.info(f'Retornando reserva existente de {booking_provider.value} {reserva.reserva_reference!r}')
         return stored_message, saved, created
 
     async def notify_if_necessary(

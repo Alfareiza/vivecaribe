@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import Image from 'next/image';
 import DatePicker from "@/components/form/date-picker";
 import Select from "@/components/form/Select";
 import Pagination from "@/components/tables/Pagination";
@@ -159,8 +160,8 @@ export default function ReservationsTable({
             <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
               <TableRow>
                 {[
-                  "Ref",
-                  "Fuente",
+                  // "Ref",
+                  // "Fuente",
                   "Estado",
                   "Experiencia",
                   "Cliente",
@@ -196,14 +197,14 @@ export default function ReservationsTable({
                     className="cursor-pointer hover:bg-gray-50 dark:hover:bg-white/[0.02]"
                     onClick={() => handleRowClick(reservation)}
                   >
-                    <TableCell className="px-5 py-4 text-start">
+                    {/* <TableCell className="px-5 py-4 text-start">
                       <span className="font-medium text-theme-sm text-gray-800 dark:text-white/90">
                         {reservation.reserva_reference}
                       </span>
-                    </TableCell>
-                    <TableCell className="px-4 py-3 text-start text-theme-sm text-gray-500 dark:text-gray-400">
+                    </TableCell> */}
+                    {/* <TableCell className="px-4 py-3 text-start text-theme-sm text-gray-500 dark:text-gray-400">
                       {reservation.booking_provider}
-                    </TableCell>
+                    </TableCell> */}
                     <TableCell className="px-4 py-3 text-start">
                       <Badge
                         size="sm"
@@ -213,12 +214,25 @@ export default function ReservationsTable({
                       </Badge>
                     </TableCell>
                     <TableCell className="px-4 py-3 text-start">
-                      <span className="block font-medium text-theme-sm text-gray-800 dark:text-white/90">
-                        {reservation.nombre_experiencia}
-                      </span>
-                      <span className="block text-theme-xs text-gray-500 dark:text-gray-400">
-                        {reservation.ciudad_experiencia}
-                      </span>
+                      <div className="flex flex-col items-center w-full gap-4 xl:flex-row">
+                        <div className="w-7 h-7 overflow-hidden border border-gray-200 rounded-full dark:border-gray-800">
+                          <Image
+                            width={44}
+                            height={44}
+                            src={`/images/providers/${reservation.booking_provider}.svg`}
+                            alt="User"
+                          />
+                        </div>
+                        <div className="order-3 xl:order-2">
+                          <span className="block font-medium text-theme-sm text-gray-800 dark:text-white/90">
+                            {reservation.nombre_experiencia}
+                          </span>
+                          
+                          <span className="block text-theme-xs text-gray-500 dark:text-gray-400">
+                            {reservation.ciudad_experiencia}
+                          </span>
+                        </div>
+                      </div>
                     </TableCell>
                     <TableCell className="px-4 py-3 text-start">
                       <span className="block font-medium text-theme-sm text-gray-800 dark:text-white/90">
