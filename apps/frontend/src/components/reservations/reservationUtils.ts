@@ -20,6 +20,7 @@ export function formatDisplayDateTime(iso: string | null | undefined): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
   return new Intl.DateTimeFormat("es-CO", {
+    timeZone: "America/Bogota",
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);

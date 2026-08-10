@@ -25,3 +25,7 @@ export async function fetchAllReservas(): Promise<Reservation[]> {
 
   return all;
 }
+
+export async function fetchReservaById(id: string): Promise<Reservation> {
+  return apiJson<Reservation>(`/reservas/${id}`);
+}
