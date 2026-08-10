@@ -1,5 +1,6 @@
 "use client";
 
+import PageLoading from "@/components/ui/loading/PageLoading";
 import {
   login as apiLogin,
   logout as apiLogout,
@@ -76,11 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   if (status === "loading") {
-    return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-gray-500 dark:text-gray-400">
-        Verificando sesión…
-      </div>
-    );
+    return <PageLoading label="Verificando sesión…" />;
   }
 
   if (status !== "authenticated") {
@@ -128,11 +125,7 @@ export function SignInGate({ children }: { children: React.ReactNode }) {
   }, [router, searchParams]);
 
   if (!ready) {
-    return (
-      <div className="flex flex-1 items-center justify-center text-sm text-gray-500 dark:text-gray-400">
-        Verificando sesión…
-      </div>
-    );
+    return <PageLoading label="Verificando sesión…" className="flex-1" />;
   }
 
   return <>{children}</>;

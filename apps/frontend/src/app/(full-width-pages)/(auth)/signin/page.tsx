@@ -1,4 +1,5 @@
 import SignInForm from "@/components/auth/SignInForm";
+import PageLoading from "@/components/ui/loading/PageLoading";
 import { SignInGate } from "@/context/AuthContext";
 import type { Metadata } from "next";
 import { Suspense } from "react";
@@ -11,11 +12,7 @@ export const metadata: Metadata = {
 export default function SignIn() {
   return (
     <Suspense
-      fallback={
-        <div className="flex flex-1 items-center justify-center text-sm text-gray-500">
-          Cargando…
-        </div>
-      }
+      fallback={<PageLoading label="Cargando…" className="flex-1" />}
     >
       <SignInGate>
         <SignInForm />

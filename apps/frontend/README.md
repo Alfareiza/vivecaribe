@@ -56,8 +56,8 @@ HttpOnly **refresh** cookie. The **access** JWT is kept in JS memory only.
 Details and curl examples: [backend Auth](../backend/README.md#auth).
 
 `/signup` remains TailAdmin UI only (register API not wired from the admin —
-see GitHub #47). Temporary text loading states (`Cargando…` /
-`Verificando sesión…`) are tracked in #50.
+see GitHub #47). Shared loading UI: `PageLoading` / `InlineLoading` /
+`PulseLoader` under `components/ui/loading/` (#50).
 
 ## Reservas list
 
