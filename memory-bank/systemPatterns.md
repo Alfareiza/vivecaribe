@@ -72,19 +72,28 @@ When Zoho shows an identity email challenge, `ZohoSession` uses the
 - Homefans overrides country via `pycountry`.
 - `price` vs `income` are provider-specific.
 
+## Auth pattern
+
+- Access JWT in browser **memory**; refresh token in **HttpOnly cookie** on
+  the API origin (`POST /login`, `/refresh`, `/logout`). See #44/#45.
+- `/reservas` and other operator routes: Bearer access JWT.
+- Automation GET/POST: JWT **or** `CRON_SECRET`.
+- Browser calls need `CORS_ORIGINS` + `credentials: "include"` (#41 Phase 1).
+- Hobby Vercel Cron: daily `GET /automation/emails/get-bookings` at 09:00 UTC.
+
+### Frontend session gate
+
+- Client `(admin)` layout: boot `/refresh` or redirect `/signin`.
+- No Next middleware JWT check (refresh cookie is on API host, not UI host).
+
 ## Persistence
 
 | Table | Key |
 |-------|-----|
 | `users` | `email` unique |
+| `refresh_tokens` | `token_hash` unique; `family_id` for rotation/reuse revoke |
 | `email_messages` | `(source, mailbox_message_id)` |
 | `reservas` | `(booking_provider, reserva_reference)`; soft delete via `deleted_at` |
-
-## Auth pattern
-
-- Public register/login; `/reservas` Bearer JWT.
-- Automation GET/POST: JWT **or** `CRON_SECRET`.
-- Hobby Vercel Cron: daily `GET /automation/emails/get-bookings` at 09:00 UTC.
 
 ## Deviations from the original architecture plan
 

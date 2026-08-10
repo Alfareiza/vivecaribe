@@ -31,8 +31,11 @@ structured reservations operators can trust, while remaining an API platform
 
 ### Frontend (operators)
 
-- Admin dashboard for day-to-day booking operations (layouts, tables, charts
-  from TailAdmin starter under `apps/frontend`).
-- Talks to the API via `NEXT_PUBLIC_API_URL` (not embedded in the API image).
+- Admin dashboard for day-to-day booking operations (TailAdmin under
+  `apps/frontend`).
+- Auth: email/password sign-in; access token in memory; refresh via HttpOnly
+  cookie on the API; live `/reservas` list (epic #41 Phases 0–2).
+- Talks to the API via `NEXT_PUBLIC_API_URL` with credentialed CORS
+  (`CORS_ORIGINS` on the API).
 - Local: `npm run dev` or Compose `frontend` on `:3000`.
-- Production: separate Vercel project from the API.
+- Production: https://vivecaribe-frontend.vercel.app (separate Vercel project).

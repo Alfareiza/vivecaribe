@@ -62,17 +62,29 @@ Fixtures refuse to reset any database whose name does not end with `_test`.
 
 ## CI
 
-`.github/workflows/test.yml` — Postgres 16 on 5433;
-`defaults.run.working-directory: apps/backend`; `uv sync`,
-`alembic upgrade head`, `uv run pytest` with coverage fail-under 90.
-Frontend CI not required for #38 (Vercel preview builds the UI).
+`.github/workflows/test.yml`:
+
+- **Backend job:** Postgres 16 on 5433; `working-directory: apps/backend`;
+  `uv sync`, `alembic upgrade head`, `uv run pytest` (coverage ≥ 90%).
+- **Frontend job:** path-filtered (`apps/frontend/**`); `npm ci` +
+  `npm run build` (Node 22).
+
+## Env vars (auth / CORS / UI)
+
+| Variable | App | Notes |
+|----------|-----|--------|
+| `CORS_ORIGINS` | API | Comma-separated browser origins (credentials) |
+| `JWT_SECRET` / `JWT_EXPIRE_MINUTES` | API | Access JWT |
+| `JWT_REFRESH_EXPIRE_DAYS` | API | Refresh cookie TTL (default 7) |
+| `NEXT_PUBLIC_API_URL` | Frontend | API origin, e.g. `https://vivecaribe.vercel.app` |
+| `NEXT_PUBLIC_LOGIN_REDIRECT_URL` | Frontend | Default `/reservas` |
 
 ## Deploy targets
 
 | App | Vercel project | Root Directory | Mechanism |
 |-----|----------------|----------------|-----------|
 | API | `vivecaribe` | `apps/backend` | `Dockerfile.vercel` → Fluid Compute; cron in `vercel.json` |
-| UI | `vivecaribe-frontend` | `apps/frontend` | Next.js native |
+| UI | `vivecaribe-frontend` | `apps/frontend` | Next.js native · https://vivecaribe-frontend.vercel.app |
 
 Production DB for API: Supabase transaction pooler (`:6543`) with `NullPool`
 + disabled prepared statements when `ENVIRONMENT != local`.

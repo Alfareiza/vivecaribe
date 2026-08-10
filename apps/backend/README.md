@@ -40,20 +40,48 @@ Build context is this directory (`Dockerfile`). Image listens on **8000**.
 
 ## Auth
 
+Browser admin auth (frontend + API) uses a **split token** model:
+
+| Credential | Where it lives | Purpose |
+|------------|----------------|---------|
+| Access JWT | Frontend **JS memory only** (never `localStorage` / `sessionStorage` / cookie) | `Authorization: Bearer …` on API calls |
+| Refresh token | **HttpOnly cookie** on the API origin (`refresh_token`) | `POST /refresh` only — mint a new access JWT |
+
+```text
+POST /login  → JSON { access_token } + Set-Cookie refresh_token
+POST /refresh → cookie in, new access_token + rotated cookie
+POST /logout  → revoke refresh family + Clear-Cookie
+```
+
+Protected business routes (`/reservas`, …) require the access JWT.
+`GET`/`POST /automation/emails/get-bookings` also accept
+`Authorization: Bearer $CRON_SECRET`.
+
+### Local curl
+
 ```bash
 curl -X POST http://localhost:8000/users \
   -H 'Content-Type: application/json' \
   -d '{"email":"ops@vivecaribe.com","password":"secret123"}'
 
-curl -X POST http://localhost:8000/login \
+# -c/-b keep the HttpOnly refresh cookie for /refresh and /logout
+curl -c /tmp/vc-cookies -b /tmp/vc-cookies \
+  -X POST http://localhost:8000/login \
   -H 'Content-Type: application/json' \
   -d '{"email":"ops@vivecaribe.com","password":"secret123"}'
+
+curl -c /tmp/vc-cookies -b /tmp/vc-cookies -X POST http://localhost:8000/refresh
+curl -c /tmp/vc-cookies -b /tmp/vc-cookies -X POST http://localhost:8000/logout
 ```
 
-Protected routes: `Authorization: Bearer <access_token>` (JWT).
+### CORS (browser → API)
 
-`GET` and `POST /automation/emails/get-bookings` also accept
-`Authorization: Bearer $CRON_SECRET`.
+The Next.js admin calls the API **cross-origin** with `credentials: "include"`.
+Set a comma-separated allowlist:
+
+```bash
+CORS_ORIGINS=http://localhost:3000,https://vivecaribe-frontend.vercel.app
+```
 
 | Method | Body | Behavior |
 |--------|------|----------|
@@ -105,6 +133,7 @@ password.
 | Table | Idempotency key | Notes |
 |-------|-----------------|-------|
 | `users` | `email` UK | Argon2 password hash |
+| `refresh_tokens` | `token_hash` UK | Opaque refresh; rotated; family revoke on reuse |
 | `email_messages` | `(source, mailbox_message_id)` | Includes `body_html` |
 | `reservas` | `(booking_provider, reserva_reference)` | Soft delete via `deleted_at` |
 
