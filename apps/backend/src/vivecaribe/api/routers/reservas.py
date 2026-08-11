@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Annotated
 from uuid import UUID
 
@@ -13,8 +13,10 @@ from vivecaribe.api.schemas.reservas import (
     ReservaCreate,
     ReservaListResponse,
     ReservaResponse,
+    ReservaShortItem,
     ReservaUpdate,
 )
+from vivecaribe.domain.enums import BookingProvider, ReservaEstado
 from vivecaribe.domain.reserva import Reserva
 
 router = APIRouter(tags=["reservas"])
@@ -55,12 +57,33 @@ async def list_reservas(
     _current_user: CurrentUser,
     skip: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    estado: Annotated[ReservaEstado | None, Query()] = None,
+    booking_provider: Annotated[BookingProvider | None, Query()] = None,
+    fecha_evento_from: Annotated[
+        date | None,
+        Query(description="Inclusive lower bound (America/Bogota calendar day)"),
+    ] = None,
+    fecha_evento_to: Annotated[
+        date | None,
+        Query(description="Inclusive upper bound (America/Bogota calendar day)"),
+    ] = None,
 ) -> ReservaListResponse:
-    """Return a paginated list of reservations (JWT required)."""
-    items, total = await reservas.list(skip=skip, limit=limit)
+    """Return a filtered, paginated list of reservations (JWT required).
+
+    Filters compose with AND. Omitted params mean no constraint. When either
+    fecha bound is set, rows with null ``fecha_evento`` are excluded.
+    """
+    items, total = await reservas.list(
+        skip=skip,
+        limit=limit,
+        estado=estado,
+        booking_provider=booking_provider,
+        fecha_evento_from=fecha_evento_from,
+        fecha_evento_to=fecha_evento_to,
+    )
     return ReservaListResponse(
         total=total,
-        items=[ReservaResponse.model_validate(item) for item in items],
+        items=[ReservaShortItem.model_validate(item) for item in items],
     )
 
 

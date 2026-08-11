@@ -26,7 +26,8 @@
 ## In progress / open children of #41
 
 - #40 — Edit reserva (PATCH) from modal
-- #46 — Server-side filters on `GET /reservas`
+- #46 — Server-side filters + slim list + `es_hoy` (branch
+  `feat/46-reservas-list-filters-es-hoy`)
 - #47 — Sign Up / `POST /users` from UI (low priority)
 - #48 — Detail modal UX + share (WhatsApp / Google Calendar)
 
@@ -43,7 +44,8 @@
 
 ## Left to build
 
-- Remaining #41 children (#40, #46–#48).
+- Land #46 (filters / slim list / `es_hoy`), then remaining #41 children
+  (#40, #47–#48).
 - Real WhatsApp Meta notifier after Meta authorization.
 - Zoho mark-as-read (deferred).
 - Optional: per-user ownership on reservas.

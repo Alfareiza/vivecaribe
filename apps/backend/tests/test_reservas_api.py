@@ -107,8 +107,12 @@ async def test_get_reserva_returns_200(auth_client: AsyncClient) -> None:
 
     response = await auth_client.get(f"/reservas/{reserva_id}", headers=headers)
     assert response.status_code == 200
-    assert response.json()["id"] == reserva_id
-    assert response.json()["reserva_reference"] == "GYG-GET-1"
+    body = response.json()
+    assert body["id"] == reserva_id
+    assert body["reserva_reference"] == "GYG-GET-1"
+    assert "es_hoy" in body
+    assert isinstance(body["es_hoy"], bool)
+    assert "deleted_at" not in body
 
 
 @pytest.mark.asyncio
@@ -128,14 +132,34 @@ async def test_get_reserva_unauthenticated_returns_401(
     assert response.status_code == 401
 
 
+_LIST_ITEM_KEYS = {
+    "id",
+    "booking_provider",
+    "ciudad_experiencia",
+    "nombre_experiencia",
+    "participants",
+    "pais_del_visitante",
+    "phone",
+    "fecha_evento",
+    "customer_name",
+    "moneda",
+    "price",
+    "income",
+    "es_hoy",
+}
+
+
 @pytest.mark.asyncio
 async def test_list_reservas_paginates(auth_client: AsyncClient) -> None:
-    """List returns total and a skip/limit page slice."""
+    """List returns total and a skip/limit page slice of slim items."""
     headers = await auth_headers(auth_client)
     for i in range(3):
         created = await auth_client.post(
             "/reservas",
-            json=_reserva_payload(reserva_reference=f"GYG-LIST-{i}"),
+            json=_reserva_payload(
+                reserva_reference=f"GYG-LIST-{i}",
+                fecha_evento=f"2026-08-{15 + i:02d}T09:00:00Z",
+            ),
             headers=headers,
         )
         assert created.status_code == 201
@@ -149,6 +173,9 @@ async def test_list_reservas_paginates(auth_client: AsyncClient) -> None:
     body = page.json()
     assert body["total"] == 3
     assert len(body["items"]) == 2
+    assert set(body["items"][0].keys()) == _LIST_ITEM_KEYS
+    # Newest fecha_evento first
+    assert body["items"][0]["fecha_evento"].startswith("2026-08-17")
 
     rest = await auth_client.get(
         "/reservas",
@@ -158,6 +185,110 @@ async def test_list_reservas_paginates(auth_client: AsyncClient) -> None:
     assert rest.status_code == 200
     assert rest.json()["total"] == 3
     assert len(rest.json()["items"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_list_reservas_filters_compose(auth_client: AsyncClient) -> None:
+    """estado, booking_provider, and fecha bounds AND together."""
+    headers = await auth_headers(auth_client)
+    fixtures = [
+        _reserva_payload(
+            reserva_reference="F-1",
+            booking_provider="getyourguide",
+            estado="confirmada",
+            fecha_evento="2026-08-10T14:00:00Z",
+        ),
+        _reserva_payload(
+            reserva_reference="F-2",
+            booking_provider="viator",
+            estado="confirmada",
+            fecha_evento="2026-08-12T14:00:00Z",
+        ),
+        _reserva_payload(
+            reserva_reference="F-3",
+            booking_provider="getyourguide",
+            estado="en_progreso",
+            fecha_evento="2026-08-12T14:00:00Z",
+        ),
+        _reserva_payload(
+            reserva_reference="F-4",
+            booking_provider="getyourguide",
+            estado="confirmada",
+            fecha_evento="2026-08-20T14:00:00Z",
+        ),
+        _reserva_payload(
+            reserva_reference="F-NULL",
+            booking_provider="getyourguide",
+            estado="confirmada",
+            fecha_evento=None,
+        ),
+        _reserva_payload(
+            reserva_reference="F-MATCH",
+            booking_provider="getyourguide",
+            estado="confirmada",
+            fecha_evento="2026-08-12T14:00:00Z",
+        ),
+    ]
+    for payload in fixtures:
+        created = await auth_client.post(
+            "/reservas",
+            json=payload,
+            headers=headers,
+        )
+        assert created.status_code == 201
+
+    filtered = await auth_client.get(
+        "/reservas",
+        params={
+            "estado": "confirmada",
+            "booking_provider": "getyourguide",
+            "fecha_evento_from": "2026-08-11",
+            "fecha_evento_to": "2026-08-15",
+        },
+        headers=headers,
+    )
+    assert filtered.status_code == 200
+    body = filtered.json()
+    assert body["total"] == 1
+    assert len(body["items"]) == 1
+    assert body["items"][0]["customer_name"] == "Ada Lovelace"
+    assert "estado" not in body["items"][0]
+
+
+@pytest.mark.asyncio
+async def test_list_reservas_date_range_excludes_null_fecha(
+    auth_client: AsyncClient,
+) -> None:
+    """Null fecha_evento rows drop out when any fecha bound is set."""
+    headers = await auth_headers(auth_client)
+    with_date = await auth_client.post(
+        "/reservas",
+        json=_reserva_payload(
+            reserva_reference="DATED",
+            fecha_evento="2026-09-01T15:00:00Z",
+        ),
+        headers=headers,
+    )
+    null_date = await auth_client.post(
+        "/reservas",
+        json=_reserva_payload(
+            reserva_reference="NULL-FECHA",
+            fecha_evento=None,
+        ),
+        headers=headers,
+    )
+    assert with_date.status_code == 201
+    assert null_date.status_code == 201
+
+    response = await auth_client.get(
+        "/reservas",
+        params={"fecha_evento_from": "2026-09-01", "fecha_evento_to": "2026-09-01"},
+        headers=headers,
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert body["items"][0]["nombre_experiencia"] == "City Tour"
 
 
 @pytest.mark.asyncio

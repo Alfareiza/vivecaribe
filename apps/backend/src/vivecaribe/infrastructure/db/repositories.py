@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, Date, and_, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from vivecaribe.domain.email_message import EmailMessage
-from vivecaribe.domain.enums import BookingProvider
+from vivecaribe.domain.enums import BookingProvider, ReservaEstado
 from vivecaribe.domain.refresh_token import RefreshToken
 from vivecaribe.domain.reserva import Reserva
 from vivecaribe.domain.user import User
@@ -194,17 +194,45 @@ class SqlAlchemyReservaRepository:
         *,
         skip: int = 0,
         limit: int = 20,
+        estado: ReservaEstado | None = None,
+        booking_provider: BookingProvider | None = None,
+        fecha_evento_from: date | None = None,
+        fecha_evento_to: date | None = None,
     ) -> tuple[list[Reserva], int]:
-        """Return a page of non-deleted reservations by ``created_at`` desc."""
-        active = ReservaORM.deleted_at.is_(None)
+        """Return a filtered page of non-deleted reservations.
+
+        Filters compose with AND. Omitted filters are unconstrained.
+        When either fecha bound is set, rows with null ``fecha_evento`` are
+        excluded. Bounds are inclusive America/Bogota calendar days.
+        Ordered by ``fecha_evento`` descending (nulls last).
+        """
+        filters: list[ColumnElement[bool]] = [ReservaORM.deleted_at.is_(None)]
+        if estado is not None:
+            filters.append(ReservaORM.estado == estado.value)
+        if booking_provider is not None:
+            filters.append(
+                ReservaORM.booking_provider == booking_provider.value,
+            )
+        if fecha_evento_from is not None or fecha_evento_to is not None:
+            filters.append(ReservaORM.fecha_evento.is_not(None))
+            event_day = cast(
+                func.timezone("America/Bogota", ReservaORM.fecha_evento),
+                Date,
+            )
+            if fecha_evento_from is not None:
+                filters.append(event_day >= fecha_evento_from)
+            if fecha_evento_to is not None:
+                filters.append(event_day <= fecha_evento_to)
+
+        where_clause = and_(*filters)
         total_result = await self._session.execute(
-            select(func.count()).select_from(ReservaORM).where(active),
+            select(func.count()).select_from(ReservaORM).where(where_clause),
         )
         total = total_result.scalar_one()
         result = await self._session.execute(
             select(ReservaORM)
-            .where(active)
-            .order_by(ReservaORM.created_at.desc())
+            .where(where_clause)
+            .order_by(ReservaORM.fecha_evento.desc().nulls_last())
             .offset(skip)
             .limit(limit),
         )

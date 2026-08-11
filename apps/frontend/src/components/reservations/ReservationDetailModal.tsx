@@ -7,10 +7,10 @@ import { Modal } from "@/components/ui/modal";
 import { AngleDownIcon, CalendarIcon, WhatsappIcon } from "@/icons";
 import { ApiError } from "@/lib/api";
 import { fetchReservaById } from "@/lib/reservas";
-import type { Reservation } from "@/types/reservation";
-import EstadoStatusDot from "./EstadoStatusDot";
+import type { Reservation, ReservationListItem } from "@/types/reservation";
 import ProviderLogo from "./ProviderLogo";
 import ShareMenu from "./ShareMenu";
+import { EsHoyStatusDot } from "./StatusDot";
 import {
   buildGoogleCalendarUrl,
   buildWhatsAppShareUrl,
@@ -21,7 +21,7 @@ import {
 } from "./reservationUtils";
 
 type ReservationDetailModalProps = {
-  reservation: Reservation | null;
+  reservation: ReservationListItem | null;
   isOpen: boolean;
   onClose: () => void;
 };
@@ -101,16 +101,17 @@ export default function ReservationDetailModal({
   isOpen,
   onClose,
 }: ReservationDetailModalProps) {
-  const [detail, setDetail] = useState<Reservation | null>(reservation);
+  const [detail, setDetail] = useState<Reservation | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen || !reservation) {
+      setDetail(null);
       return;
     }
 
-    setDetail(reservation);
+    setDetail(null);
     setRefreshError(null);
 
     let cancelled = false;
@@ -141,10 +142,13 @@ export default function ReservationDetailModal({
     };
   }, [isOpen, reservation]);
 
-  if (!reservation || !detail) return null;
+  if (!reservation) return null;
 
-  const whatsappUrl = buildWhatsAppShareUrl(detail);
-  const calendarUrl = buildGoogleCalendarUrl(detail);
+  const preview = detail ?? reservation;
+  const esHoy = detail?.es_hoy ?? reservation.es_hoy;
+  const titleRef = detail?.reserva_reference;
+  const whatsappUrl = detail ? buildWhatsAppShareUrl(detail) : null;
+  const calendarUrl = detail ? buildGoogleCalendarUrl(detail) : null;
 
   return (
     <Modal
@@ -155,13 +159,13 @@ export default function ReservationDetailModal({
       <div className="pr-8">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
-            <ProviderLogo provider={detail.booking_provider} size={40} />
+            <ProviderLogo provider={preview.booking_provider} size={40} />
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2.5">
                 <h4 className="text-title-sm font-semibold text-gray-800 dark:text-white/90">
-                  Reserva {detail.reserva_reference}
+                  {titleRef ? `Reserva ${titleRef}` : preview.nombre_experiencia}
                 </h4>
-                <EstadoStatusDot estado={detail.estado} tooltipSide="right" />
+                <EsHoyStatusDot esHoy={esHoy} tooltipSide="right" />
               </div>
               {isRefreshing ? (
                 <p
@@ -204,80 +208,85 @@ export default function ReservationDetailModal({
           </p>
         ) : null}
 
-        {/* Event lead: primary scan path, no label/value waste */}
         <div className="mb-4 rounded-xl border border-gray-100 bg-gray-50/70 px-3.5 py-3 dark:border-gray-800 dark:bg-white/[0.02]">
           <p className="text-sm font-semibold text-gray-800 dark:text-white/90">
-            {detail.nombre_experiencia}
+            {preview.nombre_experiencia}
           </p>
           <p className="mt-1 text-theme-sm text-gray-500 dark:text-gray-400">
             {[
-              detail.ciudad_experiencia,
-              formatDisplayDateTime(detail.fecha_evento)
+              preview.ciudad_experiencia,
+              formatDisplayDateTime(preview.fecha_evento),
             ]
               .filter(Boolean)
               .join(" · ")}
           </p>
         </div>
 
-        <div className="max-h-[min(55vh,28rem)] space-y-4 overflow-y-auto pe-1">
-          <div className="grid gap-4 sm:grid-cols-2 sm:gap-x-6">
-            <DetailSection title="Cliente">
-              <DetailRow label="Nombre" value={detail.customer_name} />
-              <DetailRow label="Personas" value={detail.participants} />
-              <DetailRow label="Teléfono" value={detail.phone || "—"} />
-              <DetailRow
-                label="País"
-                value={detail.pais_del_visitante || "—"}
-              />
-            </DetailSection>
+        {detail ? (
+          <div className="max-h-[min(55vh,28rem)] space-y-4 overflow-y-auto pe-1">
+            <div className="grid gap-4 sm:grid-cols-2 sm:gap-x-6">
+              <DetailSection title="Cliente">
+                <DetailRow label="Nombre" value={detail.customer_name} />
+                <DetailRow label="Personas" value={detail.participants} />
+                <DetailRow label="Teléfono" value={detail.phone || "—"} />
+                <DetailRow
+                  label="País"
+                  value={detail.pais_del_visitante || "—"}
+                />
+              </DetailSection>
 
-            <DetailSection title="Comercial">
+              <DetailSection title="Comercial">
+                <DetailRow
+                  label="Precio"
+                  value={formatPrice(detail.price, detail.moneda)}
+                />
+                <DetailRow
+                  label="Ingreso"
+                  value={formatPrice(detail.income, detail.moneda)}
+                />
+                <DetailRow
+                  label="WhatsApp"
+                  value={
+                    <Badge
+                      size="sm"
+                      color={detail.notificado_whatsapp ? "success" : "light"}
+                    >
+                      {detail.notificado_whatsapp ? "Sí" : "No"}
+                    </Badge>
+                  }
+                />
+              </DetailSection>
+            </div>
+
+            <CollapsibleMetadata>
+              <DetailRow label="Fuente" value={detail.source} />
+              <DetailRow label="ID" value={detail.id} />
+              <DetailRow label="Referencia" value={detail.reserva_reference} />
+              <DetailRow label="Remitente" value={detail.sender} />
               <DetailRow
-                label="Precio"
-                value={formatPrice(detail.price, detail.moneda)}
+                label="Email recibido"
+                value={formatDisplayDateTime(detail.fecha_email_recibido)}
               />
               <DetailRow
-                label="Ingreso"
-                value={formatPrice(detail.income, detail.moneda)}
+                label="Email message ID"
+                value={detail.email_message_id || "—"}
+              />
+              <DetailRow label="User ID" value={detail.user_id || "—"} />
+              <DetailRow
+                label="Creado"
+                value={formatDisplayDateTime(detail.created_at)}
               />
               <DetailRow
-                label="WhatsApp"
-                value={
-                  <Badge
-                    size="sm"
-                    color={detail.notificado_whatsapp ? "success" : "light"}
-                  >
-                    {detail.notificado_whatsapp ? "Sí" : "No"}
-                  </Badge>
-                }
+                label="Actualizado"
+                value={formatDisplayDateTime(detail.updated_at)}
               />
-            </DetailSection>
+            </CollapsibleMetadata>
           </div>
-
-          <CollapsibleMetadata>
-            <DetailRow label="Fuente" value={detail.source} />
-            <DetailRow label="ID" value={detail.id} />
-            <DetailRow label="Referencia" value={detail.reserva_reference} />
-            <DetailRow label="Remitente" value={detail.sender} />
-            <DetailRow
-              label="Email recibido"
-              value={formatDisplayDateTime(detail.fecha_email_recibido)}
-            />
-            <DetailRow
-              label="Email message ID"
-              value={detail.email_message_id || "—"}
-            />
-            <DetailRow label="User ID" value={detail.user_id || "—"} />
-            <DetailRow
-              label="Creado"
-              value={formatDisplayDateTime(detail.created_at)}
-            />
-            <DetailRow
-              label="Actualizado"
-              value={formatDisplayDateTime(detail.updated_at)}
-            />
-          </CollapsibleMetadata>
-        </div>
+        ) : !refreshError ? (
+          <p className="py-6 text-center text-theme-sm text-gray-500 dark:text-gray-400">
+            Cargando detalle…
+          </p>
+        ) : null}
 
         <div className="mt-5 flex items-center justify-end gap-3">
           <Button size="sm" variant="outline" onClick={onClose}>

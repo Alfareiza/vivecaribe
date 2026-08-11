@@ -3,11 +3,22 @@
 ## Current focus
 
 Epic **#41** — frontend ↔ API reservas wiring. **Phases 0–2 + #50
-landed** (list shell, refresh tokens, auth + live list, shared loading UI).
-Remaining children: Edit (#40), server list filters (#46), signup (#47),
-modal share/UX (#48).
+landed**. Active branch: `feat/46-reservas-list-filters-es-hoy` (#46).
 
 ## Recent decisions
+
+### GET /reservas filters + slim list + es_hoy (#46)
+
+- Server filters: `estado`, `booking_provider`, `fecha_evento_from/to`
+  (AND; Bogota inclusive calendar days; null fecha excluded when ranged).
+- Breaking list DTO `ReservaShortItem` (slim fields + `income` + `es_hoy`).
+- `ReservaResponse` inherits domain `Reserva`, excludes `deleted_at`, adds
+  computed `es_hoy`. Create/Update stay separate (Pydantic cannot drop fields).
+- Date filters compare Bogota calendar days in SQL
+  (`timezone('America/Bogota', fecha_evento)::date`).
+- UI: server-paginated filters; orange ping “Hoy” badge from `es_hoy`;
+  `estado` filter remains, estado badge hidden; generic `StatusDot` for later.
+- Modal still refetches `GET /reservas/{id}` for full detail.
 
 ### Shared loading UI (#50)
 
@@ -42,13 +53,11 @@ modal share/UX (#48).
 - Admin `(admin)` layout client gate: boot `/refresh` or redirect `/signin`.
 - Sign-in Spanish; social buttons visible but disabled; logout from header.
 - `NEXT_PUBLIC_LOGIN_REDIRECT_URL` (default `/reservas`); safe `callbackUrl`.
-- `/reservas` fetches all pages (`limit=100` loop) then client filter/sort.
-  Server filters deferred to #46.
 
 ### Reservas list shell (#42 / PR #43)
 
-- Route `/reservas`, sidebar **Reservas**, Spanish UI, badge mapping,
-  detail modal, Edit disabled stub (#40).
+- Route `/reservas`, sidebar **Reservas**, Spanish UI, detail modal,
+  Edit disabled stub (#40).
 
 ### Dual Vercel + portable Docker (#38)
 
@@ -59,8 +68,7 @@ modal share/UX (#48).
 
 ## Known gaps (intentional / deferred)
 
-- #40 Edit (PATCH) · #46 GET `/reservas` filters · #47 signup wire ·
-  #48 modal share (WhatsApp / Google Calendar) + UX.
+- #40 Edit (PATCH) · #47 signup wire · #48 modal share/UX polish if any left.
 - Real WhatsApp Meta integration (NoOp until Meta approval).
 - Zoho `mark_as_read`; per-user ownership / RBAC on reservas.
 - `correlation_id` ContextVar — no middleware sets it yet.
@@ -68,4 +76,4 @@ modal share/UX (#48).
 
 ## Next
 
-- Pick next #41 child (#40 Edit or #46 filters).
+- Finish #46 PR review/merge, then #40 Edit or remaining #41 children.

@@ -1,4 +1,4 @@
-/** Reservation shape aligned with API `ReservaResponse` (OpenAPI). */
+/** Reservation shapes aligned with API OpenAPI schemas. */
 
 export type BookingProvider =
   | "getyourguide"
@@ -12,25 +12,31 @@ export type ReservaEstado =
   | "cancelada"
   | "error";
 
-export type Reservation = {
+/** Slim row from ``GET /reservas`` (`ReservaShortItem`). */
+export type ReservationListItem = {
   id: string;
-  source: string;
   booking_provider: BookingProvider | string;
+  ciudad_experiencia: string;
+  nombre_experiencia: string;
+  participants: number;
+  pais_del_visitante: string;
+  phone: string;
+  fecha_evento: string | null;
+  customer_name: string;
+  moneda: string;
+  price: string;
+  income: string;
+  es_hoy: boolean;
+};
+
+/** Full detail from ``GET /reservas/{id}`` (`ReservaResponse`). */
+export type Reservation = ReservationListItem & {
+  source: string;
   reserva_reference: string;
   sender: string;
   estado: ReservaEstado | string;
   subject: string;
   fecha_email_recibido: string;
-  nombre_experiencia: string;
-  ciudad_experiencia: string;
-  fecha_evento: string | null;
-  participants: number;
-  customer_name: string;
-  phone: string;
-  pais_del_visitante: string;
-  moneda: string;
-  price: string;
-  income: string;
   notificado_whatsapp: boolean;
   email_message_id: string | null;
   user_id: string | null;

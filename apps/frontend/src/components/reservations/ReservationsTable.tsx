@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import DatePicker from "@/components/form/date-picker";
 import Select from "@/components/form/Select";
 import Pagination from "@/components/tables/Pagination";
@@ -11,16 +11,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import InlineLoading from "@/components/ui/loading/InlineLoading";
 import { useModal } from "@/hooks/useModal";
-import type { Reservation } from "@/types/reservation";
-import EstadoStatusDot from "./EstadoStatusDot";
+import { fetchReservas } from "@/lib/reservas";
+import type { ReservationListItem } from "@/types/reservation";
 import ProviderLogo from "./ProviderLogo";
 import ReservationDetailModal from "./ReservationDetailModal";
-import {
-  formatDisplayDateTime,
-  formatPrice,
-  reservationInDateRange,
-} from "./reservationUtils";
+import { EsHoyStatusDot } from "./StatusDot";
+import { formatDisplayDateTime, formatPrice } from "./reservationUtils";
 
 const PAGE_SIZE = 20;
 
@@ -42,47 +40,51 @@ const providerOptions = [
   { value: "propio", label: "propio" },
 ];
 
-type ReservationsTableProps = {
-  reservations: Reservation[];
-};
-
-export default function ReservationsTable({
-  reservations,
-}: ReservationsTableProps) {
+export default function ReservationsTable() {
   const { isOpen, openModal, closeModal } = useModal();
-  const [selected, setSelected] = useState<Reservation | null>(null);
+  const [selected, setSelected] = useState<ReservationListItem | null>(null);
+  const [items, setItems] = useState<ReservationListItem[]>([]);
+  const [total, setTotal] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [estadoFilter, setEstadoFilter] = useState(ALL);
   const [providerFilter, setProviderFilter] = useState(ALL);
   const [dateFrom, setDateFrom] = useState<string | null>(null);
   const [dateTo, setDateTo] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const filtered = useMemo(() => {
-    return reservations
-      .filter((r) => {
-        if (estadoFilter !== ALL && r.estado !== estadoFilter) return false;
-        if (providerFilter !== ALL && r.booking_provider !== providerFilter) {
-          return false;
-        }
-        return reservationInDateRange(r, { from: dateFrom, to: dateTo });
-      })
-      .sort((a, b) => {
-        // Descending by event date; nulls last
-        if (!a.fecha_evento && !b.fecha_evento) return 0;
-        if (!a.fecha_evento) return 1;
-        if (!b.fecha_evento) return -1;
-        return (
-          new Date(b.fecha_evento).getTime() -
-          new Date(a.fecha_evento).getTime()
-        );
-      });
-  }, [reservations, estadoFilter, providerFilter, dateFrom, dateTo]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const page = Math.min(currentPage, totalPages);
-  const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  const handleRowClick = (reservation: Reservation) => {
+  const loadPage = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetchReservas({
+        skip: (page - 1) * PAGE_SIZE,
+        limit: PAGE_SIZE,
+        estado: estadoFilter !== ALL ? estadoFilter : undefined,
+        booking_provider:
+          providerFilter !== ALL ? providerFilter : undefined,
+        fecha_evento_from: dateFrom ?? undefined,
+        fecha_evento_to: dateTo ?? undefined,
+      });
+      setItems(response.items);
+      setTotal(response.total);
+    } catch {
+      setItems([]);
+      setTotal(0);
+      setError("No se pudieron cargar las reservas");
+    } finally {
+      setLoading(false);
+    }
+  }, [page, estadoFilter, providerFilter, dateFrom, dateTo]);
+
+  useEffect(() => {
+    void loadPage();
+  }, [loadPage]);
+
+  const handleRowClick = (reservation: ReservationListItem) => {
     setSelected(reservation);
     openModal();
   };
@@ -102,7 +104,7 @@ export default function ReservationsTable({
             Reservas
           </h3>
           <p className="mt-1 text-theme-sm text-gray-500 dark:text-gray-400">
-            {filtered.length} resultado{filtered.length === 1 ? "" : "s"}
+            {total} resultado{total === 1 ? "" : "s"}
           </p>
         </div>
 
@@ -153,119 +155,108 @@ export default function ReservationsTable({
         </div>
       </div>
 
-      <div className="max-w-full overflow-x-auto">
-        <div className="min-w-[1102px]">
-          <Table>
-            <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
-              <TableRow>
-                {[
-                  // "Ref",
-                  // "Fuente",
-                  // "Estado",
-                  "Experiencia",
-                  "Cliente",
-                  "Fecha evento",
-                  "Pax",
-                  "Precio",
-                ].map((header) => (
-                  <TableCell
-                    key={header}
-                    isHeader
-                    className="px-5 py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
-                  >
-                    {header}
-                  </TableCell>
-                ))}
-              </TableRow>
-            </TableHeader>
-
-            <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
-              {pageItems.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={5}
-                    className="px-5 py-8 text-center text-theme-sm text-gray-500 dark:text-gray-400"
-                  >
-                    No hay reservas que coincidan con los filtros.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                pageItems.map((reservation) => (
-                  <TableRow
-                    key={reservation.id}
-                    className="cursor-pointer hover:bg-gray-50 dark:hover:bg-white/[0.02]"
-                    onClick={() => handleRowClick(reservation)}
-                  >
-                    {/* <TableCell className="px-5 py-4 text-start">
-                      <span className="font-medium text-theme-sm text-gray-800 dark:text-white/90">
-                        {reservation.reserva_reference}
-                      </span>
-                    </TableCell> */}
-                    {/* <TableCell className="px-4 py-3 text-start text-theme-sm text-gray-500 dark:text-gray-400">
-                      {reservation.booking_provider}
-                    </TableCell> */}
-                    {/* <TableCell className="px-4 py-3 text-start">
-                      <Badge
-                        size="sm"
-                        color={getEstadoBadgeColor(reservation.estado)}
+      {loading ? (
+        <InlineLoading label="Cargando reservas…" />
+      ) : error ? (
+        <p className="py-8 text-center text-sm text-error-500">{error}</p>
+      ) : (
+        <>
+          <div className="max-w-full overflow-x-auto">
+            <div className="min-w-[1102px]">
+              <Table>
+                <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
+                  <TableRow>
+                    {[
+                      "Experiencia",
+                      "Cliente",
+                      "Fecha evento",
+                      "Pax",
+                      "Precio",
+                    ].map((header) => (
+                      <TableCell
+                        key={header}
+                        isHeader
+                        className="px-5 py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
                       >
-                        {reservation.estado}
-                      </Badge>
-                    </TableCell> */}
-                    <TableCell className="px-4 py-3 text-start">
-                      <div className="flex flex-col items-center gap-3 xl:flex-row xl:items-center">
-                        <ProviderLogo
-                          provider={reservation.booking_provider}
-                          size={28}
-                        />
-                        <div className="order-3 flex min-w-0 items-center gap-2 xl:order-2">
-                          <span className="block font-medium text-theme-sm text-gray-800 dark:text-white/90">
-                            {reservation.nombre_experiencia}
-                          </span>
-                          <EstadoStatusDot
-                            estado={reservation.estado}
-                            tooltipSide="right"
-                          />
-                        </div>
-                      </div>
-                      <span className="mt-1 block text-theme-xs text-gray-500 dark:text-gray-400 xl:pl-10">
-                        {reservation.ciudad_experiencia}
-                      </span>
-                    </TableCell>
-                    <TableCell className="px-4 py-3 text-start">
-                      <span className="block font-medium text-theme-sm text-gray-800 dark:text-white/90">
-                        {reservation.customer_name}
-                      </span>
-                      <span className="block text-theme-xs text-gray-500 dark:text-gray-400">
-                        {[reservation.phone, reservation.pais_del_visitante]
-                          .filter(Boolean)
-                          .join(" · ") || "—"}
-                      </span>
-                    </TableCell>
-                    <TableCell className="px-4 py-3 text-start text-theme-sm text-gray-500 dark:text-gray-400">
-                      {formatDisplayDateTime(reservation.fecha_evento)}
-                    </TableCell>
-                    <TableCell className="px-4 py-3 text-start text-theme-sm text-gray-500 dark:text-gray-400">
-                      {reservation.participants}
-                    </TableCell>
-                    <TableCell className="px-4 py-3 text-start text-theme-sm text-gray-500 dark:text-gray-400">
-                      {formatPrice(reservation.price, reservation.moneda)}
-                    </TableCell>
+                        {header}
+                      </TableCell>
+                    ))}
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
+                </TableHeader>
 
-      <div className="mt-4 flex justify-end">
-        <Pagination
-          currentPage={page}
-          totalPages={totalPages}
-          onPageChange={setCurrentPage}
-        />
-      </div>
+                <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
+                  {items.length === 0 ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={5}
+                        className="px-5 py-8 text-center text-theme-sm text-gray-500 dark:text-gray-400"
+                      >
+                        No hay reservas que coincidan con los filtros.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    items.map((reservation) => (
+                      <TableRow
+                        key={reservation.id}
+                        className="cursor-pointer hover:bg-gray-50 dark:hover:bg-white/[0.02]"
+                        onClick={() => handleRowClick(reservation)}
+                      >
+                        <TableCell className="px-4 py-3 text-start">
+                          <div className="flex flex-col items-center gap-3 xl:flex-row xl:items-center">
+                            <ProviderLogo
+                              provider={reservation.booking_provider}
+                              size={28}
+                            />
+                            <div className="order-3 flex min-w-0 items-center gap-2 xl:order-2">
+                              <span className="block font-medium text-theme-sm text-gray-800 dark:text-white/90">
+                                {reservation.nombre_experiencia}
+                              </span>
+                              <EsHoyStatusDot
+                                esHoy={reservation.es_hoy}
+                                tooltipSide="right"
+                              />
+                            </div>
+                          </div>
+                          <span className="mt-1 block text-theme-xs text-gray-500 dark:text-gray-400 xl:pl-10">
+                            {reservation.ciudad_experiencia}
+                          </span>
+                        </TableCell>
+                        <TableCell className="px-4 py-3 text-start">
+                          <span className="block font-medium text-theme-sm text-gray-800 dark:text-white/90">
+                            {reservation.customer_name}
+                          </span>
+                          <span className="block text-theme-xs text-gray-500 dark:text-gray-400">
+                            {[reservation.phone, reservation.pais_del_visitante]
+                              .filter(Boolean)
+                              .join(" · ") || "—"}
+                          </span>
+                        </TableCell>
+                        <TableCell className="px-4 py-3 text-start text-theme-sm text-gray-500 dark:text-gray-400">
+                          {formatDisplayDateTime(reservation.fecha_evento)}
+                        </TableCell>
+                        <TableCell className="px-4 py-3 text-start text-theme-sm text-gray-500 dark:text-gray-400">
+                          {reservation.participants}
+                        </TableCell>
+                        <TableCell className="px-4 py-3 text-start text-theme-sm text-gray-500 dark:text-gray-400">
+                          {formatPrice(reservation.income, reservation.moneda)}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+
+          <div className="mt-4 flex justify-end">
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+            />
+          </div>
+        </>
+      )}
 
       <ReservationDetailModal
         reservation={selected}
