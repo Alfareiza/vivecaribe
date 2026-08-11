@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import Any, Self
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from vivecaribe.domain.enums import (
     BookingProvider,
@@ -86,6 +87,10 @@ class Reserva(BaseModel):
     ``(booking_provider, reserva_reference)``.
     ``email_message_id`` optionally links back to an ingested mailbox message;
     HTML body content itself does not live on this entity.
+
+    ``paid_at`` is always derived from ``booking_provider`` + ``fecha_evento``
+    (America/Bogota calendar rules) on construction, assignment, and
+    ``model_copy``.
     """
 
     model_config = ConfigDict(from_attributes=True, validate_assignment=True)
@@ -125,6 +130,25 @@ class Reserva(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    @model_validator(mode="after")
+    def _sync_paid_at(self) -> Self:
+        """Keep ``paid_at`` aligned with provider + event date."""
+        expected = compute_paid_at(self.booking_provider, self.fecha_evento)
+        if self.paid_at != expected:
+            # Bypass validate_assignment to avoid re-entrant validation.
+            object.__setattr__(self, "paid_at", expected)
+        return self
+
+    def model_copy(
+        self,
+        *,
+        update: Mapping[str, Any] | None = None,
+        deep: bool = False,
+    ) -> Self:
+        """Copy then re-validate so derived ``paid_at`` stays in sync."""
+        copied = super().model_copy(update=update, deep=deep)
+        return type(self).model_validate(copied.model_dump())
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize this reservation to a JSON-friendly dict."""

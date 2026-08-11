@@ -223,12 +223,39 @@ def test_compute_paid_at_homefans_on_thursday_skips_to_next_week() -> None:
 
 
 def test_reserva_operator_field_defaults() -> None:
-    """New operator fields default to null / false as specified."""
-    reserva = _sample_reserva()
+    """New operator fields default to null / false; ``paid_at`` is derived."""
+    reserva = _sample_reserva(fecha_evento=None)
     assert reserva.notas_cliente is None
     assert reserva.tipo_tour is None
     assert reserva.meeting_point is None
     assert reserva.menores_de_edad is False
     assert reserva.paid_at is None
     assert reserva.costos is None
+
+
+def test_reserva_derives_paid_at_on_construction() -> None:
+    """``Reserva(...)`` syncs ``paid_at`` from provider + ``fecha_evento``."""
+    reserva = _sample_reserva(
+        booking_provider=BookingProvider.GETYOURGUIDE,
+        fecha_evento=datetime(2026, 8, 15, 9, 0, tzinfo=UTC),
+        paid_at=datetime(2000, 1, 1, tzinfo=UTC),  # ignored / overwritten
+    )
+    assert reserva.paid_at is not None
+    assert reserva.paid_at.date().isoformat() == "2026-09-07"
+
+
+def test_reserva_model_copy_recomputes_paid_at() -> None:
+    """``model_copy`` re-validates so ``paid_at`` tracks provider/event changes."""
+    reserva = _sample_reserva(
+        booking_provider=BookingProvider.GETYOURGUIDE,
+        fecha_evento=datetime(2026, 8, 15, 9, 0, tzinfo=UTC),
+    )
+    updated = reserva.model_copy(
+        update={"booking_provider": BookingProvider.PROPIO},
+    )
+    assert updated.paid_at is not None
+    assert updated.paid_at.date().isoformat() == "2026-08-16"
+
+    cleared = updated.model_copy(update={"fecha_evento": None})
+    assert cleared.paid_at is None
 
