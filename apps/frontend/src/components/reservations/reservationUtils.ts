@@ -1,6 +1,7 @@
 import type { BadgeColor } from "@/components/ui/badge/Badge";
-import type { Reservation } from "@/types/reservation";
+import type { ReservationListItem } from "@/types/reservation";
 
+/** Kept for future estado badges; not used in the current list/modal UI. */
 export function getEstadoBadgeColor(estado: string): BadgeColor {
   switch (estado.trim().toLowerCase()) {
     case "confirmada":
@@ -61,7 +62,7 @@ export type DateRangeFilter = {
 };
 
 export function reservationInDateRange(
-  reservation: Reservation,
+  reservation: Pick<ReservationListItem, "fecha_evento">,
   range: DateRangeFilter
 ): boolean {
   const { from, to } = range;

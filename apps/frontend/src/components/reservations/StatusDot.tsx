@@ -1,13 +1,13 @@
 "use client";
 
 import React from "react";
-import {
-  formatEstadoLabel,
-  getEstadoBadgeColor,
-} from "./reservationUtils";
+import type { BadgeColor } from "@/components/ui/badge/Badge";
 
-type EstadoStatusDotProps = {
-  estado: string;
+type StatusDotProps = {
+  label: string;
+  color?: BadgeColor;
+  /** When true, shows the warning-style ping animation. */
+  animate?: boolean;
   className?: string;
   /** Prefer `right` inside overflow-clipped table cells. */
   tooltipSide?: "top" | "right";
@@ -34,17 +34,16 @@ const PING_COLOR: Record<string, string> = {
 };
 
 /**
- * Compact estado indicator: colored dot + hover tooltip.
- * Only `en_progreso` uses animate-ping.
+ * Compact status indicator: colored dot + hover tooltip.
+ * Keep generic so future badge kinds (estado, etc.) can reuse it.
  */
-export default function EstadoStatusDot({
-  estado,
+export default function StatusDot({
+  label,
+  color = "light",
+  animate = false,
   className = "",
   tooltipSide = "top",
-}: EstadoStatusDotProps) {
-  const color = getEstadoBadgeColor(estado);
-  const label = formatEstadoLabel(estado);
-  const shouldPing = estado.trim().toLowerCase() === "en_progreso";
+}: StatusDotProps) {
   const dotClass = DOT_COLOR[color] ?? DOT_COLOR.light;
   const pingClass = PING_COLOR[color] ?? PING_COLOR.light;
 
@@ -62,7 +61,7 @@ export default function EstadoStatusDot({
       <span
         className={`relative inline-flex h-2.5 w-2.5 rounded-full ${dotClass}`}
       >
-        {shouldPing ? (
+        {animate ? (
           <span
             className={`absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping ${pingClass}`}
           />
@@ -75,5 +74,27 @@ export default function EstadoStatusDot({
         {label}
       </span>
     </span>
+  );
+}
+
+/** Orange pinging badge when the event is today (America/Bogota). */
+export function EsHoyStatusDot({
+  esHoy,
+  className = "",
+  tooltipSide = "top",
+}: {
+  esHoy: boolean;
+  className?: string;
+  tooltipSide?: "top" | "right";
+}) {
+  if (!esHoy) return null;
+  return (
+    <StatusDot
+      label="Hoy"
+      color="warning"
+      animate
+      className={className}
+      tooltipSide={tooltipSide}
+    />
   );
 }

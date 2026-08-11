@@ -141,6 +141,8 @@ class ReservaORM(Base):
         ),
         Index("ix_reservas_notificado_whatsapp", "notificado_whatsapp"),
         Index("ix_reservas_estado", "estado"),
+        Index("ix_reservas_booking_provider", "booking_provider"),
+        Index("ix_reservas_fecha_evento", "fecha_evento"),
         Index("ix_reservas_fecha_email_recibido", "fecha_email_recibido"),
     )
 
