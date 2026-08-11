@@ -23,6 +23,9 @@ Next.js 16 App Router under `apps/frontend/src/`:
 - `components/ui/loading/` — shared pulse loaders (#50): `PulseLoader`,
   `PageLoading` (full viewport / `className` hatch), `InlineLoading`.
   Spanish `label` is required and screen-reader-only; `color` + `darkColor`.
+- `components/reservations/` — list table + detail modal (#48):
+  `ShareMenu`, `EstadoStatusDot` (ping only `en_progreso`), `ProviderLogo`,
+  share URL helpers; dates displayed in `America/Bogota`.
 - `layout/` — sidebar / header shell.
 - `context/` — theme + sidebar + auth session gate.
 - `output: 'standalone'` in `next.config.ts` for the portable Docker image.

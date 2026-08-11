@@ -2,12 +2,26 @@
 
 ## Current focus
 
-Epic **#41** — frontend ↔ API reservas wiring. **Phases 0–2 + #50
-landed** (list shell, refresh tokens, auth + live list, shared loading UI).
-Remaining children: Edit (#40), server list filters (#46), signup (#47),
-modal share/UX (#48).
+Epic **#41** — frontend ↔ API reservas wiring. **Phases 0–2 + #50 + #48
+landed** (list shell, refresh tokens, auth + live list, shared loading UI,
+detail modal share/UX). Remaining children: Edit (#40), server list filters
+(#46), signup (#47).
 
 ## Recent decisions
+
+### Detail modal + share (#48 / PR #53)
+
+- Header: provider logo + `Reserva {ref}` + `EstadoStatusDot` (tooltip
+  Spanish title-case; `animate-ping` only for `en_progreso`).
+- Dense body: event lead card; Cliente | Comercial two-column; Metadatos
+  collapsed by default.
+- Share: reusable `ShareMenu` → WhatsApp (`wa.me/<phone>`) + Google Calendar
+  all-day in America/Bogota (disabled if `fecha_evento` null).
+- On open: always `GET /reservas/{id}`; keep list payload; inline error on
+  failure. Display times use America/Bogota.
+- Table: Estado column commented out; status dot next to experiencia name.
+- Icons: `whatsapp.svg` / `calendar.svg` under `src/icons` (assets may be
+  refined later).
 
 ### Shared loading UI (#50)
 
@@ -47,8 +61,8 @@ modal share/UX (#48).
 
 ### Reservas list shell (#42 / PR #43)
 
-- Route `/reservas`, sidebar **Reservas**, Spanish UI, badge mapping,
-  detail modal, Edit disabled stub (#40).
+- Route `/reservas`, sidebar **Reservas**, Spanish UI, detail modal, Edit
+  disabled stub (#40).
 
 ### Dual Vercel + portable Docker (#38)
 
@@ -59,9 +73,9 @@ modal share/UX (#48).
 
 ## Known gaps (intentional / deferred)
 
-- #40 Edit (PATCH) · #46 GET `/reservas` filters · #47 signup wire ·
-  #48 modal share (WhatsApp / Google Calendar) + UX.
-- Real WhatsApp Meta integration (NoOp until Meta approval).
+- #40 Edit (PATCH) · #46 GET `/reservas` filters · #47 signup wire.
+- Real WhatsApp Meta integration (NoOp until Meta approval); share uses
+  user-initiated `wa.me` links only (#48).
 - Zoho `mark_as_read`; per-user ownership / RBAC on reservas.
 - `correlation_id` ContextVar — no middleware sets it yet.
 - Hourly Colombia-window cron needs Pro (Hobby is once/day).

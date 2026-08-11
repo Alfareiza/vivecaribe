@@ -22,19 +22,20 @@
 | #44 / #45 Refresh tokens | Closed | Opaque refresh + HttpOnly cookie; `/refresh` `/logout` |
 | #41 Phases 1–2 | Merged (#49) | CORS, sign-in, live GET `/reservas` |
 | #50 Shared loading UI | Closed | PulseLoader / PageLoading / InlineLoading |
+| #48 Detail modal UX + share | Merged (#53) | WhatsApp/Calendar share, status dots, dense modal |
 
 ## In progress / open children of #41
 
 - #40 — Edit reserva (PATCH) from modal
 - #46 — Server-side filters on `GET /reservas`
 - #47 — Sign Up / `POST /users` from UI (low priority)
-- #48 — Detail modal UX + share (WhatsApp / Google Calendar)
 
 ## Works today
 
 - Register/login; access JWT + refresh cookie rotation.
 - Reserva CRUD + paginated list; soft-delete hidden from get/list.
 - Admin UI: authenticated `/reservas` against live API.
+- Detail modal: live refetch, share links, status ping for `en_progreso`.
 - Shared pulse loading for auth gate, reservas fetch, and sign-in submit.
 - Automation POST accepts JWT **or** `CRON_SECRET`; GET (cron) same auth.
 - Pipeline GYG / Viator / Homefans / Propio (Zoho); idempotent persistence.
@@ -43,7 +44,7 @@
 
 ## Left to build
 
-- Remaining #41 children (#40, #46–#48).
+- Remaining #41 children (#40, #46, #47).
 - Real WhatsApp Meta notifier after Meta authorization.
 - Zoho mark-as-read (deferred).
 - Optional: per-user ownership on reservas.
@@ -51,7 +52,8 @@
 ## Known issues / deliberate non-goals
 
 - No domain `Result` type (exceptions by design).
-- WhatsApp stays NoOp until Meta approves.
+- WhatsApp Cloud API stays NoOp until Meta approves (operator share via
+  `wa.me` is separate, #48).
 - Local OAuth helper scripts / refresh token files must stay untracked.
 - Homefans `get_income` still has a rough error path — watch in production.
 - Single-container UI+API on Vercel rejected (#38): dual projects.

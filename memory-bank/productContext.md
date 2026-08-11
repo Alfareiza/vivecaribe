@@ -35,6 +35,8 @@ structured reservations operators can trust, while remaining an API platform
   `apps/frontend`).
 - Auth: email/password sign-in; access token in memory; refresh via HttpOnly
   cookie on the API; live `/reservas` list (epic #41 Phases 0–2 + #50).
+- Reserva detail modal: dense layout, status ping dot, WhatsApp / Google
+  Calendar share links, live `GET /reservas/{id}` refetch (#48 / #53).
 - Loading UX: shared pulse spinner (page / inline / button); Spanish labels
   for assistive tech only.
 - Talks to the API via `NEXT_PUBLIC_API_URL` with credentialed CORS

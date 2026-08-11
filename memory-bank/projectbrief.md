@@ -32,5 +32,6 @@ Vercel projects from the same GitHub monorepo.
 Issues #1–#8 delivered scaffold through Vercel container deploy / cron auth.
 Follow-on on main: Propio via Zoho Mail, Zoho OTP via GYG Gmail, extractor
 income/country hardening, monorepo `#36`, frontend + dual Vercel `#38`,
-reservas list + auth wiring `#41` / `#49`, shared loading UI `#50`.
-Open `#41` children: Edit `#40`, filters `#46`, signup `#47`, modal `#48`.
+reservas list + auth wiring `#41` / `#49`, shared loading UI `#50`,
+detail modal share/UX `#48` / `#53`.
+Open `#41` children: Edit `#40`, filters `#46`, signup `#47`.
