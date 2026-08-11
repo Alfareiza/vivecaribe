@@ -17,7 +17,7 @@ from vivecaribe.api.schemas.reservas import (
     ReservaUpdate,
 )
 from vivecaribe.domain.enums import BookingProvider, ReservaEstado
-from vivecaribe.domain.reserva import Reserva, compute_paid_at
+from vivecaribe.domain.reserva import Reserva
 
 router = APIRouter(tags=["reservas"])
 
@@ -37,14 +37,7 @@ async def create_reserva(
     Conflicts on the idempotency key
     ``(booking_provider, reserva_reference)``.
     """
-    data = payload.model_dump()
-    reserva = Reserva(
-        **data,
-        paid_at=compute_paid_at(
-            payload.booking_provider,
-            payload.fecha_evento,
-        ),
-    )
+    reserva = Reserva(**payload.model_dump())
     saved, created = await reservas.get_or_create(reserva)
     if not created:
         raise HTTPException(
@@ -128,14 +121,6 @@ async def update_reserva(
         update={
             **payload.model_dump(exclude_unset=True),
             "updated_at": datetime.now(UTC),
-        },
-    )
-    updated = updated.model_copy(
-        update={
-            "paid_at": compute_paid_at(
-                updated.booking_provider,
-                updated.fecha_evento,
-            ),
         },
     )
     saved = await reservas.save(updated)
