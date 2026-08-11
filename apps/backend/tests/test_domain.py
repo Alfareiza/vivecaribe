@@ -11,11 +11,14 @@ from vivecaribe.domain import (
     ConflictError,
     DomainError,
     EmailMessage,
+    MeetingPoint,
     NotFoundError,
     Reserva,
     ReservaEstado,
+    TipoTour,
     User,
     ValidationError,
+    compute_paid_at,
 )
 
 
@@ -128,3 +131,104 @@ def test_email_message_defaults() -> None:
     assert message.body_html == ""
     assert message.metadata == {}
     assert isinstance(message.id, UUID)
+
+
+def test_tipo_tour_and_meeting_point_literal_values() -> None:
+    """New enums keep human-readable wire values."""
+    assert TipoTour.FOOTBALL_TOUR.value == "football tour"
+    assert TipoTour.CITY_TOUR.value == "city tour"
+    assert MeetingPoint.OLD_SHOES_MONUMENT.value == "old shoes monument"
+    assert MeetingPoint.DOOR_TO_DOOR.value == "Door-to-Door"
+
+
+def test_compute_paid_at_none_without_fecha_evento() -> None:
+    """Missing event date yields no payout date."""
+    assert compute_paid_at(BookingProvider.GETYOURGUIDE, None) is None
+
+
+def test_compute_paid_at_gyg_weekday_seventh() -> None:
+    """GYG: 7th of next month when that day is Mon–Fri."""
+    # 15 Aug 2026 → 7 Sep 2026 (Monday)
+    paid = compute_paid_at(
+        BookingProvider.GETYOURGUIDE,
+        datetime(2026, 8, 15, 9, 0, tzinfo=UTC),
+    )
+    assert paid is not None
+    assert paid.date().isoformat() == "2026-09-07"
+
+
+def test_compute_paid_at_viator_saturday_seventh_uses_ninth() -> None:
+    """Viator: when the 7th is Saturday, payout is the 9th."""
+    # 15 Jan 2026 → 7 Feb 2026 (Saturday) → 9 Feb
+    paid = compute_paid_at(
+        BookingProvider.VIATOR,
+        datetime(2026, 1, 15, 12, 0, tzinfo=UTC),
+    )
+    assert paid is not None
+    assert paid.date().isoformat() == "2026-02-09"
+
+
+def test_compute_paid_at_gyg_sunday_seventh_uses_ninth() -> None:
+    """GYG: when the 7th is Sunday, payout is the 9th."""
+    # 15 May 2026 → 7 Jun 2026 (Sunday) → 9 Jun
+    paid = compute_paid_at(
+        BookingProvider.GETYOURGUIDE,
+        datetime(2026, 5, 15, 12, 0, tzinfo=UTC),
+    )
+    assert paid is not None
+    assert paid.date().isoformat() == "2026-06-09"
+
+
+def test_compute_paid_at_gyg_december_rolls_to_january() -> None:
+    """GYG December events pay out in January of the next year."""
+    paid = compute_paid_at(
+        BookingProvider.GETYOURGUIDE,
+        datetime(2026, 12, 20, 12, 0, tzinfo=UTC),
+    )
+    assert paid is not None
+    # 7 Jan 2027 is Thursday
+    assert paid.date().isoformat() == "2027-01-07"
+
+
+def test_compute_paid_at_propio_next_day() -> None:
+    """Propio pays the calendar day after the event."""
+    paid = compute_paid_at(
+        BookingProvider.PROPIO,
+        datetime(2026, 8, 15, 9, 0, tzinfo=UTC),
+    )
+    assert paid is not None
+    assert paid.date().isoformat() == "2026-08-16"
+
+
+def test_compute_paid_at_homefans_next_thursday() -> None:
+    """Homefans: next Thursday after a non-Thursday event."""
+    # Saturday 15 Aug 2026 → Thursday 20 Aug 2026
+    paid = compute_paid_at(
+        BookingProvider.HOMEFANS,
+        datetime(2026, 8, 15, 9, 0, tzinfo=UTC),
+    )
+    assert paid is not None
+    assert paid.date().isoformat() == "2026-08-20"
+
+
+def test_compute_paid_at_homefans_on_thursday_skips_to_next_week() -> None:
+    """Homefans: event on Thursday → Thursday of the following week."""
+    # Thursday 13 Aug 2026 → Thursday 20 Aug 2026
+    paid = compute_paid_at(
+        BookingProvider.HOMEFANS,
+        datetime(2026, 8, 13, 9, 0, tzinfo=UTC),
+    )
+    assert paid is not None
+    assert paid.date().isoformat() == "2026-08-20"
+
+
+def test_reserva_operator_field_defaults() -> None:
+    """New operator fields default to null / false as specified."""
+    reserva = _sample_reserva()
+    assert reserva.notas_cliente is None
+    assert reserva.tipo_tour is None
+    assert reserva.meeting_point is None
+    assert reserva.menores_de_edad is False
+    assert reserva.paid_at is None
+    assert reserva.costos is None
+

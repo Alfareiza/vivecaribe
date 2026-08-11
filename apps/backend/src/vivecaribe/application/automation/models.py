@@ -9,7 +9,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from vivecaribe.domain.enums import BookingProvider, ReservaEstado
-from vivecaribe.domain.reserva import Reserva
+from vivecaribe.domain.reserva import Reserva, compute_paid_at
 
 
 class ReservaDraft(BaseModel):
@@ -63,6 +63,7 @@ class ReservaDraft(BaseModel):
             income=self.income,
             notificado_whatsapp=notificado_whatsapp,
             email_message_id=email_message_id,
+            paid_at=compute_paid_at(self.booking_provider, self.fecha_evento),
             created_at=now,
             updated_at=now,
         )

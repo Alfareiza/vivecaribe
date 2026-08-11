@@ -25,3 +25,17 @@ class ReservaEstado(StrEnum):
     CONFIRMADA = "confirmada"
     CANCELADA = "cancelada"
     ERROR = "error"
+
+
+class TipoTour(StrEnum):
+    """Kind of guided experience on a reservation."""
+
+    FOOTBALL_TOUR = "football tour"
+    CITY_TOUR = "city tour"
+
+
+class MeetingPoint(StrEnum):
+    """Where the guest is met for the experience."""
+
+    OLD_SHOES_MONUMENT = "old shoes monument"
+    DOOR_TO_DOOR = "Door-to-Door"
