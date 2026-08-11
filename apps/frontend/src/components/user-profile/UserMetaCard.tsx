@@ -24,7 +24,7 @@ export default function UserMetaCard() {
               <Image
                 width={80}
                 height={80}
-                src="/images/user/owner.jpg"
+                src="/images/user/owner.jpeg"
                 alt="user"
               />
             </div>

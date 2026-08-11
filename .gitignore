@@ -230,6 +230,8 @@ apps/frontend/.turbo/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+.env.local
+tsconfig.tsbuildinfo
 
 # Mailbox OAuth / token files (authorized-user JSON, Outlook tokens)
 secrets/
