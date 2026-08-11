@@ -166,6 +166,14 @@ class SqlAlchemyReservaRepository:
         payload = reserva.model_dump()
         payload["booking_provider"] = reserva.booking_provider.value
         payload["estado"] = reserva.estado.value
+        payload["tipo_tour"] = (
+            reserva.tipo_tour.value if reserva.tipo_tour is not None else None
+        )
+        payload["meeting_point"] = (
+            reserva.meeting_point.value
+            if reserva.meeting_point is not None
+            else None
+        )
         if row is None:
             row = ReservaORM(**payload)
             self._session.add(row)

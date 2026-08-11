@@ -4,7 +4,12 @@ No FastAPI, SQLAlchemy, mailbox clients, or WhatsApp here.
 """
 
 from vivecaribe.domain.email_message import EmailMessage
-from vivecaribe.domain.enums import BookingProvider, ReservaEstado
+from vivecaribe.domain.enums import (
+    BookingProvider,
+    MeetingPoint,
+    ReservaEstado,
+    TipoTour,
+)
 from vivecaribe.domain.errors import (
     ConflictError,
     DomainError,
@@ -12,7 +17,7 @@ from vivecaribe.domain.errors import (
     NotFoundError,
     ValidationError,
 )
-from vivecaribe.domain.reserva import Reserva
+from vivecaribe.domain.reserva import Reserva, compute_paid_at
 from vivecaribe.domain.user import User
 
 __all__ = [
@@ -21,9 +26,12 @@ __all__ = [
     "DomainError",
     "EmailMessage",
     "EmailNotFound",
+    "MeetingPoint",
     "NotFoundError",
     "Reserva",
     "ReservaEstado",
+    "TipoTour",
     "User",
     "ValidationError",
+    "compute_paid_at",
 ]

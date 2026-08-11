@@ -9,7 +9,12 @@ from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
-from vivecaribe.domain.enums import BookingProvider, ReservaEstado
+from vivecaribe.domain.enums import (
+    BookingProvider,
+    MeetingPoint,
+    ReservaEstado,
+    TipoTour,
+)
 from vivecaribe.domain.reserva import Reserva
 
 _BOGOTA = ZoneInfo("America/Bogota")
@@ -57,6 +62,16 @@ class ReservaCreate(BaseModel):
     price: Decimal
     income: Decimal
     notificado_whatsapp: bool = False
+    notas_cliente: str | None = Field(default=None, max_length=255)
+    tipo_tour: TipoTour | None = None
+    notas_personales: str | None = Field(default=None, max_length=255)
+    costos: Decimal | None = None
+    meeting_point: MeetingPoint | None = None
+    lugar_de_recogida: str | None = Field(default=None, max_length=64)
+    income_estimado: Decimal | None = None
+    profit: Decimal | None = None
+    percentage: Decimal | None = None
+    menores_de_edad: bool = False
     email_message_id: UUID | None = None
     user_id: UUID | None = None
 
@@ -65,10 +80,12 @@ class ReservaUpdate(BaseModel):
     """Partial payload for ``PATCH /reservas/{id}``.
 
     Identity and audit fields are intentionally omitted so they stay
-    immutable through this endpoint.
+    immutable through this endpoint. ``paid_at`` is derived server-side
+    from ``booking_provider`` + ``fecha_evento`` and is not writable here.
     """
 
     estado: ReservaEstado | None = None
+    booking_provider: BookingProvider | None = None
     nombre_experiencia: str | None = None
     ciudad_experiencia: str | None = None
     fecha_evento: datetime | None = None
@@ -81,6 +98,16 @@ class ReservaUpdate(BaseModel):
     income: Decimal | None = None
     notificado_whatsapp: bool | None = None
     subject: str | None = None
+    notas_cliente: str | None = Field(default=None, max_length=255)
+    tipo_tour: TipoTour | None = None
+    notas_personales: str | None = Field(default=None, max_length=255)
+    costos: Decimal | None = None
+    meeting_point: MeetingPoint | None = None
+    lugar_de_recogida: str | None = Field(default=None, max_length=64)
+    income_estimado: Decimal | None = None
+    profit: Decimal | None = None
+    percentage: Decimal | None = None
+    menores_de_edad: bool | None = None
 
 
 class ReservaShortItem(BaseModel):

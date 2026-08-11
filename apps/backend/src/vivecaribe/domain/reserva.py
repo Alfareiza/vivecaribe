@@ -2,14 +2,81 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from vivecaribe.domain.enums import BookingProvider, ReservaEstado
+from vivecaribe.domain.enums import (
+    BookingProvider,
+    MeetingPoint,
+    ReservaEstado,
+    TipoTour,
+)
+
+_BOGOTA = ZoneInfo("America/Bogota")
+
+
+def compute_paid_at(
+    booking_provider: BookingProvider,
+    fecha_evento: datetime | None,
+) -> datetime | None:
+    """Derive expected payout date from provider + event day (Bogota).
+
+    Returns ``None`` when ``fecha_evento`` is missing.
+    """
+    if fecha_evento is None:
+        return None
+
+    event = (
+        fecha_evento.replace(tzinfo=_BOGOTA)
+        if fecha_evento.tzinfo is None
+        else fecha_evento.astimezone(_BOGOTA)
+    )
+    event_day = event.date()
+
+    if booking_provider in (
+        BookingProvider.GETYOURGUIDE,
+        BookingProvider.VIATOR,
+    ):
+        paid_day = _marketplace_payout_day(event_day)
+    elif booking_provider is BookingProvider.PROPIO:
+        paid_day = event_day + timedelta(days=1)
+    elif booking_provider is BookingProvider.HOMEFANS:
+        paid_day = _next_thursday_after(event_day)
+    else:  # pragma: no cover — StrEnum exhaustiveness
+        return None
+
+    return datetime(
+        paid_day.year,
+        paid_day.month,
+        paid_day.day,
+        tzinfo=_BOGOTA,
+    )
+
+
+def _marketplace_payout_day(event_day: date) -> date:
+    """GYG / Viator: 7th of next month, or 9th when the 7th is weekend."""
+    if event_day.month == 12:
+        candidate = date(event_day.year + 1, 1, 7)
+    else:
+        candidate = date(event_day.year, event_day.month + 1, 7)
+    # Saturday=5, Sunday=6
+    if candidate.weekday() >= 5:
+        return candidate.replace(day=9)
+    return candidate
+
+
+def _next_thursday_after(event_day: date) -> date:
+    """Homefans: next Thursday; same-day Thursday → following week."""
+    # Monday=0 … Thursday=3
+    days_ahead = (3 - event_day.weekday()) % 7
+    if days_ahead == 0:
+        days_ahead = 7
+    return event_day + timedelta(days=days_ahead)
 
 
 class Reserva(BaseModel):
@@ -41,6 +108,17 @@ class Reserva(BaseModel):
     price: Decimal
     income: Decimal
     notificado_whatsapp: bool = False
+    notas_cliente: str | None = Field(default=None, max_length=255)
+    tipo_tour: TipoTour | None = None
+    notas_personales: str | None = Field(default=None, max_length=255)
+    costos: Decimal | None = None
+    meeting_point: MeetingPoint | None = None
+    lugar_de_recogida: str | None = Field(default=None, max_length=64)
+    income_estimado: Decimal | None = None
+    profit: Decimal | None = None
+    percentage: Decimal | None = None
+    menores_de_edad: bool = False
+    paid_at: datetime | None = None
     email_message_id: UUID | None = None
     user_id: UUID | None = None
     deleted_at: datetime | None = None

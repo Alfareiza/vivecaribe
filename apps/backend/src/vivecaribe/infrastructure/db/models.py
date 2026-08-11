@@ -190,6 +190,28 @@ class ReservaORM(Base):
         nullable=False,
         default=False,
     )
+    notas_cliente: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    tipo_tour: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    notas_personales: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    costos: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    meeting_point: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    lugar_de_recogida: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    income_estimado: Mapped[Decimal | None] = mapped_column(
+        Numeric(12, 2),
+        nullable=True,
+    )
+    profit: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    percentage: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    menores_de_edad: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
+    paid_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     deleted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
