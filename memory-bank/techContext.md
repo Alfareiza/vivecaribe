@@ -20,6 +20,7 @@
 - Next.js **16**, React **19**, TypeScript, Tailwind CSS **v4**
 - TailAdmin starter (ApexCharts, FullCalendar, jvectormap, etc.)
 - Shared loading: `apps/frontend/src/components/ui/loading/` (#50)
+- Reservas UI: server-filtered list + `es_hoy` badge (`StatusDot`) (#46)
 - Package manager: npm (`package-lock.json`)
 - `output: 'standalone'` for Docker
 
@@ -76,6 +77,8 @@ Fixtures refuse to reset any database whose name does not end with `_test`.
   (also `workflow_dispatch`).
 - Runs `uv run alembic upgrade head` against repository secret `DATABASE_URL`
   (prod Supabase). Not run in Vercel or Docker Compose entrypoints.
+- Latest schema add: `d4e5f6a7b8c9` operator fields + `paid_at` on `reservas`
+  (#55 / #56).
 
 ## Env vars (auth / CORS / UI)
 

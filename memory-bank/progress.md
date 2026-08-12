@@ -22,30 +22,33 @@
 | #44 / #45 Refresh tokens | Closed | Opaque refresh + HttpOnly cookie; `/refresh` `/logout` |
 | #41 Phases 1–2 | Merged (#49) | CORS, sign-in, live GET `/reservas` |
 | #50 Shared loading UI | Closed | PulseLoader / PageLoading / InlineLoading |
+| #48 Detail modal share | Closed (#53) | WhatsApp / Google Calendar + modal UX |
+| #46 List filters + es_hoy | Merged (#54) | Server filters, ReservaShortItem, Hoy badge |
+| #55 Operator fields + paid_at | Merged (#56) | Domain/ORM/API + Alembic; derived `paid_at` |
 
 ## In progress / open children of #41
 
 - #40 — Edit reserva (PATCH) from modal
-- #46 — Server-side filters + slim list + `es_hoy` (branch
-  `feat/46-reservas-list-filters-es-hoy`)
 - #47 — Sign Up / `POST /users` from UI (low priority)
-- #48 — Detail modal UX + share (WhatsApp / Google Calendar)
 
 ## Works today
 
 - Register/login; access JWT + refresh cookie rotation.
-- Reserva CRUD + paginated list; soft-delete hidden from get/list.
-- Admin UI: authenticated `/reservas` against live API.
+- Reserva CRUD; soft-delete hidden from get/list.
+- `GET /reservas` server filters + slim list + `es_hoy`; detail by id.
+- Operator/finance fields on create/update/detail; `paid_at` auto-derived.
+- Admin UI: authenticated `/reservas` with server pagination/filters and
+  Hoy badge; modal refetches full detail (UI edit of new fields still #40).
 - Shared pulse loading for auth gate, reservas fetch, and sign-in submit.
 - Automation POST accepts JWT **or** `CRON_SECRET`; GET (cron) same auth.
 - Pipeline GYG / Viator / Homefans / Propio (Zoho); idempotent persistence.
 - Isolated Postgres tests ≥ 90% coverage; frontend CI path-filtered build.
 - Compose: Postgres + API + frontend.
+- Migrate workflow on main applies Alembic when migrations change.
 
 ## Left to build
 
-- Land #46 (filters / slim list / `es_hoy`), then remaining #41 children
-  (#40, #47–#48).
+- Remaining #41 children (#40, #47).
 - Real WhatsApp Meta notifier after Meta authorization.
 - Zoho mark-as-read (deferred).
 - Optional: per-user ownership on reservas.

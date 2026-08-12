@@ -89,6 +89,29 @@ When Zoho shows an identity email challenge, `ZohoSession` uses the
 - Client `(admin)` layout: boot `/refresh` or redirect `/signin`.
 - No Next middleware JWT check (refresh cookie is on API host, not UI host).
 
+## Reservas list / detail API (#46)
+
+- `GET /reservas` — filters: `estado`, `booking_provider`,
+  `fecha_evento_from` / `fecha_evento_to` (AND; Bogota calendar days via SQL
+  `timezone('America/Bogota', fecha_evento)::date`; null fecha excluded when
+  ranged). Order: `fecha_evento` desc nulls last. Items: slim
+  `ReservaShortItem` (+ computed `es_hoy`).
+- `GET /reservas/{id}` — full `ReservaResponse` (inherits domain `Reserva`,
+  excludes `deleted_at`, computed `es_hoy`).
+- Indexes: `estado`, `booking_provider`, `fecha_evento` (plus existing).
+- Frontend: server pagination/filters; “Hoy” badge from `es_hoy`; modal
+  refetches by id. `StatusDot` kept for future badge kinds.
+
+## Reserva derived fields (#55)
+
+- Persistable fields that are pure functions of other attributes live on the
+  domain model, not in routers: `@model_validator(mode="after")` syncs them;
+  `model_copy` re-validates so PATCH stays consistent.
+- `paid_at` ← `booking_provider` + `fecha_evento` (America/Bogota). Callers
+  use `Reserva(**data)` / `model_copy(update=...)` without computing it.
+- New enums: `TipoTour`, `MeetingPoint` (literal phrase values). Operator
+  notes/finance columns nullable except `menores_de_edad` (default false).
+
 ## Persistence
 
 | Table | Key |
@@ -96,7 +119,7 @@ When Zoho shows an identity email challenge, `ZohoSession` uses the
 | `users` | `email` unique |
 | `refresh_tokens` | `token_hash` unique; `family_id` for rotation/reuse revoke |
 | `email_messages` | `(source, mailbox_message_id)` |
-| `reservas` | `(booking_provider, reserva_reference)`; soft delete via `deleted_at` |
+| `reservas` | `(booking_provider, reserva_reference)`; soft delete via `deleted_at`; operator/finance + `paid_at` (#55) |
 
 ## Deviations from the original architecture plan
 

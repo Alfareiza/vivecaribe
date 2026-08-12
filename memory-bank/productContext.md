@@ -23,7 +23,9 @@ structured reservations operators can trust, while remaining an API platform
 ### API consumers
 
 - Predictable auth (`POST /users`, `POST /login` → Bearer JWT).
-- Reserva CRUD under `/reservas` (JWT; soft delete; paginated list).
+- Reserva CRUD under `/reservas` (JWT; soft delete; filtered/paginated list
+  with slim items + `es_hoy`; full detail by id including operator/finance
+  fields and domain-derived `paid_at`).
 - Structured pipeline counters (`fetched`, `created`, `existing`, `notified`).
 - Clear env docs (`.env.example`) and Memory Bank for future agents.
 - Safe local tests that never touch the developer Postgres database.
@@ -34,7 +36,8 @@ structured reservations operators can trust, while remaining an API platform
 - Admin dashboard for day-to-day booking operations (TailAdmin under
   `apps/frontend`).
 - Auth: email/password sign-in; access token in memory; refresh via HttpOnly
-  cookie on the API; live `/reservas` list (epic #41 Phases 0–2 + #50).
+  cookie on the API; live `/reservas` list with server filters + `es_hoy`
+  (epic #41 through #46 / #54).
 - Loading UX: shared pulse spinner (page / inline / button); Spanish labels
   for assistive tech only.
 - Talks to the API via `NEXT_PUBLIC_API_URL` with credentialed CORS
