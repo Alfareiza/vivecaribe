@@ -87,7 +87,7 @@ async def test_create_reserva_sets_paid_at_and_operator_fields(
             lugar_de_recogida="Hotel Caribe",
             income_estimado="90.00",
             profit="65.00",
-            percentage="72.22",
+            percentage_profit="72.22",
             menores_de_edad=True,
         ),
         headers=headers,

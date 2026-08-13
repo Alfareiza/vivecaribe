@@ -47,6 +47,49 @@ export function formatPrice(price: string, moneda: string): string {
   return `${moneda} ${price}`;
 }
 
+/** Temporary fixed TRM (COP per USD) until a real rate source is wired up. */
+export const TRM_COP_PLACEHOLDER = 4000;
+
+export function formatCOP(value: number | string | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const amount = typeof value === "number" ? value : Number(value);
+  if (Number.isNaN(amount)) return "—";
+  return new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
+/** income x TRM placeholder — computed client-side, not a real conversion. */
+export function estimateIncomeCOP(
+  income: string | null | undefined,
+): number | null {
+  if (!income) return null;
+  const amount = Number(income);
+  if (Number.isNaN(amount)) return null;
+  return amount * TRM_COP_PLACEHOLDER;
+}
+
+export function truncateText(
+  value: string | null | undefined,
+  maxLength = 20,
+): { display: string; truncated: boolean } {
+  if (!value) return { display: "—", truncated: false };
+  if (value.length <= maxLength) return { display: value, truncated: false };
+  return { display: `${value.slice(0, maxLength)}…`, truncated: true };
+}
+
+export const TIPO_TOUR_LABELS: Record<string, string> = {
+  "football tour": "Tour de fútbol",
+  "city tour": "City tour",
+};
+
+export const MEETING_POINT_LABELS: Record<string, string> = {
+  "old shoes monument": "Monumento zapatos viejos",
+  "Door-to-Door": "Puerta a puerta",
+};
+
 /** Local calendar YYYY-MM-DD for inclusive range checks. */
 export function toLocalDateKey(iso: string): string {
   const date = new Date(iso);
