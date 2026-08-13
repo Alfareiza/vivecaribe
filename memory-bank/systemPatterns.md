@@ -36,8 +36,8 @@ GitHub monorepo
 └── docker-compose → db (Postgres 16) + api + frontend
 ```
 
-Root no longer owns Docker/Vercel entrypoints. Cron lives in
-`apps/backend/vercel.json`.
+Root no longer owns Docker/Vercel entrypoints. The API container does not
+run Vercel Cron; ingest is triggered by HTTP callers with `CRON_SECRET`.
 
 ## Pipeline (automation BC)
 
@@ -82,7 +82,9 @@ When Zoho shows an identity email challenge, `ZohoSession` uses the
 - `/reservas` and other operator routes: Bearer access JWT.
 - Automation GET/POST: JWT **or** `CRON_SECRET`.
 - Browser calls need `CORS_ORIGINS` + `credentials: "include"` (#41 Phase 1).
-- Hobby Vercel Cron: daily `GET /automation/emails/get-bookings` at 09:00 UTC.
+- Ingest: authenticated `GET`/`POST /automation/emails/get-bookings`.
+  Production API Vercel Authentication is preview-only so external schedulers
+  can reach FastAPI; the GET is still gated by `CRON_SECRET`.
 
 ### Frontend session gate
 

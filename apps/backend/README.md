@@ -158,7 +158,6 @@ apps/backend/
 ├── alembic.ini
 ├── booking_providers.yaml
 ├── Dockerfile / Dockerfile.vercel
-├── vercel.json
 ├── migrations/
 ├── tests/
 └── src/vivecaribe/
@@ -210,12 +209,12 @@ CI: [`.github/workflows/test.yml`](../../.github/workflows/test.yml) runs from
 
 ### Cron
 
-[`vercel.json`](vercel.json) — Hobby daily
-`GET /automation/emails/get-bookings` at **09:00 UTC** (≈ **04:00 Colombia**).
-Vercel sends `Authorization: Bearer $CRON_SECRET` when that env is set.
+This API project does **not** schedule ingest. Callers (operators or an
+external scheduler) `GET`/`POST` the endpoint with JWT or
+`Authorization: Bearer $CRON_SECRET`.
 
 ```bash
-curl -X GET https://vivecaribe.vercel.app/automation/emails/get-bookings \
+curl -X GET https://vivecaribe-alfareizas-projects.vercel.app/automation/emails/get-bookings \
   -H "Authorization: Bearer $CRON_SECRET"
 ```
 
