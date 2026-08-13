@@ -201,7 +201,10 @@ class ReservaORM(Base):
         nullable=True,
     )
     profit: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
-    percentage: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    percentage_profit: Mapped[Decimal | None] = mapped_column(
+        Numeric(12, 2),
+        nullable=True,
+    )
     menores_de_edad: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,

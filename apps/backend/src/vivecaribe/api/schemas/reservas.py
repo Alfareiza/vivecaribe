@@ -53,7 +53,7 @@ class ReservaCreate(BaseModel):
     lugar_de_recogida: str | None = Field(default=None, max_length=64)
     income_estimado: Decimal | None = None
     profit: Decimal | None = None
-    percentage: Decimal | None = None
+    percentage_profit: Decimal | None = None
     menores_de_edad: bool = False
     email_message_id: UUID | None = None
     user_id: UUID | None = None
@@ -89,7 +89,7 @@ class ReservaUpdate(BaseModel):
     lugar_de_recogida: str | None = Field(default=None, max_length=64)
     income_estimado: Decimal | None = None
     profit: Decimal | None = None
-    percentage: Decimal | None = None
+    percentage_profit: Decimal | None = None
     menores_de_edad: bool | None = None
 
 

@@ -121,7 +121,7 @@ class Reserva(BaseModel):
     lugar_de_recogida: str | None = Field(default=None, max_length=64)
     income_estimado: Decimal | None = None
     profit: Decimal | None = None
-    percentage: Decimal | None = None
+    percentage_profit: Decimal | None = None
     menores_de_edad: bool = False
     paid_at: datetime | None = None
     email_message_id: UUID | None = None

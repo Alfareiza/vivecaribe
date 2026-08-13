@@ -37,3 +37,18 @@ export async function fetchReservas(
 export async function fetchReservaById(id: string): Promise<Reservation> {
   return apiJson<Reservation>(`/reservas/${id}`);
 }
+
+export type ReservaUpdatePayload = Partial<
+  Pick<Reservation, "menores_de_edad">
+>;
+
+export async function updateReserva(
+  id: string,
+  payload: ReservaUpdatePayload,
+): Promise<Reservation> {
+  return apiJson<Reservation>(`/reservas/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
