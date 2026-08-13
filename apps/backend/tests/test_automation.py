@@ -94,7 +94,7 @@ def test_getyourguide_extractor_from_fixture() -> None:
     assert ext.get_moneda() == "USD"
     assert ext.get_price() == Decimal("186.00")
     assert ext.get_income() == Decimal("130.200")
-    assert ext.get_dt_evento() == datetime(2026, 5, 2, 15, 25, tzinfo=UTC)
+    assert ext.get_dt_evento() == datetime(2026, 5, 2, 15, 25)
 
     draft = ext.to_draft()
     assert draft.booking_provider == BookingProvider.GETYOURGUIDE
@@ -116,7 +116,7 @@ def test_homefans_extractor_from_fixture() -> None:
     assert ext.get_income() == Decimal("63.7500")
     assert ext.get_pais_del_visitante() == "NL"
     assert ext.get_phone() == "+31641428471"
-    assert ext.get_dt_evento() == datetime(2026, 7, 29, 17, 4, tzinfo=UTC)
+    assert ext.get_dt_evento() == datetime(2026, 7, 29, 17, 4)
 
 
 def test_viator_extractor_from_fixture() -> None:
@@ -130,7 +130,7 @@ def test_viator_extractor_from_fixture() -> None:
         == "Soccer at the Metropolitan stadium with local fans"
     )
     assert ext.get_ciudad_evento() == "Barranquilla"
-    assert ext.get_dt_evento() == datetime(2026, 8, 1, tzinfo=UTC)
+    assert ext.get_dt_evento() == datetime(2026, 8, 1)
     assert ext.get_participants() == 1
     assert ext.get_customer_name() == "Jane Doe"
     assert ext.get_phone() == "+18137350000"
@@ -149,7 +149,7 @@ def test_propio_extractor_from_fixture() -> None:
     assert ext.get_reserva_reference() == "1995"
     assert ext.get_nombre_experiencia() == "Watch Junior de Barranquilla Match"
     assert ext.get_ciudad_evento() == "Barranquilla"
-    assert ext.get_dt_evento() == datetime(2026, 8, 1, 12, 40, tzinfo=UTC)
+    assert ext.get_dt_evento() == datetime(2026, 8, 1, 12, 40)
     assert ext.get_participants() == 2
     assert ext.get_customer_name() == "Lara Oliveira"
     assert ext.get_phone() == "+64224550339"

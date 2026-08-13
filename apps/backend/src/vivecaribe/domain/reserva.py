@@ -72,11 +72,11 @@ def _marketplace_payout_day(event_day: date) -> date:
 
 
 def _next_thursday_after(event_day: date) -> date:
-    """Homefans: next Thursday; same-day Thursday → following week."""
+    """Homefans: next Thursday; Wed/Thu events use the following week's Thursday."""
     # Monday=0 … Thursday=3
     days_ahead = (3 - event_day.weekday()) % 7
-    if days_ahead == 0:
-        days_ahead = 7
+    if days_ahead <= 1:
+        days_ahead += 7
     return event_day + timedelta(days=days_ahead)
 
 

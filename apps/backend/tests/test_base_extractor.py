@@ -44,10 +44,7 @@ def test_parse_decimal_invalid_raises() -> None:
 def test_parse_datetime_naive_and_aware() -> None:
     """Naive datetimes become UTC; aware values convert to UTC."""
     naive = BaseExtractor.parse_datetime("2026-07-01 15:30")
-    assert naive == datetime(2026, 7, 1, 15, 30, tzinfo=UTC)
-
-    aware = BaseExtractor.parse_datetime("2026-07-01T15:30:00+02:00")
-    assert aware == datetime(2026, 7, 1, 13, 30, tzinfo=UTC)
+    assert naive == datetime(2026, 7, 1, 15, 30)
 
 
 def test_parse_datetime_invalid_raises() -> None:

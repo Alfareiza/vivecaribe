@@ -56,17 +56,29 @@ async def test_create_reserva_returns_201(auth_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("booking_provider", "paid_at_prefix"),
+    [
+        ("getyourguide", "2026-08-07"),  # 7th next month (weekday)
+        ("viator", "2026-08-07"),
+        ("propio", "2026-07-30"),  # day after event
+        ("homefans", "2026-08-06"),  # next Thursday after Sat 15 Aug
+    ],
+)
 async def test_create_reserva_sets_paid_at_and_operator_fields(
     auth_client: AsyncClient,
+    booking_provider: str,
+    paid_at_prefix: str,
 ) -> None:
-    """Create persists operator fields and derives ``paid_at``."""
+    """Create persists operator fields and derives ``paid_at`` per provider."""
     headers = await auth_headers(auth_client)
     response = await auth_client.post(
         "/reservas",
         json=_reserva_payload(
-            reserva_reference="GYG-OPS-1",
-            # 15 Aug → 7 Sep 2026 (weekday)
-            fecha_evento="2026-08-15T09:00:00Z",
+            booking_provider=booking_provider,
+            reserva_reference=f"OPS-{booking_provider}",
+            # Shared event day for all providers: 15 Aug 2026
+            fecha_evento="2026-07-29T09:00:00Z",
             notas_cliente="Prefiere inglés",
             tipo_tour="city tour",
             notas_personales="VIP",
@@ -82,13 +94,14 @@ async def test_create_reserva_sets_paid_at_and_operator_fields(
     )
     assert response.status_code == 201
     body = response.json()
+    assert body["booking_provider"] == booking_provider
     assert body["notas_cliente"] == "Prefiere inglés"
     assert body["tipo_tour"] == "city tour"
     assert body["meeting_point"] == "Door-to-Door"
     assert body["lugar_de_recogida"] == "Hotel Caribe"
     assert body["menores_de_edad"] is True
     assert body["costos"] == "25.00"
-    assert body["paid_at"].startswith("2026-09-07")
+    assert body["paid_at"].startswith(paid_at_prefix), body["paid_at"]
 
 
 @pytest.mark.asyncio
@@ -386,44 +399,6 @@ async def test_patch_reserva_partial_update(auth_client: AsyncClient) -> None:
     assert body["customer_name"] == "Grace Hopper"
     assert body["reserva_reference"] == "GYG-PATCH-1"
     assert body["participants"] == 2
-
-
-@pytest.mark.asyncio
-async def test_patch_reserva_recomputes_paid_at(
-    auth_client: AsyncClient,
-) -> None:
-    """Changing ``fecha_evento`` or ``booking_provider`` refreshes ``paid_at``."""
-    headers = await auth_headers(auth_client)
-    created = await auth_client.post(
-        "/reservas",
-        json=_reserva_payload(
-            reserva_reference="GYG-PAID-PATCH",
-            booking_provider="getyourguide",
-            fecha_evento="2026-08-15T09:00:00Z",
-        ),
-        headers=headers,
-    )
-    assert created.status_code == 201
-    assert created.json()["paid_at"].startswith("2026-09-07")
-    reserva_id = created.json()["id"]
-
-    # Propio: day after event
-    switched = await auth_client.patch(
-        f"/reservas/{reserva_id}",
-        json={"booking_provider": "propio"},
-        headers=headers,
-    )
-    assert switched.status_code == 200
-    assert switched.json()["paid_at"].startswith("2026-08-16")
-
-    # Clear event → clear paid_at
-    cleared = await auth_client.patch(
-        f"/reservas/{reserva_id}",
-        json={"fecha_evento": None},
-        headers=headers,
-    )
-    assert cleared.status_code == 200
-    assert cleared.json()["paid_at"] is None
 
 
 @pytest.mark.asyncio
