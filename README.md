@@ -53,7 +53,7 @@ app on the host — see [backend](apps/backend/README.md#local-development) and
 
 | Vercel project | Root Directory | Runtime | Production |
 |----------------|----------------|---------|------------|
-| `vivecaribe` | `apps/backend` | Container | https://vivecaribe.vercel.app |
+| `vivecaribe` | `apps/backend` | Container | https://vivecaribe-alfareizas-projects.vercel.app |
 | `vivecaribe-frontend` | `apps/frontend` | Next.js | (promote when ready) |
 
 Ignored Build Step on each project skips builds when that app’s folder did

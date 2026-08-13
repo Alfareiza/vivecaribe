@@ -1,9 +1,0 @@
-{
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "crons": [
-    {
-      "path": "/automation/emails/get-bookings",
-      "schedule": "0 9 * * *"
-    }
-  ]
-}

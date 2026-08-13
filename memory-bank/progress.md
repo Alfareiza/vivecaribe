@@ -11,7 +11,7 @@
 | #5 Automation BC | Closed | Gmail/Outlook, extractors, pipeline, WhatsApp NoOp |
 | #6 Pipeline API | Closed | `POST /automation/emails/get-bookings` |
 | #7 Tests + docs | Closed | Coverage gate, CI, Memory Bank, README |
-| #8 Deploy | Closed / verify | `Dockerfile.vercel`, GET+POST automation, Hobby daily cron |
+| #8 Deploy | Closed / verify | `Dockerfile.vercel`, GET+POST automation, no API-project Cron |
 | Propio + Zoho | Merged | HTTP search/md, PropioExtractor, YAML |
 | Zoho OTP + data dir | Merged | GYG Gmail OTP poller; `APP_DATA_DIR` sessions |
 | Extractor income/country | Merged | Shared phone→alpha-2; provider income formulas |
@@ -40,7 +40,7 @@
 - Admin UI: authenticated `/reservas` with server pagination/filters and
   Hoy badge; modal refetches full detail (UI edit of new fields still #40).
 - Shared pulse loading for auth gate, reservas fetch, and sign-in submit.
-- Automation POST accepts JWT **or** `CRON_SECRET`; GET (cron) same auth.
+- Automation POST accepts JWT **or** `CRON_SECRET`; GET same auth.
 - Pipeline GYG / Viator / Homefans / Propio (Zoho); idempotent persistence.
 - Isolated Postgres tests ≥ 90% coverage; frontend CI path-filtered build.
 - Compose: Postgres + API + frontend.

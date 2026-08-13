@@ -10,8 +10,8 @@ structured reservations operators can trust, while remaining an API platform
 
 ## How it should work
 
-1. Operator (`POST` + JWT/body) or Vercel Cron (`GET` + `CRON_SECRET`)
-   calls `/automation/emails/get-bookings`.
+1. Operator (`POST` + JWT/body) or an external scheduler (`GET` +
+   `CRON_SECRET`) calls `/automation/emails/get-bookings`.
 2. Pipeline fetches unread/matching messages per `booking_providers.yaml`.
 3. Provider-specific extractors map HTML → `ReservaDraft` → `Reserva`
    (`pais_del_visitante` as ISO alpha-2; `price`/`income` per channel).

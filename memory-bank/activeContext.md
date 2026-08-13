@@ -61,7 +61,8 @@ Epic **#41** — frontend ↔ API reservas. Backend operator fields +
 - Real WhatsApp Meta integration (NoOp until Meta approval).
 - Zoho `mark_as_read`; per-user ownership / RBAC on reservas.
 - `correlation_id` ContextVar — no middleware sets it yet.
-- Hourly Colombia-window cron needs Pro (Hobby is once/day).
+- Hourly Colombia-window ingest still needs Pro (Hobby Cron is once/day).
+  API-project Cron was removed; ingest is triggered by an external scheduler.
 - Stored dates eventually all America/Bogota (noted during #46).
 - Frontend does not yet show/edit the new operator fields (#40).
 

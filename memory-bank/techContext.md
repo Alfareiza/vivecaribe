@@ -26,7 +26,7 @@
 
 ## Monorepo layout
 
-- `apps/backend` — API package, tests, migrations, YAML, Dockerfiles, `vercel.json`
+- `apps/backend` — API package, tests, migrations, YAML, Dockerfiles
 - `apps/frontend` — Next.js admin UI + portable Dockerfile
 - Repo root — Compose, CI, README, Memory Bank (no root Docker/Vercel files)
 
@@ -94,7 +94,7 @@ Fixtures refuse to reset any database whose name does not end with `_test`.
 
 | App | Vercel project | Root Directory | Mechanism |
 |-----|----------------|----------------|-----------|
-| API | `vivecaribe` | `apps/backend` | `Dockerfile.vercel` → Fluid Compute; cron in `vercel.json` |
+| API | `vivecaribe` | `apps/backend` | `Dockerfile.vercel` → Fluid Compute |
 | UI | `vivecaribe-frontend` | `apps/frontend` | Next.js native · https://vivecaribe-frontend.vercel.app |
 
 Production DB for API: Supabase transaction pooler (`:6543`) with `NullPool`
