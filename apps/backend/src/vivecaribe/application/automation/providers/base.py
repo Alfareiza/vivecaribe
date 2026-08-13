@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from abc import ABC, abstractmethod
-from datetime import UTC, datetime
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Self
 
@@ -91,7 +91,7 @@ class BaseExtractor(ABC):
 
     @staticmethod
     def parse_datetime(raw: str) -> datetime:
-        """Parse common booking-email datetime shapes as timezone-aware UTC."""
+        """Parse common booking-email datetime shapes (naive wall time)."""
         candidates = (
             "%a, %b %d, %Y",
             "%B %d, %Y %I:%M %p",
@@ -107,9 +107,7 @@ class BaseExtractor(ABC):
                 dt = datetime.strptime(text, fmt)
             except ValueError:
                 continue
-            if dt.tzinfo is None:
-                return dt.replace(tzinfo=UTC)
-            return dt.astimezone(UTC)
+            return dt
         raise ValidationError(f"Invalid datetime: {raw}", field="fecha_evento")
 
     @staticmethod

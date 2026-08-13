@@ -151,7 +151,7 @@ def test_compute_paid_at_gyg_weekday_seventh() -> None:
     # 15 Aug 2026 → 7 Sep 2026 (Monday)
     paid = compute_paid_at(
         BookingProvider.GETYOURGUIDE,
-        datetime(2026, 8, 15, 9, 0, tzinfo=UTC),
+        datetime(2026, 8, 15, 9, 0),
     )
     assert paid is not None
     assert paid.date().isoformat() == "2026-09-07"
@@ -162,7 +162,7 @@ def test_compute_paid_at_viator_saturday_seventh_uses_ninth() -> None:
     # 15 Jan 2026 → 7 Feb 2026 (Saturday) → 9 Feb
     paid = compute_paid_at(
         BookingProvider.VIATOR,
-        datetime(2026, 1, 15, 12, 0, tzinfo=UTC),
+        datetime(2026, 1, 15, 12, 0),
     )
     assert paid is not None
     assert paid.date().isoformat() == "2026-02-09"
@@ -173,7 +173,7 @@ def test_compute_paid_at_gyg_sunday_seventh_uses_ninth() -> None:
     # 15 May 2026 → 7 Jun 2026 (Sunday) → 9 Jun
     paid = compute_paid_at(
         BookingProvider.GETYOURGUIDE,
-        datetime(2026, 5, 15, 12, 0, tzinfo=UTC),
+        datetime(2026, 5, 15, 12, 0),
     )
     assert paid is not None
     assert paid.date().isoformat() == "2026-06-09"
@@ -183,7 +183,7 @@ def test_compute_paid_at_gyg_december_rolls_to_january() -> None:
     """GYG December events pay out in January of the next year."""
     paid = compute_paid_at(
         BookingProvider.GETYOURGUIDE,
-        datetime(2026, 12, 20, 12, 0, tzinfo=UTC),
+        datetime(2026, 12, 20, 12, 0),
     )
     assert paid is not None
     # 7 Jan 2027 is Thursday
@@ -194,7 +194,7 @@ def test_compute_paid_at_propio_next_day() -> None:
     """Propio pays the calendar day after the event."""
     paid = compute_paid_at(
         BookingProvider.PROPIO,
-        datetime(2026, 8, 15, 9, 0, tzinfo=UTC),
+        datetime(2026, 8, 15, 9, 0),
     )
     assert paid is not None
     assert paid.date().isoformat() == "2026-08-16"
@@ -205,7 +205,7 @@ def test_compute_paid_at_homefans_next_thursday() -> None:
     # Saturday 15 Aug 2026 → Thursday 20 Aug 2026
     paid = compute_paid_at(
         BookingProvider.HOMEFANS,
-        datetime(2026, 8, 15, 9, 0, tzinfo=UTC),
+        datetime(2026, 8, 15, 9, 0),
     )
     assert paid is not None
     assert paid.date().isoformat() == "2026-08-20"
@@ -216,7 +216,7 @@ def test_compute_paid_at_homefans_on_thursday_skips_to_next_week() -> None:
     # Thursday 13 Aug 2026 → Thursday 20 Aug 2026
     paid = compute_paid_at(
         BookingProvider.HOMEFANS,
-        datetime(2026, 8, 13, 9, 0, tzinfo=UTC),
+        datetime(2026, 8, 13, 9, 0),
     )
     assert paid is not None
     assert paid.date().isoformat() == "2026-08-20"

@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
-from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
@@ -17,28 +16,12 @@ from vivecaribe.domain.enums import (
 )
 from vivecaribe.domain.reserva import Reserva
 
-_BOGOTA = ZoneInfo("America/Bogota")
 
-
-def _es_hoy(
-    fecha_evento: datetime | None,
-    *,
-    now: datetime | None = None,
-) -> bool:
-    """True when ``fecha_evento`` is today's calendar day in America/Bogota."""
+def _es_hoy(fecha_evento: datetime | None) -> bool:
+    """True when ``fecha_evento`` falls on today's calendar date."""
     if fecha_evento is None:
         return False
-    current = now if now is not None else datetime.now(_BOGOTA)
-    if current.tzinfo is None:
-        current = current.replace(tzinfo=_BOGOTA)
-    else:
-        current = current.astimezone(_BOGOTA)
-    event = (
-        fecha_evento.replace(tzinfo=_BOGOTA)
-        if fecha_evento.tzinfo is None
-        else fecha_evento.astimezone(_BOGOTA)
-    )
-    return event.date() == current.date()
+    return fecha_evento.date() == datetime.now().date()
 
 
 class ReservaCreate(BaseModel):
@@ -131,7 +114,7 @@ class ReservaShortItem(BaseModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def es_hoy(self) -> bool:
-        """Whether ``fecha_evento`` is today in America/Bogota."""
+        """Whether ``fecha_evento`` is today's calendar date."""
         return _es_hoy(self.fecha_evento)
 
 
@@ -143,7 +126,7 @@ class ReservaResponse(Reserva):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def es_hoy(self) -> bool:
-        """Whether ``fecha_evento`` is today in America/Bogota."""
+        """Whether ``fecha_evento`` is today's calendar date."""
         return _es_hoy(self.fecha_evento)
 
 
