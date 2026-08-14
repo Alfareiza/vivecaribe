@@ -233,6 +233,12 @@ def test_reserva_operator_field_defaults() -> None:
     assert reserva.costos is None
 
 
+def test_reserva_sets_tipo_tour_from_football_keywords() -> None:
+    """``check_tipo_tour`` sets football tour when the name matches keywords."""
+    reserva = _sample_reserva(nombre_experiencia="Cartagena Football Match")
+    assert reserva.tipo_tour == TipoTour.FOOTBALL_TOUR
+
+
 def test_reserva_derives_paid_at_on_construction() -> None:
     """``Reserva(...)`` syncs ``paid_at`` from provider + ``fecha_evento``."""
     reserva = _sample_reserva(
