@@ -18,7 +18,7 @@ import type { ReservationListItem } from "@/types/reservation";
 import ProviderLogo from "./ProviderLogo";
 import ReservationDetailModal from "./ReservationDetailModal";
 import { EsHoyStatusDot } from "./StatusDot";
-import { formatDisplayDateTime, formatPrice } from "./reservationUtils";
+import { formatRawDateTime, formatPrice } from "./reservationUtils";
 
 const PAGE_SIZE = 20;
 
@@ -232,7 +232,7 @@ export default function ReservationsTable() {
                           </span>
                         </TableCell>
                         <TableCell className="px-4 py-3 text-start text-theme-sm text-gray-500 dark:text-gray-400">
-                          {formatDisplayDateTime(reservation.fecha_evento)}
+                          {formatRawDateTime(reservation.fecha_evento)}
                         </TableCell>
                         <TableCell className="px-4 py-3 text-start text-theme-sm text-gray-500 dark:text-gray-400">
                           {reservation.participants}

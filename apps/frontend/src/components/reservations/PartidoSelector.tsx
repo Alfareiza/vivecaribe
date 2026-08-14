@@ -5,7 +5,7 @@ import { ApiError } from "@/lib/api";
 import { updateReserva } from "@/lib/reservas";
 import { fetchPartidoById, fetchPartidos } from "@/lib/partidos";
 import type { PartidoListItem } from "@/types/partido";
-import { formatDisplayDateTime } from "./reservationUtils";
+import { formatRawDateTime } from "./reservationUtils";
 
 type PartidoSelectorProps = {
   reservationId: string;
@@ -16,7 +16,7 @@ type PartidoSelectorProps = {
 };
 
 function partidoLabel(partido: PartidoListItem): string {
-  return `${partido.equipo_local} vs ${partido.equipo_visitante} — ${partido.ciudad} (${formatDisplayDateTime(partido.fecha)})`;
+  return `${partido.equipo_local} vs ${partido.equipo_visitante} — ${partido.ciudad} (${formatRawDateTime(partido.fecha)})`;
 }
 
 /** Same calendar day as ``fechaEvento``'s raw Y-M-D, as a UTC day window. */
