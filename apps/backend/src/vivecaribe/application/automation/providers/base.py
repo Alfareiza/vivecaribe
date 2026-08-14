@@ -100,6 +100,7 @@ class BaseExtractor(ABC):
             "%Y-%m-%d %H:%M",
             "%Y-%m-%dT%H:%M:%S%z",
             "%Y-%m-%dT%H:%M:%S",
+            "%H:%M %a, %b %d, %Y"
         )
         text = " ".join(raw.split())
         for fmt in candidates:

@@ -130,7 +130,7 @@ def test_viator_extractor_from_fixture() -> None:
         == "Soccer at the Metropolitan stadium with local fans"
     )
     assert ext.get_ciudad_evento() == "Barranquilla"
-    assert ext.get_dt_evento() == datetime(2026, 8, 1)
+    assert ext.get_dt_evento() == datetime(2026, 8, 1, 17, 00)
     assert ext.get_participants() == 1
     assert ext.get_customer_name() == "Jane Doe"
     assert ext.get_phone() == "+18137350000"
