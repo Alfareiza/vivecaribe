@@ -20,6 +20,7 @@ export type MeetingPoint = "old shoes monument" | "Door-to-Door";
 export type ReservationListItem = {
   id: string;
   booking_provider: BookingProvider | string;
+  estado: ReservaEstado | string;
   ciudad_experiencia: string;
   nombre_experiencia: string;
   participants: number;
@@ -38,7 +39,6 @@ export type Reservation = ReservationListItem & {
   source: string;
   reserva_reference: string;
   sender: string;
-  estado: ReservaEstado | string;
   subject: string;
   fecha_email_recibido: string;
   notificado_whatsapp: boolean;

@@ -100,6 +100,7 @@ class ReservaShortItem(BaseModel):
 
     id: UUID
     booking_provider: BookingProvider
+    estado: ReservaEstado
     ciudad_experiencia: str
     nombre_experiencia: str
     participants: int
