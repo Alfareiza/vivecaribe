@@ -140,6 +140,16 @@ class Reserva(BaseModel):
             object.__setattr__(self, "paid_at", expected)
         return self
 
+    @model_validator(mode="after")
+    def check_tipo_tour(self) -> Self:
+        """Set ``tipo_tour`` when the experience name matches football keywords."""
+        football_tours_keywords = ("match", "soccer", "football")
+        name = self.nombre_experiencia.lower()
+        if any(keyword in name for keyword in football_tours_keywords):
+            # Bypass validate_assignment to avoid re-entrant validation.
+            object.__setattr__(self, "tipo_tour", TipoTour.FOOTBALL_TOUR)
+        return self
+
     def model_copy(
         self,
         *,
