@@ -202,7 +202,6 @@ async def test_get_reserva_unauthenticated_returns_401(
 _LIST_ITEM_KEYS = {
     "id",
     "booking_provider",
-    "estado",
     "ciudad_experiencia",
     "nombre_experiencia",
     "participants",
@@ -320,7 +319,7 @@ async def test_list_reservas_filters_compose(auth_client: AsyncClient) -> None:
     assert body["total"] == 1
     assert len(body["items"]) == 1
     assert body["items"][0]["customer_name"] == "Ada Lovelace"
-    assert body["items"][0]["estado"] == "confirmada"
+    assert "estado" not in body["items"][0]
 
 
 @pytest.mark.asyncio
