@@ -23,7 +23,10 @@ import {
   estimateIncomeCOP,
   formatCOP,
   formatDisplayDateTime,
+  formatNumberCO,
+  formatPaidAtDate,
   formatPrice,
+  formatRawDateTime,
   truncateText,
 } from "./reservationUtils";
 
@@ -44,36 +47,6 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
         {value}
       </dd>
     </>
-  );
-}
-
-function DetailSection({
-  title,
-  children,
-  className = "",
-}: {
-  title: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <section className={className}>
-      <h5 className="mb-2 text-theme-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
-        {title}
-      </h5>
-      <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1.5">
-        {children}
-      </dl>
-    </section>
-  );
-}
-
-/** Micro-header for a subgroup within a DetailSection (e.g. Financiero / Operativo). */
-function SubGroupLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="col-span-2 mt-1 text-theme-xs font-medium text-gray-400 first:mt-0 dark:text-gray-500">
-      {children}
-    </p>
   );
 }
 
@@ -123,7 +96,7 @@ function PercentageBar({ value }: { value: string | null }) {
       <span
         className={`text-sm font-medium tabular-nums ${isNegative ? "text-error-600 dark:text-error-400" : "text-gray-800 dark:text-white/90"}`}
       >
-        {numeric.toFixed(2)}%
+        {Math.round(numeric)} %
       </span>
     </div>
   );
@@ -350,7 +323,7 @@ export default function ReservationDetailModal({
           <p className="mt-1 text-theme-sm text-gray-500 dark:text-gray-400">
             {[
               preview.ciudad_experiencia,
-              formatDisplayDateTime(preview.fecha_evento),
+              formatRawDateTime(preview.fecha_evento),
             ]
               .filter(Boolean)
               .join(" · ")}
@@ -359,70 +332,31 @@ export default function ReservationDetailModal({
 
         {detail ? (
           <div className="max-h-[min(65vh,34rem)] space-y-4 overflow-y-auto pe-1">
-            <DetailSection title="Cliente">
-              <DetailRow label="Nombre" value={detail.customer_name} />
-              <DetailRow label="Personas" value={detail.participants} />
-              <DetailRow label="Teléfono" value={detail.phone || "—"} />
-              <DetailRow
-                label="País"
-                value={detail.pais_del_visitante || "—"}
-              />
-            </DetailSection>
-
             <section>
               <h5 className="mb-2 text-theme-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
-                Resumen
+                Cliente
               </h5>
-              <div className="grid gap-x-6 gap-y-4 rounded-xl border border-gray-100 p-3.5 sm:grid-cols-2 dark:border-gray-800">
+              <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
                 <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1.5">
-                  <SubGroupLabel>Financiero</SubGroupLabel>
+                  <DetailRow label="Nombre" value={detail.customer_name} />
+                  <DetailRow label="Personas" value={detail.participants} />
+                  <DetailRow label="Teléfono" value={detail.phone || "—"} />
                   <DetailRow
-                    label="Ingreso"
-                    value={
-                      <InfoTooltip
-                        label={`El cliente pagó ${formatPrice(detail.price, detail.moneda)} en total`}
-                      >
-                        {formatPrice(detail.income, detail.moneda)}
-                      </InfoTooltip>
-                    }
-                  />
-                  <DetailRow
-                    label="Ingreso est."
-                    value={
-                      <span>
-                        {formatCOP(incomeEstimadoCOP)}
-                        <span className="ml-1 text-theme-xs text-gray-400 dark:text-gray-500">
-                          (TRM {TRM_COP_PLACEHOLDER})
-                        </span>
-                      </span>
-                    }
-                  />
-                  <DetailRow label="Costos" value={formatCOP(detail.costos)} />
-                  <DetailRow label="Profit" value={formatCOP(detail.profit)} />
-                  <DetailRow
-                    label="% Profit"
-                    value={<PercentageBar value={detail.percentage_profit} />}
-                  />
-                  <DetailRow
-                    label="Pago estimado"
-                    value={formatDisplayDateTime(detail.paid_at)}
+                    label="País"
+                    value={detail.pais_del_visitante || "—"}
                   />
                 </dl>
 
                 <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1.5">
-                  <SubGroupLabel>Operativo</SubGroupLabel>
                   <DetailRow
                     label="Menores de edad"
                     value={
-                      <div className="flex items-center gap-2 rounded-lg border border-brand-100 bg-brand-50/40 px-2 py-1 dark:border-brand-500/20 dark:bg-brand-500/5">
+                      <div className="inline-flex items-center rounded-lg border border-brand-100 bg-brand-50/40 px-2 py-1 dark:border-brand-500/20 dark:bg-brand-500/5">
                         <ControlledSwitch
                           checked={detail.menores_de_edad}
                           disabled={isSavingMenores}
                           onChange={handleMenoresDeEdadChange}
                         />
-                        <span className="text-theme-xs text-gray-400 dark:text-gray-500">
-                          {isSavingMenores ? "Guardando…" : "Se guarda al instante"}
-                        </span>
                       </div>
                     }
                   />
@@ -448,6 +382,17 @@ export default function ReservationDetailModal({
                     }
                   />
                   <DetailRow
+                    label="WhatsApp"
+                    value={
+                      <Badge
+                        size="sm"
+                        color={detail.notificado_whatsapp ? "success" : "light"}
+                      >
+                        {detail.notificado_whatsapp ? "Sí" : "No"}
+                      </Badge>
+                    }
+                  />
+                  <DetailRow
                     label="Lugar de recogida"
                     value={(() => {
                       const { display, truncated } = truncateText(
@@ -463,19 +408,46 @@ export default function ReservationDetailModal({
                       );
                     })()}
                   />
-                  <DetailRow
-                    label="WhatsApp"
-                    value={
-                      <Badge
-                        size="sm"
-                        color={detail.notificado_whatsapp ? "success" : "light"}
-                      >
-                        {detail.notificado_whatsapp ? "Sí" : "No"}
-                      </Badge>
-                    }
-                  />
                 </dl>
               </div>
+            </section>
+
+            <section>
+              <h5 className="mb-2 text-theme-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                Resumen
+              </h5>
+              <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1.5 rounded-xl border border-gray-100 p-3.5 dark:border-gray-800">
+                <DetailRow
+                  label="Ingreso"
+                  value={
+                    <InfoTooltip
+                      label={`El cliente pagó ${formatPrice(detail.price, detail.moneda)} en total`}
+                    >
+                      {formatPrice(detail.income, detail.moneda)}
+                    </InfoTooltip>
+                  }
+                />
+                <DetailRow
+                  label="Ingreso est."
+                  value={
+                    <InfoTooltip
+                      label={`TRM Estimada de USD ${formatNumberCO(TRM_COP_PLACEHOLDER)}`}
+                    >
+                      {formatCOP(incomeEstimadoCOP)}
+                    </InfoTooltip>
+                  }
+                />
+                <DetailRow label="Costos" value={formatCOP(detail.costos)} />
+                <DetailRow label="Profit" value={formatCOP(detail.profit)} />
+                <DetailRow
+                  label="% Profit"
+                  value={<PercentageBar value={detail.percentage_profit} />}
+                />
+                <DetailRow
+                  label="Pago estimado"
+                  value={formatPaidAtDate(detail.paid_at)}
+                />
+              </dl>
 
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <div>
