@@ -32,6 +32,7 @@ class TipoTour(StrEnum):
 
     FOOTBALL_TOUR = "football tour"
     CITY_TOUR = "city tour"
+    OTRO = ""
 
 
 class MeetingPoint(StrEnum):
