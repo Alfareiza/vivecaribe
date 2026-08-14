@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { formatDisplayDateTime } from "@/components/reservations/reservationUtils";
+import { formatRawDateTime } from "@/components/reservations/reservationUtils";
 import type { PartidoListItem } from "@/types/partido";
 
 type PartidoCardProps = {
@@ -29,7 +29,7 @@ export default function PartidoCard({ partido, onClick }: PartidoCardProps) {
       </div>
 
       <div className="mt-3 flex w-full items-center justify-between gap-2 text-theme-xs text-gray-500 dark:text-gray-400">
-        <span className="truncate">{formatDisplayDateTime(partido.fecha)}</span>
+        <span className="truncate">{formatRawDateTime(partido.fecha)}</span>
         <span className="truncate">{partido.ciudad}</span>
       </div>
     </button>

@@ -6,7 +6,7 @@ import Label from "@/components/form/Label";
 import Input from "@/components/form/input/InputField";
 import Select from "@/components/form/Select";
 import { Modal } from "@/components/ui/modal";
-import { formatDisplayDateTime } from "@/components/reservations/reservationUtils";
+import { formatRawDateTime } from "@/components/reservations/reservationUtils";
 import { ApiError } from "@/lib/api";
 import {
   createPartido,
@@ -287,7 +287,7 @@ export default function PartidoModal({
                       {reserva.customer_name}
                     </span>
                     <span className="shrink-0 text-theme-xs text-gray-400 dark:text-gray-500">
-                      {formatDisplayDateTime(reserva.fecha_evento)}
+                      {formatRawDateTime(reserva.fecha_evento)}
                     </span>
                   </li>
                 ))}

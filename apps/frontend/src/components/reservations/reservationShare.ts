@@ -1,37 +1,19 @@
 import type { Reservation } from "@/types/reservation";
-
-const BOGOTA_TZ = "America/Bogota";
+import { formatRawDateTime } from "./reservationUtils";
 
 /** Digits only for wa.me; strips leading + and non-digits. */
 export function phoneDigitsForWhatsApp(phone: string): string {
   return phone.replace(/\D/g, "");
 }
 
-function formatBogotaDateTime(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  return new Intl.DateTimeFormat("es-CO", {
-    timeZone: BOGOTA_TZ,
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
-}
-
-/** Calendar YYYY-MM-DD in America/Bogota. */
+/**
+ * Calendar YYYY-MM-DD read straight off the ISO string's own digits, ignoring
+ * any offset/"Z" suffix — see formatRawDateTime in reservationUtils for why
+ * fecha_evento can't be treated as a real UTC instant.
+ */
 export function bogotaDateKey(iso: string): string | null {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return null;
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: BOGOTA_TZ,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(date);
-  const y = parts.find((p) => p.type === "year")?.value;
-  const m = parts.find((p) => p.type === "month")?.value;
-  const d = parts.find((p) => p.type === "day")?.value;
-  if (!y || !m || !d) return null;
-  return `${y}-${m}-${d}`;
+  const match = /^(\d{4}-\d{2}-\d{2})/.exec(iso);
+  return match ? match[1] : null;
 }
 
 function nextDayKey(yyyyMmDd: string): string {
@@ -53,7 +35,7 @@ export function buildWhatsAppShareUrl(reservation: Reservation): string | null {
   if (!digits) return null;
 
   const fecha = reservation.fecha_evento
-    ? formatBogotaDateTime(reservation.fecha_evento)
+    ? formatRawDateTime(reservation.fecha_evento)
     : "Sin fecha";
 
   const lines = [
