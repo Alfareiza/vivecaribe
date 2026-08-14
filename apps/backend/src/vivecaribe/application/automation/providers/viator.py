@@ -60,7 +60,9 @@ class ViatorExtractor(BaseExtractor):
 
     def get_dt_evento(self) -> datetime:
         """Return the travel date."""
-        return self.parse_datetime(self._value_after_label("Fecha del viaje"))
+        momento = self._value_after_label("Código de la categoría de la excursión o actividad")
+        momento = momento.replace('TG1~', '')
+        return self.parse_datetime(f"{momento} {self._value_after_label("Fecha del viaje")}")
 
     def get_participants(self) -> int:
         """Return traveler count from ``Viajeros`` (e.g. ``1 adulto``)."""
