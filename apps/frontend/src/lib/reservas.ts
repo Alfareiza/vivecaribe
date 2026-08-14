@@ -39,7 +39,7 @@ export async function fetchReservaById(id: string): Promise<Reservation> {
 }
 
 export type ReservaUpdatePayload = Partial<
-  Pick<Reservation, "menores_de_edad">
+  Pick<Reservation, "menores_de_edad" | "partido_id">
 >;
 
 export async function updateReserva(

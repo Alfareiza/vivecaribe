@@ -14,6 +14,7 @@ import {
   PageIcon,
   PieChartIcon,
   PlugInIcon,
+  ShootingStarIcon,
   TableIcon,
   UserCircleIcon,
 } from "../icons/index";
@@ -36,6 +37,11 @@ const navItems: NavItem[] = [
     icon: <TableIcon />,
     name: "Reservas",
     path: "/reservas",
+  },
+  {
+    icon: <ShootingStarIcon />,
+    name: "Partidos",
+    path: "/partidos",
   },
   // {
   //   icon: <CalenderIcon />,

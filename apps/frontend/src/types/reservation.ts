@@ -30,6 +30,7 @@ export type ReservationListItem = {
   moneda: string;
   price: string;
   income: string;
+  partido_id: string | null;
   es_hoy: boolean;
 };
 

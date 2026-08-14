@@ -212,6 +212,7 @@ _LIST_ITEM_KEYS = {
     "moneda",
     "price",
     "income",
+    "partido_id",
     "es_hoy",
 }
 
