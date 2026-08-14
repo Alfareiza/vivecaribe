@@ -57,6 +57,7 @@ class ReservaCreate(BaseModel):
     menores_de_edad: bool = False
     email_message_id: UUID | None = None
     user_id: UUID | None = None
+    partido_id: UUID | None = None
 
 
 class ReservaUpdate(BaseModel):
@@ -91,6 +92,7 @@ class ReservaUpdate(BaseModel):
     profit: Decimal | None = None
     percentage_profit: Decimal | None = None
     menores_de_edad: bool | None = None
+    partido_id: UUID | None = None
 
 
 class ReservaShortItem(BaseModel):
@@ -110,6 +112,7 @@ class ReservaShortItem(BaseModel):
     moneda: str
     price: Decimal
     income: Decimal
+    partido_id: UUID | None
 
     @computed_field  # type: ignore[prop-decorator]
     @property

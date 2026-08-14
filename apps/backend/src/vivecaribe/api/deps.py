@@ -16,6 +16,7 @@ from vivecaribe.domain.errors import DomainError
 from vivecaribe.domain.user import User
 from vivecaribe.infrastructure.db.repositories import (
     SqlAlchemyEmailMessageRepository,
+    SqlAlchemyPartidoRepository,
     SqlAlchemyRefreshTokenRepository,
     SqlAlchemyReservaRepository,
     SqlAlchemyUserRepository,
@@ -101,6 +102,13 @@ def get_reserva_repository(
     return SqlAlchemyReservaRepository(session)
 
 
+def get_partido_repository(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> SqlAlchemyPartidoRepository:
+    """Build a partido repository for the current request session."""
+    return SqlAlchemyPartidoRepository(session)
+
+
 def _unauthorized(detail: str) -> HTTPException:
     """Build a 401 response that advertises Bearer auth."""
     return HTTPException(
@@ -177,6 +185,10 @@ RefreshTokenRepo = Annotated[
 ReservaRepo = Annotated[
     SqlAlchemyReservaRepository,
     Depends(get_reserva_repository),
+]
+PartidoRepo = Annotated[
+    SqlAlchemyPartidoRepository,
+    Depends(get_partido_repository),
 ]
 PasswordHasherDep = Annotated[Argon2PasswordHasher, Depends(get_password_hasher)]
 TokenServiceDep = Annotated[JwtTokenService, Depends(get_token_service)]

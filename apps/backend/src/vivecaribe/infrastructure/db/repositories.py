@@ -1,4 +1,4 @@
-"""SQLAlchemy repositories for users, reservas, and email messages."""
+"""SQLAlchemy repositories for users, reservas, partidos, and email messages."""
 
 from __future__ import annotations
 
@@ -10,11 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from vivecaribe.domain.email_message import EmailMessage
 from vivecaribe.domain.enums import BookingProvider, ReservaEstado
+from vivecaribe.domain.partido import Partido
 from vivecaribe.domain.refresh_token import RefreshToken
 from vivecaribe.domain.reserva import Reserva
 from vivecaribe.domain.user import User
 from vivecaribe.infrastructure.db.models import (
     EmailMessageORM,
+    PartidoORM,
     RefreshTokenORM,
     ReservaORM,
     UserORM,
@@ -253,6 +255,127 @@ class SqlAlchemyReservaRepository:
             select(ReservaORM).where(
                 ReservaORM.id == reserva_id,
                 ReservaORM.deleted_at.is_(None),
+            ),
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            return False
+        now = datetime.now(UTC)
+        row.deleted_at = now
+        row.updated_at = now
+        await self._session.flush()
+        return True
+
+    async def list_by_partido(self, partido_id: UUID) -> list[Reserva]:
+        """Return all non-deleted reservations linked to ``partido_id``."""
+        result = await self._session.execute(
+            select(ReservaORM).where(
+                ReservaORM.partido_id == partido_id,
+                ReservaORM.deleted_at.is_(None),
+            ),
+        )
+        return [Reserva.model_validate(row) for row in result.scalars()]
+
+    async def unlink_partido(self, partido_id: UUID) -> int:
+        """Clear ``partido_id`` on every reservation linked to it. Return count."""
+        result = await self._session.execute(
+            select(ReservaORM).where(ReservaORM.partido_id == partido_id),
+        )
+        rows = result.scalars().all()
+        now = datetime.now(UTC)
+        for row in rows:
+            row.partido_id = None
+            row.updated_at = now
+        await self._session.flush()
+        return len(rows)
+
+
+class SqlAlchemyPartidoRepository:
+    """Partido persistence backed by PostgreSQL."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        """Bind this repository to an open async session."""
+        self._session = session
+
+    async def get_by_id(self, partido_id: UUID) -> Partido | None:
+        """Return a non-deleted partido by primary key, or ``None``."""
+        result = await self._session.execute(
+            select(PartidoORM).where(
+                PartidoORM.id == partido_id,
+                PartidoORM.deleted_at.is_(None),
+            ),
+        )
+        row = result.scalar_one_or_none()
+        return Partido.model_validate(row) if row else None
+
+    async def save(self, partido: Partido) -> Partido:
+        """Insert or update a partido and return the persisted entity."""
+        row = await self._session.get(PartidoORM, partido.id)
+        payload = partido.model_dump()
+        payload["nombre_campeonato"] = partido.nombre_campeonato.value
+        payload["estadio"] = partido.estadio.value
+        payload["ciudad"] = partido.ciudad.value
+        if row is None:
+            row = PartidoORM(**payload)
+            self._session.add(row)
+        else:
+            _apply_fields(row, payload)
+        await self._session.flush()
+        await self._session.refresh(row)
+        return Partido.model_validate(row)
+
+    async def list(
+        self,
+        *,
+        skip: int = 0,
+        limit: int = 20,
+        ciudad: str | None = None,
+        fecha_from: datetime | None = None,
+        fecha_to: datetime | None = None,
+        q: str | None = None,
+    ) -> tuple[list[Partido], int]:
+        """Return a filtered page of non-deleted partidos.
+
+        Filters compose with AND. ``q`` does a case-insensitive search across
+        ``equipo_local``, ``equipo_visitante``, and ``ciudad``. Ordered by
+        ``fecha`` ascending (soonest first).
+        """
+        filters: list[ColumnElement[bool]] = [PartidoORM.deleted_at.is_(None)]
+        if ciudad is not None:
+            filters.append(PartidoORM.ciudad.ilike(f"%{ciudad}%"))
+        if fecha_from is not None:
+            filters.append(PartidoORM.fecha >= fecha_from)
+        if fecha_to is not None:
+            filters.append(PartidoORM.fecha <= fecha_to)
+        if q is not None:
+            pattern = f"%{q}%"
+            filters.append(
+                PartidoORM.equipo_local.ilike(pattern)
+                | PartidoORM.equipo_visitante.ilike(pattern)
+                | PartidoORM.ciudad.ilike(pattern),
+            )
+
+        where_clause = and_(*filters)
+        total_result = await self._session.execute(
+            select(func.count()).select_from(PartidoORM).where(where_clause),
+        )
+        total = total_result.scalar_one()
+        result = await self._session.execute(
+            select(PartidoORM)
+            .where(where_clause)
+            .order_by(PartidoORM.fecha.asc())
+            .offset(skip)
+            .limit(limit),
+        )
+        items = [Partido.model_validate(row) for row in result.scalars()]
+        return items, total
+
+    async def soft_delete(self, partido_id: UUID) -> bool:
+        """Mark a partido as deleted. Return ``False`` if missing."""
+        result = await self._session.execute(
+            select(PartidoORM).where(
+                PartidoORM.id == partido_id,
+                PartidoORM.deleted_at.is_(None),
             ),
         )
         row = result.scalar_one_or_none()

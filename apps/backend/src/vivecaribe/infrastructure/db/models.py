@@ -1,4 +1,4 @@
-"""SQLAlchemy ORM models for users, email_messages, and reservas."""
+"""SQLAlchemy ORM models for users, email_messages, reservas, and partidos."""
 
 from __future__ import annotations
 
@@ -162,6 +162,12 @@ class ReservaORM(Base):
         nullable=True,
         index=True,
     )
+    partido_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("partidos.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     source: Mapped[str] = mapped_column(String(64), nullable=False)
     booking_provider: Mapped[str] = mapped_column(String(32), nullable=False)
     reserva_reference: Mapped[str] = mapped_column(String(512), nullable=False)
@@ -215,6 +221,44 @@ class ReservaORM(Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class PartidoORM(Base):
+    """Persisted football match, optionally linked to many reservas."""
+
+    __tablename__ = "partidos"
+    __table_args__ = (
+        Index("ix_partidos_fecha", "fecha"),
+        Index("ix_partidos_ciudad", "ciudad"),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+    )
+    equipo_local: Mapped[str] = mapped_column(String(25), nullable=False)
+    equipo_visitante: Mapped[str] = mapped_column(String(25), nullable=False)
+    nombre_campeonato: Mapped[str] = mapped_column(String(50), nullable=False)
+    estadio: Mapped[str] = mapped_column(String(25), nullable=False)
+    fecha: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ciudad: Mapped[str] = mapped_column(String(50), nullable=False)
     deleted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,

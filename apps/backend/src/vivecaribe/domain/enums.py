@@ -40,3 +40,32 @@ class MeetingPoint(StrEnum):
 
     OLD_SHOES_MONUMENT = "old shoes monument"
     DOOR_TO_DOOR = "Door-to-Door"
+
+
+class Campeonato(StrEnum):
+    """Championship a ``Partido`` belongs to."""
+
+    COLOMBIAN_CUP = "Colombian Cup"
+    COLOMBIAN_LEAGUE = "Colombian League"
+    COPA_LIBERTADORES = "Copa Libertadores"
+    COPA_SUDAMERICANA = "Copa Sudamericana"
+    COLOMBIAN_SECOND_DIVISION_LEAGUE = "Colombian Second Division League"
+
+
+class Estadio(StrEnum):
+    """Stadium where a ``Partido`` is played."""
+
+    JAIME_MORON = "Jaime Morón"
+    ROMELIO_MARTINEZ = "Romelio Martínez"
+    METROPOLITANO = "Metropolitano"
+
+
+class Ciudad(StrEnum):
+    """City where a ``Partido`` is played.
+
+    Registering a new city is a one-line addition here — the column is a
+    plain ``VARCHAR`` (no DB-level enum), so no migration is needed.
+    """
+
+    BARRANQUILLA = "Barranquilla"
+    CARTAGENA = "Cartagena"

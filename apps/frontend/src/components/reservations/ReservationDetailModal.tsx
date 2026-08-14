@@ -9,6 +9,7 @@ import { AngleDownIcon, CalendarIcon, WhatsappIcon } from "@/icons";
 import { ApiError } from "@/lib/api";
 import { fetchReservaById, updateReserva } from "@/lib/reservas";
 import type { Reservation, ReservationListItem } from "@/types/reservation";
+import PartidoSelector from "./PartidoSelector";
 import ProviderLogo from "./ProviderLogo";
 import ShareMenu from "./ShareMenu";
 import { EsHoyStatusDot } from "./StatusDot";
@@ -410,6 +411,23 @@ export default function ReservationDetailModal({
                   />
                 </dl>
               </div>
+            </section>
+
+            <section>
+              <h5 className="mb-2 text-theme-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                Partido asociado
+              </h5>
+              <PartidoSelector
+                reservationId={detail.id}
+                ciudadExperiencia={detail.ciudad_experiencia}
+                fechaEvento={detail.fecha_evento}
+                partidoId={detail.partido_id}
+                onChanged={(next) =>
+                  setDetail((current) =>
+                    current ? { ...current, partido_id: next } : current,
+                  )
+                }
+              />
             </section>
 
             <section>
