@@ -43,6 +43,45 @@ export function formatDisplayDateTime(iso: string | null | undefined): string {
   }).format(date);
 }
 
+/**
+ * Same "es-CO" medium/short shape as formatDisplayDateTime, but reads the
+ * Y-M-D H:M straight off the ISO string and ignores any offset/"Z" suffix —
+ * for values stored as naive wall-clock time that a DB round trip mislabels
+ * with a UTC offset (fecha_evento). Not for genuinely timezone-aware values.
+ */
+export function formatRawDateTime(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(iso);
+  if (!match) return iso;
+  const [, year, month, day, hour, minute] = match;
+  const asUtc = new Date(
+    Date.UTC(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+    ),
+  );
+  return new Intl.DateTimeFormat("es-CO", {
+    timeZone: "UTC",
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(asUtc);
+}
+
+/** "2 de agosto" — day + full Spanish month name, no time, no year. */
+export function formatPaidAtDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return new Intl.DateTimeFormat("es-CO", {
+    timeZone: "America/Bogota",
+    day: "numeric",
+    month: "long",
+  }).format(date);
+}
+
 export function formatPrice(price: string, moneda: string): string {
   return `${moneda} ${price}`;
 }
@@ -59,6 +98,12 @@ export function formatCOP(value: number | string | null | undefined): string {
     currency: "COP",
     maximumFractionDigits: 0,
   }).format(amount);
+}
+
+export function formatNumberCO(value: number): string {
+  return new Intl.NumberFormat("es-CO", { maximumFractionDigits: 0 }).format(
+    value,
+  );
 }
 
 /** income x TRM placeholder — computed client-side, not a real conversion. */
