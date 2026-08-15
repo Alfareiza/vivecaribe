@@ -28,7 +28,13 @@ export default function PartidosGrid() {
         limit: 100,
         q: search.trim() || undefined,
       });
-      setItems(response.items);
+      // Sort by fecha descending (newest first)
+      const sorted = [...response.items].sort((a, b) => {
+        const dateA = new Date(a.fecha).getTime();
+        const dateB = new Date(b.fecha).getTime();
+        return dateB - dateA;
+      });
+      setItems(sorted);
       setTotal(response.total);
     } catch {
       setItems([]);

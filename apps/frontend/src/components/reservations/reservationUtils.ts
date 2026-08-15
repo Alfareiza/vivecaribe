@@ -162,3 +162,31 @@ export function reservationInDateRange(
   if (to && key > to) return false;
   return true;
 }
+
+/** Get today's date in Bogota timezone as YYYY-MM-DD string. */
+function getTodayInBogota(): string {
+  const now = new Date();
+  const bogotaFormatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Bogota",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  return bogotaFormatter.format(now);
+}
+
+/**
+ * Determine if an ISO datetime (naive wall-clock time) is in the past, today, or future.
+ * Compares YYYY-MM-DD portion with today in America/Bogota timezone.
+ */
+export type DateState = "past" | "today" | "future";
+
+export function getDateState(iso: string | null | undefined): DateState {
+  if (!iso) return "future";
+  const dateKey = toLocalDateKey(iso);
+  const today = getTodayInBogota();
+
+  if (dateKey < today) return "past";
+  if (dateKey === today) return "today";
+  return "future";
+}

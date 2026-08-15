@@ -7,6 +7,7 @@ import Input from "@/components/form/input/InputField";
 import Select from "@/components/form/Select";
 import { Modal } from "@/components/ui/modal";
 import { formatRawDateTime } from "@/components/reservations/reservationUtils";
+import ProviderLogo from "@/components/reservations/ProviderLogo";
 import { ApiError } from "@/lib/api";
 import {
   createPartido,
@@ -16,6 +17,8 @@ import {
 } from "@/lib/partidos";
 import { CAMPEONATO_OPTIONS, CIUDAD_OPTIONS, ESTADIO_OPTIONS } from "@/types/partido";
 import type { Partido } from "@/types/partido";
+import type { ReservationListItem } from "@/types/reservation";
+import ReservationDetailModal from "@/components/reservations/ReservationDetailModal";
 
 type PartidoModalProps = {
   /** ``null`` opens the modal in create mode. */
@@ -76,10 +79,22 @@ export default function PartidoModal({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedReserva, setSelectedReserva] = useState<ReservationListItem | null>(null);
+  const [isReservaModalOpen, setIsReservaModalOpen] = useState(false);
 
   useEffect(() => {
-    if (!isOpen) return;
+    // Reset state when modal closes
+    if (!isOpen) {
+      setDetail(null);
+      setForm(EMPTY_FORM);
+      setError(null);
+      setLoading(false);
+      setSelectedReserva(null);
+      setIsReservaModalOpen(false);
+      return;
+    }
 
+    // Reset state when switching to create mode
     if (isCreate) {
       setDetail(null);
       setForm(EMPTY_FORM);
@@ -88,6 +103,7 @@ export default function PartidoModal({
       return;
     }
 
+    // Load detail when switching to edit mode
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -121,6 +137,19 @@ export default function PartidoModal({
       cancelled = true;
     };
   }, [isOpen, isCreate, partidoId]);
+
+  /** Auto-select ciudad based on equipo_local name. */
+  useEffect(() => {
+    if (!isCreate || !form.equipo_local) return;
+    const equipo = form.equipo_local.toLowerCase();
+    if (equipo.includes("junior")) {
+      setForm((prev) => ({ ...prev, ciudad: "Barranquilla" }));
+      setForm((prev) => ({ ...prev, estadio: "Romelio Martínez" }));
+    } else if (equipo.includes("cartagena")) {
+      setForm((prev) => ({ ...prev, ciudad: "Cartagena" }));
+      setForm((prev) => ({ ...prev, estadio: "Jaime Morón" }));
+    }
+  }, [form.equipo_local, isCreate]);
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -212,7 +241,8 @@ export default function PartidoModal({
         </p>
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2">
+          {/* Key ensures form fields reset when switching between create/edit modes */}
+          <div key={`form-${isCreate}`} className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2">
             <div>
               <Label>Equipo local</Label>
               <Input
@@ -247,6 +277,7 @@ export default function PartidoModal({
             <div>
               <Label>Estadio</Label>
               <Select
+                key={`estadio-${form.estadio}`}
                 options={estadioOptions}
                 placeholder="Selecciona un estadio"
                 defaultValue={form.estadio}
@@ -264,6 +295,7 @@ export default function PartidoModal({
             <div>
               <Label>Ciudad</Label>
               <Select
+                key={`ciudad-${form.ciudad}`}
                 options={ciudadOptions}
                 placeholder="Selecciona una ciudad"
                 defaultValue={form.ciudad}
@@ -274,20 +306,48 @@ export default function PartidoModal({
 
           {detail && detail.reservas.length > 0 ? (
             <div className="mt-5">
-              <h5 className="mb-2 text-theme-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
-                Reservas vinculadas ({detail.reservas.length})
-              </h5>
+              <div className="mb-3 flex items-center justify-between">
+                <h5 className="text-theme-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                  Reservas vinculadas ({detail.reservas.length})
+                </h5>
+                <div className="text-right">
+                  <p className="text-theme-xs font-medium text-gray-500 dark:text-gray-400">
+                    Total participantes
+                  </p>
+                  <p className="text-lg font-semibold text-gray-800 dark:text-white/90">
+                    {detail.reservas.reduce((sum, r) => sum + r.participants, 0)}
+                  </p>
+                </div>
+              </div>
               <ul className="space-y-1.5 rounded-xl border border-gray-100 p-3 dark:border-gray-800">
                 {detail.reservas.map((reserva) => (
                   <li
                     key={reserva.id}
-                    className="flex items-center justify-between gap-3 text-theme-sm"
+                    className="flex items-center justify-between gap-3"
                   >
-                    <span className="min-w-0 truncate text-gray-700 dark:text-gray-300">
-                      {reserva.customer_name}
-                    </span>
-                    <span className="shrink-0 text-theme-xs text-gray-400 dark:text-gray-500">
-                      {formatRawDateTime(reserva.fecha_evento)}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedReserva(reserva);
+                        setIsReservaModalOpen(true);
+                      }}
+                      className="group flex min-w-0 flex-1 flex-col text-left transition-colors hover:text-orange-600 dark:hover:text-orange-400"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <ProviderLogo
+                          provider={reserva.booking_provider}
+                          size={20}
+                        />
+                        <span className="min-w-0 truncate text-theme-sm font-medium text-gray-700 group-hover:text-orange-600 dark:text-gray-300 dark:group-hover:text-orange-400">
+                          {reserva.customer_name}
+                        </span>
+                      </div>
+                      <span className="mt-0.5 ml-6 text-theme-xs text-gray-500 dark:text-gray-400">
+                        {formatRawDateTime(reserva.fecha_evento)}
+                      </span>
+                    </button>
+                    <span className="shrink-0 text-theme-sm font-medium text-gray-700 dark:text-gray-300">
+                      {reserva.participants} pax
                     </span>
                   </li>
                 ))}
@@ -324,6 +384,15 @@ export default function PartidoModal({
           </div>
         </>
       )}
+
+      <ReservationDetailModal
+        reservation={selectedReserva}
+        isOpen={isReservaModalOpen}
+        onClose={() => {
+          setIsReservaModalOpen(false);
+          setSelectedReserva(null);
+        }}
+      />
     </Modal>
   );
 }
