@@ -333,14 +333,18 @@ class SqlAlchemyPartidoRepository:
         fecha_from: datetime | None = None,
         fecha_to: datetime | None = None,
         q: str | None = None,
-    ) -> tuple[list[tuple[Partido, int]], int]:
-        """Return a filtered page of non-deleted partidos with reservas count.
+    ) -> tuple[list[dict[str, object]], int]:
+        """Return a filtered page of non-deleted partidos, each with a reservas_count.
 
-        Each item is a tuple of (Partido, reservas_count). Filters compose with AND.
-        ``q`` does a case-insensitive search across ``equipo_local``, ``equipo_visitante``,
-        and ``ciudad``. Ordered by ``fecha`` ascending (soonest first).
+        Filters compose with AND. ``q`` does a case-insensitive search across
+        ``equipo_local``, ``equipo_visitante``, and ``ciudad``. Ordered by
+        ``fecha`` ascending (soonest first).
 
-        Uses LEFT JOIN to count linked reservas in a single query (no N+1).
+        Each item is a plain dict (partido fields + ``reservas_count``), built
+        from a single LEFT JOIN + COUNT query — no N+1. The non-deleted filter
+        on reservas lives in the join's ON clause, not WHERE, so a partido
+        whose reservas are all soft-deleted still appears (with count 0)
+        instead of being dropped from the page entirely.
         """
         filters: list[ColumnElement[bool]] = [PartidoORM.deleted_at.is_(None)]
         if ciudad is not None:
@@ -359,25 +363,21 @@ class SqlAlchemyPartidoRepository:
 
         where_clause = and_(*filters)
 
-        # Query total count (before pagination)
         total_result = await self._session.execute(
-            select(func.count(PartidoORM.id.distinct()))
-            .select_from(PartidoORM)
-            .where(where_clause),
+            select(func.count()).select_from(PartidoORM).where(where_clause),
         )
         total = total_result.scalar_one()
 
-        # Query with LEFT JOIN to count reservas in single statement (no N+1)
-        reservas_count = func.count(ReservaORM.id).label("reservas_count")
         result = await self._session.execute(
-            select(PartidoORM, reservas_count)
-            .outerjoin(ReservaORM, ReservaORM.partido_id == PartidoORM.id)
-            .where(
+            select(PartidoORM, func.count(ReservaORM.id).label("reservas_count"))
+            .outerjoin(
+                ReservaORM,
                 and_(
-                    where_clause,
-                    ReservaORM.deleted_at.is_(None),  # Only count non-deleted reservas
-                )
+                    ReservaORM.partido_id == PartidoORM.id,
+                    ReservaORM.deleted_at.is_(None),
+                ),
             )
+            .where(where_clause)
             .group_by(PartidoORM.id)
             .order_by(PartidoORM.fecha.asc())
             .offset(skip)
@@ -385,8 +385,8 @@ class SqlAlchemyPartidoRepository:
         )
 
         items = [
-            (Partido.model_validate(row[0]), row[1])
-            for row in result.all()
+            {**Partido.model_validate(row).model_dump(), "reservas_count": count}
+            for row, count in result.all()
         ]
         return items, total
 
