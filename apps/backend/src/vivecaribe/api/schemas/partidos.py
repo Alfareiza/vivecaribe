@@ -39,7 +39,11 @@ class PartidoUpdate(BaseModel):
 
 
 class PartidoShortItem(BaseModel):
-    """Slim partido row for ``GET /partidos`` grid cards."""
+    """Slim partido row for ``GET /partidos`` grid cards, with reservas count.
+
+    ``reservas_count`` is computed via LEFT JOIN + COUNT in the repository query
+    (no N+1 queries). Frontend uses this to show the badge count.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -50,6 +54,7 @@ class PartidoShortItem(BaseModel):
     estadio: Estadio
     fecha: datetime
     ciudad: Ciudad
+    reservas_count: int = 0
 
 
 class PartidoResponse(Partido):

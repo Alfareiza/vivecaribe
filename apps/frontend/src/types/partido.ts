@@ -39,7 +39,9 @@ export type PartidoListItem = {
   estadio: Estadio | string;
   fecha: string;
   ciudad: Ciudad | string;
-  /** Optional: included if API response includes related reservas (for UI features). */
+  /** Count of linked non-deleted reservas (computed via LEFT JOIN in backend). */
+  reservas_count: number;
+  /** Full reservas array only included in detail response (GET /partidos/{id}). */
   reservas?: ReservationListItem[];
 };
 

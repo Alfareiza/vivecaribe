@@ -333,12 +333,14 @@ class SqlAlchemyPartidoRepository:
         fecha_from: datetime | None = None,
         fecha_to: datetime | None = None,
         q: str | None = None,
-    ) -> tuple[list[Partido], int]:
-        """Return a filtered page of non-deleted partidos.
+    ) -> tuple[list[tuple[Partido, int]], int]:
+        """Return a filtered page of non-deleted partidos with reservas count.
 
-        Filters compose with AND. ``q`` does a case-insensitive search across
-        ``equipo_local``, ``equipo_visitante``, and ``ciudad``. Ordered by
-        ``fecha`` ascending (soonest first).
+        Each item is a tuple of (Partido, reservas_count). Filters compose with AND.
+        ``q`` does a case-insensitive search across ``equipo_local``, ``equipo_visitante``,
+        and ``ciudad``. Ordered by ``fecha`` ascending (soonest first).
+
+        Uses LEFT JOIN to count linked reservas in a single query (no N+1).
         """
         filters: list[ColumnElement[bool]] = [PartidoORM.deleted_at.is_(None)]
         if ciudad is not None:
@@ -356,18 +358,36 @@ class SqlAlchemyPartidoRepository:
             )
 
         where_clause = and_(*filters)
+
+        # Query total count (before pagination)
         total_result = await self._session.execute(
-            select(func.count()).select_from(PartidoORM).where(where_clause),
+            select(func.count(PartidoORM.id.distinct()))
+            .select_from(PartidoORM)
+            .where(where_clause),
         )
         total = total_result.scalar_one()
+
+        # Query with LEFT JOIN to count reservas in single statement (no N+1)
+        reservas_count = func.count(ReservaORM.id).label("reservas_count")
         result = await self._session.execute(
-            select(PartidoORM)
-            .where(where_clause)
+            select(PartidoORM, reservas_count)
+            .outerjoin(ReservaORM, ReservaORM.partido_id == PartidoORM.id)
+            .where(
+                and_(
+                    where_clause,
+                    ReservaORM.deleted_at.is_(None),  # Only count non-deleted reservas
+                )
+            )
+            .group_by(PartidoORM.id)
             .order_by(PartidoORM.fecha.asc())
             .offset(skip)
             .limit(limit),
         )
-        items = [Partido.model_validate(row) for row in result.scalars()]
+
+        items = [
+            (Partido.model_validate(row[0]), row[1])
+            for row in result.all()
+        ]
         return items, total
 
     async def soft_delete(self, partido_id: UUID) -> bool:
