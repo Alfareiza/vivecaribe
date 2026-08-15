@@ -83,10 +83,7 @@ async def list_partidos(
     )
     return PartidoListResponse(
         total=total,
-        items=[
-            PartidoShortItem.model_validate(partido, context={"reservas_count": count})
-            for partido, count in items
-        ],
+        items=[PartidoShortItem.model_validate(item) for item in items],
     )
 
 
