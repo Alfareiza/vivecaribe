@@ -39,6 +39,8 @@ export type PartidoListItem = {
   estadio: Estadio | string;
   fecha: string;
   ciudad: Ciudad | string;
+  /** Optional: included if API response includes related reservas (for UI features). */
+  reservas?: ReservationListItem[];
 };
 
 /** Full detail from ``GET /partidos/{id}`` (`PartidoResponse`). */
