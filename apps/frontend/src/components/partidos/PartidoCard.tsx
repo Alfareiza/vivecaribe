@@ -11,7 +11,7 @@ type PartidoCardProps = {
 
 export default function PartidoCard({ partido, onClick }: PartidoCardProps) {
   const dateState = getDateState(partido.fecha);
-  const reservaCount = partido.reservas?.length ?? 0;
+  const reservaCount = partido.reservas_count;
   const isPast = dateState === "past";
   const isToday = dateState === "today";
 

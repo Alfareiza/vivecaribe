@@ -68,10 +68,10 @@ async def list_partidos(
         Query(description="Search equipo_local, equipo_visitante, ciudad"),
     ] = None,
 ) -> PartidoListResponse:
-    """Return a filtered, paginated list of partidos (JWT required).
+    """Return a filtered, paginated list of partidos with reservas count (JWT required).
 
     Filters compose with AND. Omitted params mean no constraint. Ordered by
-    ``fecha`` ascending (soonest first).
+    ``fecha`` ascending (soonest first). Uses single LEFT JOIN query (no N+1).
     """
     items, total = await partidos.list(
         skip=skip,
@@ -83,7 +83,10 @@ async def list_partidos(
     )
     return PartidoListResponse(
         total=total,
-        items=[PartidoShortItem.model_validate(item) for item in items],
+        items=[
+            PartidoShortItem.model_validate(partido, context={"reservas_count": count})
+            for partido, count in items
+        ],
     )
 
 
