@@ -6,10 +6,32 @@ import Input from "@/components/form/input/InputField";
 import InlineLoading from "@/components/ui/loading/InlineLoading";
 import { PlusIcon } from "@/icons";
 import { useModal } from "@/hooks/useModal";
+import { getDateState } from "@/components/reservations/reservationUtils";
 import { fetchPartidos } from "@/lib/partidos";
 import type { PartidoListItem } from "@/types/partido";
 import PartidoCard from "./PartidoCard";
 import PartidoModal from "./PartidoModal";
+
+/** Upcoming (today + future) ascending, past descending (nearest to today first). */
+function splitAndSortPartidos(items: PartidoListItem[]): {
+  upcoming: PartidoListItem[];
+  past: PartidoListItem[];
+} {
+  const upcoming: PartidoListItem[] = [];
+  const past: PartidoListItem[] = [];
+  for (const partido of items) {
+    if (getDateState(partido.fecha) === "past") {
+      past.push(partido);
+    } else {
+      upcoming.push(partido);
+    }
+  }
+  upcoming.sort(
+    (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime(),
+  );
+  past.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+  return { upcoming, past };
+}
 
 export default function PartidosGrid() {
   const { isOpen, openModal, closeModal } = useModal();
@@ -19,6 +41,7 @@ export default function PartidosGrid() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { upcoming, past } = splitAndSortPartidos(items);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -28,13 +51,7 @@ export default function PartidosGrid() {
         limit: 100,
         q: search.trim() || undefined,
       });
-      // Sort by fecha descending (newest first)
-      const sorted = [...response.items].sort((a, b) => {
-        const dateA = new Date(a.fecha).getTime();
-        const dateB = new Date(b.fecha).getTime();
-        return dateB - dateA;
-      });
-      setItems(sorted);
+      setItems(response.items);
       setTotal(response.total);
     } catch {
       setItems([]);
@@ -107,15 +124,41 @@ export default function PartidosGrid() {
           No hay partidos registrados.
         </p>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {items.map((partido) => (
-            <PartidoCard
-              key={partido.id}
-              partido={partido}
-              onClick={() => handleOpenDetail(partido)}
-            />
-          ))}
-        </div>
+        <>
+          {upcoming.length > 0 ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {upcoming.map((partido) => (
+                <PartidoCard
+                  key={partido.id}
+                  partido={partido}
+                  onClick={() => handleOpenDetail(partido)}
+                />
+              ))}
+            </div>
+          ) : null}
+
+          {past.length > 0 ? (
+            <>
+              <div className="my-6 flex items-center gap-3">
+                <hr className="flex-1 border-gray-200 dark:border-gray-800" />
+                <span className="shrink-0 text-theme-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                  Partidos pasados
+                </span>
+                <hr className="flex-1 border-gray-200 dark:border-gray-800" />
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {past.map((partido) => (
+                  <PartidoCard
+                    key={partido.id}
+                    partido={partido}
+                    onClick={() => handleOpenDetail(partido)}
+                  />
+                ))}
+              </div>
+            </>
+          ) : null}
+        </>
       )}
 
       <PartidoModal
