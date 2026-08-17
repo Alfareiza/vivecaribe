@@ -6,7 +6,12 @@ import Label from "@/components/form/Label";
 import Input from "@/components/form/input/InputField";
 import Select from "@/components/form/Select";
 import { Modal } from "@/components/ui/modal";
-import { formatRawDateTime } from "@/components/reservations/reservationUtils";
+import {
+  formatRawDateTime,
+  rawDateOnly,
+  toDatetimeLocal,
+  toIsoUtc,
+} from "@/components/reservations/reservationUtils";
 import ProviderLogo from "@/components/reservations/ProviderLogo";
 import { ApiError } from "@/lib/api";
 import {
@@ -48,23 +53,6 @@ const EMPTY_FORM: FormState = {
   fecha: "",
   ciudad: "",
 };
-
-/** "2026-09-01T20:00:00Z" -> "2026-09-01T20:00" for a datetime-local input. */
-function toDatetimeLocal(iso: string): string {
-  const match = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})/.exec(iso);
-  return match ? match[1] : "";
-}
-
-/** "2026-09-01T20:00" -> "2026-09-01T20:00:00Z" for the API payload. */
-function toIsoUtc(datetimeLocal: string): string {
-  return `${datetimeLocal}:00Z`;
-}
-
-/** "2026-09-01T20:00:00Z" -> "2026-09-01" (raw calendar day, no timezone shift). */
-function rawDateOnly(iso: string): string {
-  const match = /^(\d{4}-\d{2}-\d{2})/.exec(iso);
-  return match ? match[1] : iso;
-}
 
 const campeonatoOptions = CAMPEONATO_OPTIONS.map((value) => ({
   value,

@@ -48,7 +48,9 @@ def compute_paid_at(
         paid_day = event_day + timedelta(days=1)
     elif booking_provider is BookingProvider.HOMEFANS:
         paid_day = _next_thursday_after(event_day)
-    else:  # pragma: no cover — StrEnum exhaustiveness
+    elif booking_provider is BookingProvider.VAYARA:
+        paid_day = event_day
+    else:  # OTRO and any future provider: no payout formula defined yet
         return None
 
     return datetime(
@@ -98,10 +100,10 @@ class Reserva(BaseModel):
     source: str
     booking_provider: BookingProvider
     reserva_reference: str
-    sender: str
+    sender: str | None
     estado: ReservaEstado
-    subject: str
-    fecha_email_recibido: datetime
+    subject: str | None
+    fecha_email_recibido: datetime | None
     nombre_experiencia: str
     ciudad_experiencia: str
     fecha_evento: datetime | None

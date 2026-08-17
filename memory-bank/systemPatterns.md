@@ -114,6 +114,71 @@ When Zoho shows an identity email challenge, `ZohoSession` uses the
 - New enums: `TipoTour`, `MeetingPoint` (literal phrase values). Operator
   notes/finance columns nullable except `menores_de_edad` (default false).
 
+## Reservas Create/Edit/Delete (`#40`/`#41`/`#70`, PR #71)
+
+- `ReservationDetailModal` is the single component for view, create, and
+  edit — `createMode` prop opens a blank form (skips the
+  `GET /reservas/{id}` fetch); `isEditing` state toggles the read-only
+  detail view into an edit form seeded from `detail`. `handleDelete`
+  mirrors `PartidoModal.handleDelete`: `window.confirm` then `DELETE`;
+  `onSaved`/`onDeleted` callback props let the parent table refetch.
+- `reserva_reference` (create only) is generated client-side as
+  `{provider[:2].upper()}-{ddmmyy}-{3-char random suffix}`; `handleSave`
+  retries up to 5x with a fresh suffix on an actual 409, so a same-day/
+  same-provider collision resolves transparently instead of dead-ending
+  (the field isn't shown/editable in the UI, so a bare 409 with no retry
+  left the operator stuck).
+- Validation now matches the DB columns exactly: `max_length` on every
+  base string field in `ReservaCreate`/`ReservaUpdate` (previously only
+  the #55 operator fields had it — overflow on `phone`/`customer_name`/
+  `moneda`/etc. used to 500, not 422). `price`/`income` are `gt=0`.
+  `phone` must start with `+` when non-empty — validated only on the
+  Create/Update schemas, not the domain model or
+  `ReservaResponse`/`ReservaShortItem`, so reading existing non-`+`
+  records (automation pipeline data, pre-migration rows) is unaffected.
+- New providers `vayara`/`otro`/`airbnb` on `BookingProvider` — plain
+  `StrEnum` + `VARCHAR`, so adding one is a one-line change (same pattern
+  as `Ciudad`). Vayara has a `paid_at` formula (same day as
+  `fecha_evento`); Otro/Airbnb fall through the existing
+  "no formula defined" `None` branch.
+- `sender`/`subject`/`fecha_email_recibido` are nullable (migration
+  `a8b9c0d1e2f3`) so a manually-created reserva can honestly have no
+  source-email metadata; the automation pipeline always supplies real
+  values regardless, so this doesn't change pipeline behavior.
+- País: free-text `<input list=...>` + `<datalist>` sourced from the
+  `world-countries` npm package (`apps/frontend/src/lib/countries.ts`),
+  not a `<Select>` — lets the operator search/type any country without a
+  closed-option list, stores the typed string as-is (no alpha-2
+  conversion; that's pipeline-only, via `pycountry`).
+- Generic `InfoHint` (`components/ui/tooltip/InfoHint.tsx`): "i" icon +
+  hover/focus tooltip, `align: "center" | "right"` (default center).
+  Only right-align a field whose icon actually sits at the container's
+  right edge — defaulting every tooltip to right-align just moves the
+  clipping risk to fields further left in the same row.
+
+### Gotchas found this round
+
+- **Tailwind v4 arbitrary values don't reliably support `fr` inside
+  `calc()`** for `grid-template-columns` in this project's browser
+  target — confirmed the browser itself rejects
+  `el.style.gridTemplateColumns = "calc(1fr - 5px) ..."` outright (not a
+  Tailwind-compilation issue; plain `calc(100% - Npx) 100px` works fine
+  via the same API). For asymmetric grid/flex sizing, use a fixed
+  `calc(100% - Npx)` on a plain block element, or a fixed pixel width on
+  one flex item with `flex-1` on the rest — not `fr` + `calc` together.
+- A native `datetime-local` input needs real fixed width (e.g.
+  `sm:w-[220px]`) to avoid the browser's calendar icon covering the
+  minutes; equal-thirds grid columns weren't wide enough.
+- Don't run `npm run build` (production) while `next dev --turbopack` is
+  running against the same `.next` directory — it corrupts Turbopack's
+  shared cache and the dev server can silently serve stale HMR output
+  for specific edits (confirmed: the compiled bundle had the new code,
+  but the live DOM didn't reflect it, in a fresh browser tab, even after
+  reload). If HMR seems to stop reflecting a change, restart the dev
+  server (and clear `.next/cache`) rather than assuming the edit is
+  wrong. Stick to `eslint` + browser reload for verification while a dev
+  server is running.
+
 ## Partidos (`#61`–`#69`)
 
 - Domain `Partido`: `equipo_local`/`equipo_visitante` (≤25 chars),
@@ -182,7 +247,7 @@ When Zoho shows an identity email challenge, `ZohoSession` uses the
 | `users` | `email` unique |
 | `refresh_tokens` | `token_hash` unique; `family_id` for rotation/reuse revoke |
 | `email_messages` | `(source, mailbox_message_id)` |
-| `reservas` | `(booking_provider, reserva_reference)`; soft delete via `deleted_at`; operator/finance + `paid_at` (#55); nullable `partido_id` FK `SET NULL` (#61) |
+| `reservas` | `(booking_provider, reserva_reference)`; soft delete via `deleted_at`; operator/finance + `paid_at` (#55); nullable `partido_id` FK `SET NULL` (#61); `sender`/`subject`/`fecha_email_recibido` nullable (#70) |
 | `partidos` | soft delete via `deleted_at`; indexed on `fecha`, `ciudad` (#61) |
 
 ## Deviations from the original architecture plan

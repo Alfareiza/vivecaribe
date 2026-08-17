@@ -123,6 +123,31 @@ async def test_create_reserva_paid_at_null_without_fecha_evento(
 
 
 @pytest.mark.asyncio
+async def test_create_reserva_manual_without_email_metadata(
+    auth_client: AsyncClient,
+) -> None:
+    """Manually-created reservas may omit source-email metadata entirely."""
+    headers = await auth_headers(auth_client)
+    payload = _reserva_payload(
+        source="manual",
+        reserva_reference="VA-170826",
+        booking_provider="vayara",
+    )
+    del payload["sender"]
+    del payload["subject"]
+    del payload["fecha_email_recibido"]
+
+    response = await auth_client.post("/reservas", json=payload, headers=headers)
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["sender"] is None
+    assert body["subject"] is None
+    assert body["fecha_email_recibido"] is None
+    assert body["paid_at"].startswith("2026-08-15"), body["paid_at"]
+
+
+@pytest.mark.asyncio
 async def test_create_reserva_duplicate_returns_409(
     auth_client: AsyncClient,
 ) -> None:
@@ -155,6 +180,188 @@ async def test_create_reserva_invalid_payload_returns_422(
     response = await auth_client.post(
         "/reservas",
         json=_reserva_payload(estado="not-a-valid-estado"),
+        headers=headers,
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_reserva_phone_too_long_returns_422(
+    auth_client: AsyncClient,
+) -> None:
+    """``phone`` beyond the 64-char DB column returns a clean 422, not a 500."""
+    headers = await auth_headers(auth_client)
+    response = await auth_client.post(
+        "/reservas",
+        json=_reserva_payload(phone="1" * 65),
+        headers=headers,
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_reserva_moneda_too_long_returns_422(
+    auth_client: AsyncClient,
+) -> None:
+    """``moneda`` beyond the 8-char DB column returns a clean 422, not a 500."""
+    headers = await auth_headers(auth_client)
+    response = await auth_client.post(
+        "/reservas",
+        json=_reserva_payload(moneda="123456789"),
+        headers=headers,
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_reserva_customer_name_too_long_returns_422(
+    auth_client: AsyncClient,
+) -> None:
+    """``customer_name`` beyond the 255-char DB column returns a 422, not a 500."""
+    headers = await auth_headers(auth_client)
+    response = await auth_client.post(
+        "/reservas",
+        json=_reserva_payload(customer_name="a" * 256),
+        headers=headers,
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_reserva_negative_price_returns_422(
+    auth_client: AsyncClient,
+) -> None:
+    """A negative ``price`` is rejected."""
+    headers = await auth_headers(auth_client)
+    response = await auth_client.post(
+        "/reservas",
+        json=_reserva_payload(price="-50.00"),
+        headers=headers,
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_reserva_negative_income_returns_422(
+    auth_client: AsyncClient,
+) -> None:
+    """A negative ``income`` is rejected."""
+    headers = await auth_headers(auth_client)
+    response = await auth_client.post(
+        "/reservas",
+        json=_reserva_payload(income="-10.00"),
+        headers=headers,
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_reserva_phone_without_plus_returns_422(
+    auth_client: AsyncClient,
+) -> None:
+    """``phone`` without a leading '+' is rejected."""
+    headers = await auth_headers(auth_client)
+    response = await auth_client.post(
+        "/reservas",
+        json=_reserva_payload(phone="573001112233"),
+        headers=headers,
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_reserva_phone_with_plus_allowed(
+    auth_client: AsyncClient,
+) -> None:
+    """``phone`` with a leading '+' is accepted."""
+    headers = await auth_headers(auth_client)
+    response = await auth_client.post(
+        "/reservas",
+        json=_reserva_payload(
+            reserva_reference="GYG-PHONE-PLUS", phone="+573001112233"
+        ),
+        headers=headers,
+    )
+    assert response.status_code == 201
+
+
+@pytest.mark.asyncio
+async def test_create_reserva_blank_phone_allowed(
+    auth_client: AsyncClient,
+) -> None:
+    """An empty ``phone`` is still allowed — the '+' rule only applies when set."""
+    headers = await auth_headers(auth_client)
+    response = await auth_client.post(
+        "/reservas",
+        json=_reserva_payload(reserva_reference="GYG-PHONE-BLANK", phone=""),
+        headers=headers,
+    )
+    assert response.status_code == 201
+
+
+@pytest.mark.asyncio
+async def test_patch_reserva_phone_without_plus_returns_422(
+    auth_client: AsyncClient,
+) -> None:
+    """PATCH enforces the same leading-'+' rule as create."""
+    headers = await auth_headers(auth_client)
+    created = await auth_client.post(
+        "/reservas",
+        json=_reserva_payload(reserva_reference="GYG-PATCH-PHONE-PLUS"),
+        headers=headers,
+    )
+    reserva_id = created.json()["id"]
+    response = await auth_client.patch(
+        f"/reservas/{reserva_id}",
+        json={"phone": "573001112233"},
+        headers=headers,
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_reserva_zero_price_returns_422(
+    auth_client: AsyncClient,
+) -> None:
+    """Zero is not a valid price — must be strictly greater than 0."""
+    headers = await auth_headers(auth_client)
+    response = await auth_client.post(
+        "/reservas",
+        json=_reserva_payload(reserva_reference="GYG-ZERO-PRICE", price="0"),
+        headers=headers,
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_reserva_zero_income_returns_422(
+    auth_client: AsyncClient,
+) -> None:
+    """Zero is not a valid income — must be strictly greater than 0."""
+    headers = await auth_headers(auth_client)
+    response = await auth_client.post(
+        "/reservas",
+        json=_reserva_payload(reserva_reference="GYG-ZERO-INCOME", income="0"),
+        headers=headers,
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_patch_reserva_phone_too_long_returns_422(
+    auth_client: AsyncClient,
+) -> None:
+    """PATCH enforces the same ``phone`` length limit as create."""
+    headers = await auth_headers(auth_client)
+    created = await auth_client.post(
+        "/reservas",
+        json=_reserva_payload(reserva_reference="GYG-PATCH-PHONE"),
+        headers=headers,
+    )
+    reserva_id = created.json()["id"]
+    response = await auth_client.patch(
+        f"/reservas/{reserva_id}",
+        json={"phone": "1" * 65},
         headers=headers,
     )
     assert response.status_code == 422

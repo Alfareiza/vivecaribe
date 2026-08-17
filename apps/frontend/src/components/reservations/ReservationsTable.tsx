@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import DatePicker from "@/components/form/date-picker";
 import Select from "@/components/form/Select";
 import Pagination from "@/components/tables/Pagination";
+import Button from "@/components/ui/button/Button";
 import {
   Table,
   TableBody,
@@ -14,11 +15,12 @@ import {
 import InlineLoading from "@/components/ui/loading/InlineLoading";
 import { useModal } from "@/hooks/useModal";
 import { fetchReservas } from "@/lib/reservas";
+import { BOOKING_PROVIDER_OPTIONS } from "@/types/reservation";
 import type { ReservationListItem } from "@/types/reservation";
 import ProviderLogo from "./ProviderLogo";
 import ReservationDetailModal from "./ReservationDetailModal";
 import { EsHoyStatusDot } from "./StatusDot";
-import { formatRawDateTime, formatPrice } from "./reservationUtils";
+import { formatRawDateTime, formatPrice, PROVIDER_LABELS } from "./reservationUtils";
 
 const PAGE_SIZE = 20;
 
@@ -34,15 +36,16 @@ const estadoOptions = [
 
 const providerOptions = [
   { value: ALL, label: "Todos los proveedores" },
-  { value: "getyourguide", label: "getyourguide" },
-  { value: "viator", label: "viator" },
-  { value: "homefans", label: "homefans" },
-  { value: "propio", label: "propio" },
+  ...BOOKING_PROVIDER_OPTIONS.map((value) => ({
+    value,
+    label: PROVIDER_LABELS[value] ?? value,
+  })),
 ];
 
 export default function ReservationsTable() {
   const { isOpen, openModal, closeModal } = useModal();
   const [selected, setSelected] = useState<ReservationListItem | null>(null);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [items, setItems] = useState<ReservationListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
@@ -90,6 +93,10 @@ export default function ReservationsTable() {
   };
 
   const handleCloseModal = () => {
+    if (isCreateOpen) {
+      setIsCreateOpen(false);
+      return;
+    }
     closeModal();
     setSelected(null);
   };
@@ -99,13 +106,18 @@ export default function ReservationsTable() {
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white px-4 pb-3 pt-4 dark:border-gray-800 dark:bg-white/[0.03] sm:px-6">
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-            Reservas
-          </h3>
-          <p className="mt-1 text-theme-sm text-gray-500 dark:text-gray-400">
-            {total} resultado{total === 1 ? "" : "s"}
-          </p>
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+              Reservas
+            </h3>
+            <p className="mt-1 text-theme-sm text-gray-500 dark:text-gray-400">
+              {total} resultado{total === 1 ? "" : "s"}
+            </p>
+          </div>
+          <Button size="sm" onClick={() => setIsCreateOpen(true)}>
+            Nueva reserva
+          </Button>
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
@@ -259,9 +271,12 @@ export default function ReservationsTable() {
       )}
 
       <ReservationDetailModal
-        reservation={selected}
-        isOpen={isOpen}
+        reservation={isCreateOpen ? null : selected}
+        isOpen={isOpen || isCreateOpen}
+        createMode={isCreateOpen}
         onClose={handleCloseModal}
+        onSaved={() => void loadPage()}
+        onDeleted={() => void loadPage()}
       />
     </div>
   );

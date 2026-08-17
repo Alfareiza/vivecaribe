@@ -51,12 +51,15 @@ def _sample_reserva(**overrides: object) -> Reserva:
 
 
 def test_booking_provider_values() -> None:
-    """``BookingProvider`` exposes the four booking channels."""
+    """``BookingProvider`` exposes the seven booking channels."""
     assert set(BookingProvider) == {
         BookingProvider.GETYOURGUIDE,
         BookingProvider.VIATOR,
         BookingProvider.HOMEFANS,
         BookingProvider.PROPIO,
+        BookingProvider.VAYARA,
+        BookingProvider.OTRO,
+        BookingProvider.AIRBNB,
     }
     assert BookingProvider.VIATOR.value == "viator"
 
@@ -220,6 +223,25 @@ def test_compute_paid_at_homefans_on_thursday_skips_to_next_week() -> None:
     )
     assert paid is not None
     assert paid.date().isoformat() == "2026-08-20"
+
+
+def test_compute_paid_at_vayara_same_day() -> None:
+    """Vayara pays the same calendar day as the event."""
+    paid = compute_paid_at(
+        BookingProvider.VAYARA,
+        datetime(2026, 8, 15, 9, 0),
+    )
+    assert paid is not None
+    assert paid.date().isoformat() == "2026-08-15"
+
+
+def test_compute_paid_at_otro_is_none() -> None:
+    """Otro has no defined payout formula yet."""
+    paid = compute_paid_at(
+        BookingProvider.OTRO,
+        datetime(2026, 8, 15, 9, 0),
+    )
+    assert paid is None
 
 
 def test_reserva_operator_field_defaults() -> None:

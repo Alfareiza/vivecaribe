@@ -4,7 +4,20 @@ export type BookingProvider =
   | "getyourguide"
   | "viator"
   | "homefans"
-  | "propio";
+  | "propio"
+  | "vayara"
+  | "otro"
+  | "airbnb";
+
+export const BOOKING_PROVIDER_OPTIONS: BookingProvider[] = [
+  "getyourguide",
+  "viator",
+  "homefans",
+  "propio",
+  "vayara",
+  "otro",
+  "airbnb",
+];
 
 export type ReservaEstado =
   | "en_progreso"
@@ -38,10 +51,10 @@ export type ReservationListItem = {
 export type Reservation = ReservationListItem & {
   source: string;
   reserva_reference: string;
-  sender: string;
+  sender: string | null;
   estado: ReservaEstado | string;
-  subject: string;
-  fecha_email_recibido: string;
+  subject: string | null;
+  fecha_email_recibido: string | null;
   notificado_whatsapp: boolean;
   email_message_id: string | null;
   user_id: string | null;

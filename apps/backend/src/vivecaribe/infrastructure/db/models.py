@@ -171,12 +171,12 @@ class ReservaORM(Base):
     source: Mapped[str] = mapped_column(String(64), nullable=False)
     booking_provider: Mapped[str] = mapped_column(String(32), nullable=False)
     reserva_reference: Mapped[str] = mapped_column(String(512), nullable=False)
-    sender: Mapped[str] = mapped_column(String(320), nullable=False)
+    sender: Mapped[str | None] = mapped_column(String(320), nullable=True)
     estado: Mapped[str] = mapped_column(String(32), nullable=False)
-    subject: Mapped[str] = mapped_column(String(998), nullable=False, default="")
-    fecha_email_recibido: Mapped[datetime] = mapped_column(
+    subject: Mapped[str | None] = mapped_column(String(998), nullable=True)
+    fecha_email_recibido: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
-        nullable=False,
+        nullable=True,
     )
     nombre_experiencia: Mapped[str] = mapped_column(String(512), nullable=False)
     ciudad_experiencia: Mapped[str] = mapped_column(String(255), nullable=False)

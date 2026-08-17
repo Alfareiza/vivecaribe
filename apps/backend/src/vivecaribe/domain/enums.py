@@ -12,6 +12,9 @@ class BookingProvider(StrEnum):
     VIATOR = "viator"
     HOMEFANS = "homefans"
     PROPIO = "propio"
+    VAYARA = "vayara"
+    AIRBNB = "airbnb"
+    OTRO = "otro"
 
 
 class ReservaEstado(StrEnum):

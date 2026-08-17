@@ -1,5 +1,12 @@
 import { apiJson } from "@/lib/api";
-import type { Reservation, ReservationListItem } from "@/types/reservation";
+import type {
+  BookingProvider,
+  MeetingPoint,
+  Reservation,
+  ReservationListItem,
+  ReservaEstado,
+  TipoTour,
+} from "@/types/reservation";
 
 export type ReservaListResponse = {
   total: number;
@@ -43,7 +50,34 @@ export async function fetchReservaById(id: string): Promise<Reservation> {
 }
 
 export type ReservaUpdatePayload = Partial<
-  Pick<Reservation, "menores_de_edad" | "partido_id">
+  Pick<
+    Reservation,
+    | "estado"
+    | "booking_provider"
+    | "nombre_experiencia"
+    | "ciudad_experiencia"
+    | "fecha_evento"
+    | "participants"
+    | "customer_name"
+    | "phone"
+    | "pais_del_visitante"
+    | "moneda"
+    | "price"
+    | "income"
+    | "notificado_whatsapp"
+    | "subject"
+    | "notas_cliente"
+    | "tipo_tour"
+    | "notas_personales"
+    | "costos"
+    | "meeting_point"
+    | "lugar_de_recogida"
+    | "income_estimado"
+    | "profit"
+    | "percentage_profit"
+    | "menores_de_edad"
+    | "partido_id"
+  >
 >;
 
 export async function updateReserva(
@@ -55,4 +89,50 @@ export async function updateReserva(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+}
+
+export type ReservaCreatePayload = {
+  source: string;
+  booking_provider: BookingProvider | string;
+  reserva_reference: string;
+  sender?: string | null;
+  estado: ReservaEstado | string;
+  subject?: string | null;
+  fecha_email_recibido?: string | null;
+  nombre_experiencia: string;
+  ciudad_experiencia: string;
+  fecha_evento?: string | null;
+  participants: number;
+  customer_name: string;
+  phone?: string;
+  pais_del_visitante?: string;
+  moneda?: string;
+  price: string;
+  income: string;
+  notificado_whatsapp?: boolean;
+  notas_cliente?: string | null;
+  tipo_tour?: TipoTour | string | null;
+  notas_personales?: string | null;
+  costos?: string | null;
+  meeting_point?: MeetingPoint | string | null;
+  lugar_de_recogida?: string | null;
+  income_estimado?: string | null;
+  profit?: string | null;
+  percentage_profit?: string | null;
+  menores_de_edad?: boolean;
+  partido_id?: string | null;
+};
+
+export async function createReserva(
+  payload: ReservaCreatePayload,
+): Promise<Reservation> {
+  return apiJson<Reservation>("/reservas", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteReserva(id: string): Promise<void> {
+  await apiJson<null>(`/reservas/${id}`, { method: "DELETE" });
 }

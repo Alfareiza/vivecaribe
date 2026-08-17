@@ -6,7 +6,7 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 from vivecaribe.domain.enums import (
     BookingProvider,
@@ -27,23 +27,23 @@ def _es_hoy(fecha_evento: datetime | None) -> bool:
 class ReservaCreate(BaseModel):
     """Payload for ``POST /reservas``."""
 
-    source: str
+    source: str = Field(max_length=64)
     booking_provider: BookingProvider
-    reserva_reference: str
-    sender: str
+    reserva_reference: str = Field(max_length=512)
+    sender: str | None = Field(default=None, max_length=320)
     estado: ReservaEstado
-    subject: str
-    fecha_email_recibido: datetime
-    nombre_experiencia: str
-    ciudad_experiencia: str
+    subject: str | None = Field(default=None, max_length=998)
+    fecha_email_recibido: datetime | None = None
+    nombre_experiencia: str = Field(max_length=512)
+    ciudad_experiencia: str = Field(max_length=255)
     fecha_evento: datetime | None = None
     participants: int = Field(ge=0)
-    customer_name: str
-    phone: str = ""
-    pais_del_visitante: str = ""
-    moneda: str = "USD"
-    price: Decimal
-    income: Decimal
+    customer_name: str = Field(max_length=255)
+    phone: str = Field(default="", max_length=64)
+    pais_del_visitante: str = Field(default="", max_length=128)
+    moneda: str = Field(default="USD", max_length=8)
+    price: Decimal = Field(gt=0)
+    income: Decimal = Field(gt=0)
     notificado_whatsapp: bool = False
     notas_cliente: str | None = Field(default=None, max_length=255)
     tipo_tour: TipoTour | None = None
@@ -59,6 +59,14 @@ class ReservaCreate(BaseModel):
     user_id: UUID | None = None
     partido_id: UUID | None = None
 
+    @field_validator("phone")
+    @classmethod
+    def validate_phone_prefix(cls, value: str) -> str:
+        """Require a leading ``+`` (E.164-style) when a phone is provided."""
+        if value and not value.startswith("+"):
+            raise ValueError("phone must start with '+' (E.164 format)")
+        return value
+
 
 class ReservaUpdate(BaseModel):
     """Partial payload for ``PATCH /reservas/{id}``.
@@ -70,18 +78,18 @@ class ReservaUpdate(BaseModel):
 
     estado: ReservaEstado | None = None
     booking_provider: BookingProvider | None = None
-    nombre_experiencia: str | None = None
-    ciudad_experiencia: str | None = None
+    nombre_experiencia: str | None = Field(default=None, max_length=512)
+    ciudad_experiencia: str | None = Field(default=None, max_length=255)
     fecha_evento: datetime | None = None
     participants: int | None = Field(default=None, ge=0)
-    customer_name: str | None = None
-    phone: str | None = None
-    pais_del_visitante: str | None = None
-    moneda: str | None = None
-    price: Decimal | None = None
-    income: Decimal | None = None
+    customer_name: str | None = Field(default=None, max_length=255)
+    phone: str | None = Field(default=None, max_length=64)
+    pais_del_visitante: str | None = Field(default=None, max_length=128)
+    moneda: str | None = Field(default=None, max_length=8)
+    price: Decimal | None = Field(default=None, gt=0)
+    income: Decimal | None = Field(default=None, gt=0)
     notificado_whatsapp: bool | None = None
-    subject: str | None = None
+    subject: str | None = Field(default=None, max_length=998)
     notas_cliente: str | None = Field(default=None, max_length=255)
     tipo_tour: TipoTour | None = None
     notas_personales: str | None = Field(default=None, max_length=255)
@@ -93,6 +101,14 @@ class ReservaUpdate(BaseModel):
     percentage_profit: Decimal | None = None
     menores_de_edad: bool | None = None
     partido_id: UUID | None = None
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone_prefix(cls, value: str | None) -> str | None:
+        """Require a leading ``+`` (E.164-style) when a phone is provided."""
+        if value and not value.startswith("+"):
+            raise ValueError("phone must start with '+' (E.164 format)")
+        return value
 
 
 class ReservaShortItem(BaseModel):
