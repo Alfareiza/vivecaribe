@@ -114,6 +114,67 @@ When Zoho shows an identity email challenge, `ZohoSession` uses the
 - New enums: `TipoTour`, `MeetingPoint` (literal phrase values). Operator
   notes/finance columns nullable except `menores_de_edad` (default false).
 
+## Partidos (`#61`–`#69`)
+
+- Domain `Partido`: `equipo_local`/`equipo_visitante` (≤25 chars),
+  `nombre_campeonato` (`Campeonato` enum), `estadio` (`Estadio` enum),
+  `ciudad` (`Ciudad` enum — mirrors `apps/frontend/src/types/partido.ts`'s
+  `CIUDAD_OPTIONS`, add new cities on both sides), `fecha`. Soft delete via
+  `deleted_at`. One-to-many with `Reserva` via nullable `reservas.partido_id`
+  FK (`ondelete="SET NULL"`) — the relationship is informational only,
+  linking happens from the `Reserva` side (`PATCH /reservas/{id}`).
+- `GET /partidos` (`PartidoShortItem`) — filters `ciudad` (substring,
+  case-insensitive), `fecha_from`/`fecha_to`, `q` (equipo_local /
+  equipo_visitante / ciudad). Returns `reservas_count` per item via a single
+  `LEFT JOIN ReservaORM ... GROUP BY partido.id` query — **the non-deleted
+  filter on reservas lives in the JOIN's ON clause, not WHERE**; putting it
+  in WHERE was a real bug (#66) that dropped a partido from the list
+  entirely if all its reservas were soft-deleted, instead of just zeroing
+  its count. Repository returns plain dicts (partido fields + count) so the
+  router stays a one-line `PartidoShortItem.model_validate(item)` — no
+  bespoke `context=` needed.
+- `GET /partidos/{id}` (`PartidoResponse`) — embeds full linked `reservas`
+  (non-deleted, via `ReservaRepo.list_by_partido`).
+- `GET /reservas` gained `ciudad` (exact, case-insensitive match on
+  `ciudad_experiencia`) and `unassigned_only` (`partido_id IS NULL`)
+  filters (#68/#69), used for the auto-match-on-create flow below —
+  reused rather than adding a dedicated `/partidos/{id}/candidate-reservas`
+  endpoint.
+
+### Frontend patterns worth reusing
+
+- **Date state**: `getDateState()` in `reservationUtils.ts` classifies an
+  ISO string as `past`/`today`/`future` by comparing raw Y-M-D against
+  today in America/Bogota — same "naive wall-clock" convention as
+  `formatRawDateTime`/`toLocalDateKey`. Drives both partido card styling
+  and the upcoming/past list split.
+- **Uncontrolled `<Select>` + derived state**: this codebase's `Select`
+  component only accepts `defaultValue` (no controlled `value`). When code
+  needs to programmatically change a Select after mount (ciudad/estadio
+  auto-select from `equipo_local`, or the create→existing-partido
+  transition), the fix is a `key={...}` on the Select tied to the value
+  that should force a resync — not switching to `value=`, which errors.
+- **Bridging create→existing without parent involvement**: `PartidoModal`
+  computes `effectiveId = partidoId ?? detail?.id ?? null` and
+  `displayAsExisting = effectiveId !== null`. This lets the modal render
+  as "existing partido" (title, delete button, linked reservas) right
+  after a successful create — before the parent grid's `selectedId` prop
+  ever changes — by setting `detail` locally from the create response.
+  The original prop-driven `isCreate` is kept only for the effect that
+  decides reset-vs-fetch on open, so it doesn't refire mid-flow.
+- **Bulk-assign UX without a bulk endpoint**: `PartidoMatchedReservasModal`
+  fires individual `PATCH /reservas/{id}` via `Promise.allSettled`. On
+  partial failure it merges succeeded rows into the parent immediately,
+  drops them from its own list, and keeps only failed rows + an inline
+  `role="alert"` error for retry — no toast system in this app, so errors
+  are always inline banners, never toasts.
+- **Public SVG icons**: reusable icons live in `public/images/icons/*.svg`
+  and are referenced via `next/image`, not inlined/SVGR-imported — this
+  trades away `currentColor` theming (the icon renders at a fixed color,
+  not tinted by sidebar active/hover state or badge tier) for a single
+  source-of-truth file. `src/icons/*.svg` (SVGR, `currentColor`-themed) is
+  the older pattern for icons that predate this decision.
+
 ## Persistence
 
 | Table | Key |
@@ -121,7 +182,8 @@ When Zoho shows an identity email challenge, `ZohoSession` uses the
 | `users` | `email` unique |
 | `refresh_tokens` | `token_hash` unique; `family_id` for rotation/reuse revoke |
 | `email_messages` | `(source, mailbox_message_id)` |
-| `reservas` | `(booking_provider, reserva_reference)`; soft delete via `deleted_at`; operator/finance + `paid_at` (#55) |
+| `reservas` | `(booking_provider, reserva_reference)`; soft delete via `deleted_at`; operator/finance + `paid_at` (#55); nullable `partido_id` FK `SET NULL` (#61) |
+| `partidos` | soft delete via `deleted_at`; indexed on `fecha`, `ciudad` (#61) |
 
 ## Deviations from the original architecture plan
 
