@@ -135,6 +135,33 @@ export const MEETING_POINT_LABELS: Record<string, string> = {
   "Door-to-Door": "Puerta a puerta",
 };
 
+export const PROVIDER_LABELS: Record<string, string> = {
+  getyourguide: "GetYourGuide",
+  viator: "Viator",
+  homefans: "Homefans",
+  propio: "Propio",
+  vayara: "Vayara",
+  otro: "Otro",
+  airbnb: "Airbnb",
+};
+
+/** "2026-09-01T20:00:00Z" -> "2026-09-01T20:00" for a datetime-local input. */
+export function toDatetimeLocal(iso: string): string {
+  const match = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})/.exec(iso);
+  return match ? match[1] : "";
+}
+
+/** "2026-09-01T20:00" -> "2026-09-01T20:00:00Z" for the API payload. */
+export function toIsoUtc(datetimeLocal: string): string {
+  return `${datetimeLocal}:00Z`;
+}
+
+/** "2026-09-01T20:00:00Z" -> "2026-09-01" (raw calendar day, no timezone shift). */
+export function rawDateOnly(iso: string): string {
+  const match = /^(\d{4}-\d{2}-\d{2})/.exec(iso);
+  return match ? match[1] : iso;
+}
+
 /** Local calendar YYYY-MM-DD for inclusive range checks. */
 export function toLocalDateKey(iso: string): string {
   const date = new Date(iso);

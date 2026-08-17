@@ -4,10 +4,13 @@ interface InputProps {
   type?: "text" | "number" | "email" | "password" | "date" | "time" | string;
   id?: string;
   name?: string;
+  list?: string;
+  maxLength?: number;
   placeholder?: string;
   defaultValue?: string | number;
   value?: string | number;
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
   className?: string;
   min?: string;
   max?: string;
@@ -22,10 +25,13 @@ const Input: FC<InputProps> = ({
   type = "text",
   id,
   name,
+  list,
+  maxLength,
   placeholder,
   defaultValue,
   value,
   onChange,
+  onBlur,
   className = "",
   min,
   max,
@@ -55,10 +61,13 @@ const Input: FC<InputProps> = ({
         type={type}
         id={id}
         name={name}
+        list={list}
+        maxLength={maxLength}
         placeholder={placeholder}
         defaultValue={defaultValue}
         value={value}
         onChange={onChange}
+        onBlur={onBlur}
         min={min}
         max={max}
         step={step}
