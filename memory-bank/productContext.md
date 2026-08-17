@@ -44,3 +44,16 @@ structured reservations operators can trust, while remaining an API platform
   (`CORS_ORIGINS` on the API).
 - Local: `npm run dev` or Compose `frontend` on `:3000`.
 - Production: https://vivecaribe-frontend.vercel.app (separate Vercel project).
+
+### Partidos (football matches, `#61`–`#69`)
+
+- Operators track matches (`equipo_local` vs `equipo_visitante`, campeonato,
+  estadio, ciudad, fecha) independently of reservas; a reserva may optionally
+  attach to one via `partido_id`.
+- `/partidos` list groups upcoming (soonest first) above a "Partidos
+  pasados" divider (most-recent-first); cards show temporal state (past
+  greyed, today pulses orange) and a tiered reserva-count badge
+  (gray → bronze → silver → gold at 0 / 1-2 / 3-4 / 5+).
+- Creating a partido auto-checks for existing unassigned reservas matching
+  its ciudad + calendar day and offers a one-click bulk-assign confirmation
+  instead of linking reservas one by one.

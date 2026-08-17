@@ -25,20 +25,36 @@
 | #48 Detail modal share | Closed (#53) | WhatsApp / Google Calendar + modal UX |
 | #46 List filters + es_hoy | Merged (#54) | Server filters, ReservaShortItem, Hoy badge |
 | #55 Operator fields + paid_at | Merged (#56) | Domain/ORM/API + Alembic; derived `paid_at` |
+| #63 fecha_evento timezone | Merged (#64) | Fixed 5h-off display in frontend |
+| #61 Partidos feature | Merged (#62) | `Partido` domain/ORM, CRUD API, frontend shell |
+| Partidos UI/UX pass | Merged (#65) | Temporal states, badge, ciudad/estadio auto-select, nested reserva modal |
+| Partidos reservas_count fix | Merged (#66) | LEFT JOIN + COUNT, no N+1; fixed soft-delete join bug |
+| Partidos list split | Merged (#67) | Upcoming asc / "Partidos pasados" divider / past desc |
+| Auto-match reservas + tiered badges | Open (#69) | Ciudad+day match on create, bulk-assign confirm modal, bronze/silver/gold badges |
 
 ## In progress / open children of #41
 
 - #40 — Edit reserva (PATCH) from modal
 - #47 — Sign Up / `POST /users` from UI (low priority)
 
+## In progress / open (Partidos)
+
+- #69 — Auto-match reservas on partido create + tiered badges (open PR)
+
 ## Works today
 
 - Register/login; access JWT + refresh cookie rotation.
 - Reserva CRUD; soft-delete hidden from get/list.
-- `GET /reservas` server filters + slim list + `es_hoy`; detail by id.
+- `GET /reservas` server filters (`estado`, `booking_provider`,
+  `fecha_evento_from/to`, `ciudad`, `unassigned_only`) + slim list +
+  `es_hoy`; detail by id.
 - Operator/finance fields on create/update/detail; `paid_at` auto-derived.
 - Admin UI: authenticated `/reservas` with server pagination/filters and
   Hoy badge; modal refetches full detail (UI edit of new fields still #40).
+- Partidos CRUD (`/partidos`); optional 1:many with reservas via
+  `partido_id`. `/partidos` UI: upcoming/past split list, temporal card
+  states, tiered reserva-count badge, auto-match unassigned reservas by
+  ciudad+day on create with bulk-assign confirmation.
 - Shared pulse loading for auth gate, reservas fetch, and sign-in submit.
 - Automation POST accepts JWT **or** `CRON_SECRET`; GET same auth.
 - Pipeline GYG / Viator / Homefans / Propio (Zoho); idempotent persistence.
@@ -52,6 +68,10 @@
 - Real WhatsApp Meta notifier after Meta authorization.
 - Zoho mark-as-read (deferred).
 - Optional: per-user ownership on reservas.
+- Partido↔reserva matching is create-time only, one-shot; no periodic
+  re-match for reservas added/edited afterward.
+- Vercel `HEAD^`-based Ignored Build Step fix (`$VERCEL_GIT_PREVIOUS_SHA`)
+  — see techContext.md.
 
 ## Known issues / deliberate non-goals
 

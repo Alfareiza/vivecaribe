@@ -104,6 +104,19 @@ Ignored Build Step (not Skip Unaffected Projects): polyglot monorepo without
 JS workspaces. Command pattern:
 `git diff HEAD^ HEAD --quiet -- .` (runs inside Root Directory).
 
+**Known gotcha**: `HEAD^` is the immediate git parent of the new commit,
+*not* the last commit actually deployed for that project. A single `git
+push` only triggers one build for the branch tip — if that push carries
+multiple commits (e.g. GitHub "Rebase and merge" landing a 2-commit PR) and
+the relevant change lives in an earlier commit than the tip, the tip-only
+`HEAD^` diff can come up empty and the whole build gets silently skipped,
+even though real changes exist relative to what's live in production. Hit
+this on the frontend after merging PR #66 (backend-only tip commit,
+frontend change one commit back) — production served stale frontend code
+until manually redeployed. Fix is comparing against
+`$VERCEL_GIT_PREVIOUS_SHA` instead of `HEAD^`; not yet applied to either
+project as of #69.
+
 Portable images (Compose / future AWS):
 
 - `apps/backend/Dockerfile` → uvicorn `:8000`

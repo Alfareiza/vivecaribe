@@ -35,4 +35,9 @@ income/country hardening, monorepo `#36`, frontend + dual Vercel `#38`,
 reservas list + auth `#41` / `#49`, loading UI `#50`, detail share `#48`,
 list filters + `es_hoy` `#46` / `#54`, operator fields + `paid_at`
 `#55` / `#56`.
+Partidos (football matches, optional 1:many with `Reserva`): CRUD +
+frontend `#61` / `#62`, UI/UX (temporal states, auto-select ciudad/estadio,
+nested reserva detail) `#65`, `reservas_count` N+1-safe fix `#66`,
+past/upcoming split ordering `#67`, auto-match reservas on create + tiered
+badges `#68` / `#69`.
 Open `#41` children: Edit `#40`, signup `#47`.
