@@ -2,12 +2,71 @@
 
 ## Current focus
 
-Partidos (football matches) feature, `#61`→`#69`: CRUD + frontend shell
-(#61/#62), then a run of UI/UX passes (#65-#69, PR #69 still open — see
-below). Once #69 merges, next up is the still-open **#41** child: **#40**
-Edit reserva (PATCH from modal).
+Reservas full Create/Edit/Delete UI — closes `#40`, `#41` epic, `#70`
+(PR #71, open — see below). Partidos `#61`→`#69` (CRUD + UI/UX passes,
+PR #69) status as of its last update, below.
 
 ## Recent decisions
+
+### Reservas full Create/Edit/Delete UI + validation hardening (#40/#41/#70, PR #71 open)
+
+- `ReservationDetailModal` now handles view, create, and edit in one
+  component: `createMode` prop opens a blank form (skips the
+  `GET /reservas/{id}` fetch); `isEditing` state toggles the read-only
+  detail view into an edit form seeded from `detail`. `handleDelete`
+  mirrors `PartidoModal`'s pattern: `window.confirm` then `DELETE`;
+  `onSaved`/`onDeleted` callback props let the parent table refetch.
+- New providers `vayara`, `otro`, `airbnb` on `BookingProvider` (plain
+  `StrEnum` + `VARCHAR`, no migration needed). Vayara gets a same-day
+  `paid_at` formula; Otro/Airbnb fall through the existing "no formula
+  defined" `None` branch.
+- `sender`, `subject`, `fecha_email_recibido` made nullable (migration
+  `a8b9c0d1e2f3`) since a manually-created reserva has no source email;
+  the automation pipeline always supplies real values regardless, so
+  this doesn't change pipeline behavior.
+- `reserva_reference` (create only) is generated client-side as
+  `{provider prefix}-{ddmmyy}-{random 3-char suffix}`; `handleSave`
+  retries up to 5x with a fresh suffix on an actual 409. Found via QA:
+  without the suffix+retry, two same-day/same-provider manual creates
+  collided forever with no way out, since the reference isn't
+  shown/editable in the UI.
+- Validation hardening found via manual Playwright QA: `ReservaCreate`/
+  `ReservaUpdate` were missing `max_length` on most base string fields
+  (`phone`, `customer_name`, `moneda`, `nombre_experiencia`,
+  `ciudad_experiencia`, `pais_del_visitante`, `source`, `sender`,
+  `subject`, `reserva_reference`) — overflow crashed with a raw 500
+  instead of a 422 (only the #55 operator fields had `max_length`
+  already). `price`/`income` are now `gt=0` (tightened from an initial
+  `ge=0` per explicit business rule — no $0/negative bookings). `phone`
+  must start with `+` (E.164-style) when non-empty — validated only on
+  `ReservaCreate`/`ReservaUpdate`, deliberately not the domain model or
+  read schemas, so existing non-`+` pipeline data still reads fine.
+  Frontend mirrors all of this: `maxLength` on the affected inputs,
+  `isValid` requires `price`/`income` > 0, `phone` auto-normalized
+  (`+` prepended) on blur and again at submit.
+- New shared `InfoHint` (`components/ui/tooltip/InfoHint.tsx`): generic
+  "i" icon + tooltip, `align` prop (`"center"` default, `"right"` only
+  for the one field actually at a container's right edge — defaulting
+  every tooltip to right-align just moves the clipping risk left).
+- País is a searchable free-text `<input list=...>` + `<datalist>`
+  sourced from the `world-countries` npm package
+  (`apps/frontend/src/lib/countries.ts`), not a closed `<Select>` —
+  stores the typed string as-is, no alpha-2 conversion (that's
+  pipeline-only, via `pycountry`).
+- **Gotcha**: Tailwind v4 arbitrary values don't reliably support `fr`
+  inside `calc()` for `grid-template-columns` in this project's browser
+  target — confirmed the browser itself silently rejects
+  `el.style.gridTemplateColumns = "calc(1fr - 5px) ..."` (not a
+  Tailwind-compilation issue). Use `calc(100% - Npx)` on a plain block
+  element, or a fixed pixel width on one flex item with `flex-1` on the
+  rest, instead of `fr` + `calc` together.
+- **Gotcha**: don't run `npm run build` (production) while
+  `next dev --turbopack` is live against the same `.next` directory —
+  it corrupts the dev server's Turbopack cache and it can silently serve
+  stale HMR output for specific edits. If HMR stops reflecting a change,
+  restart the dev server (clear `.next/cache`) rather than assuming the
+  edit is wrong. Stick to `eslint` + browser reload while a dev server
+  is running.
 
 ### Auto-match reservas on partido create + tiered badges (#68 / PR #69, open)
 
@@ -105,14 +164,16 @@ Edit reserva (PATCH from modal).
 
 ## Known gaps (intentional / deferred)
 
-- #40 Edit (PATCH) · #47 signup wire.
+- #47 signup wire.
 - Real WhatsApp Meta integration (NoOp until Meta approval).
 - Zoho `mark_as_read`; per-user ownership / RBAC on reservas.
 - `correlation_id` ContextVar — no middleware sets it yet.
 - Hourly Colombia-window ingest still needs Pro (Hobby Cron is once/day).
   API-project Cron was removed; ingest is triggered by an external scheduler.
 - Stored dates eventually all America/Bogota (noted during #46).
-- Frontend does not yet show/edit the new operator fields (#40).
+- No provider logo asset for `otro` yet — `ProviderLogo` 404s for it
+  (`vayara`/`airbnb`/etc. have real SVGs under
+  `public/images/providers/`, `otro` doesn't; cosmetic, non-blocking).
 - Vercel Ignored Build Step compares `HEAD^` not last-deployed SHA — can
   silently skip a project's build on a multi-commit push (see
   techContext.md). Not yet fixed on either Vercel project.
@@ -126,6 +187,6 @@ Edit reserva (PATCH from modal).
 
 ## Next
 
+- Merge PR #71 (reservas Create/Edit/Delete UI + validation hardening).
 - Merge PR #69 (auto-match reservas + tiered badges).
-- #40 Edit reserva (PATCH from modal) — include new operator fields.
 - Then #47 signup (low priority) if needed.
