@@ -15,10 +15,12 @@ import {
   fetchPartidoById,
   updatePartido,
 } from "@/lib/partidos";
+import { fetchReservas } from "@/lib/reservas";
 import { CAMPEONATO_OPTIONS, CIUDAD_OPTIONS, ESTADIO_OPTIONS } from "@/types/partido";
 import type { Partido } from "@/types/partido";
 import type { ReservationListItem } from "@/types/reservation";
 import ReservationDetailModal from "@/components/reservations/ReservationDetailModal";
+import PartidoMatchedReservasModal from "./PartidoMatchedReservasModal";
 
 type PartidoModalProps = {
   /** ``null`` opens the modal in create mode. */
@@ -58,6 +60,12 @@ function toIsoUtc(datetimeLocal: string): string {
   return `${datetimeLocal}:00Z`;
 }
 
+/** "2026-09-01T20:00:00Z" -> "2026-09-01" (raw calendar day, no timezone shift). */
+function rawDateOnly(iso: string): string {
+  const match = /^(\d{4}-\d{2}-\d{2})/.exec(iso);
+  return match ? match[1] : iso;
+}
+
 const campeonatoOptions = CAMPEONATO_OPTIONS.map((value) => ({
   value,
   label: value,
@@ -81,6 +89,18 @@ export default function PartidoModal({
   const [error, setError] = useState<string | null>(null);
   const [selectedReserva, setSelectedReserva] = useState<ReservationListItem | null>(null);
   const [isReservaModalOpen, setIsReservaModalOpen] = useState(false);
+  const [matchCandidates, setMatchCandidates] = useState<ReservationListItem[]>([]);
+  const [isMatchModalOpen, setIsMatchModalOpen] = useState(false);
+
+  /**
+   * `partidoId` (prop) stays null through a create-with-matches flow — the
+   * parent doesn't learn the new id until the modal closes. `detail.id`
+   * fills that gap once creation succeeds, so the modal can keep rendering
+   * as "existing partido" (title, delete button, linked reservas) without
+   * the parent's involvement.
+   */
+  const effectiveId = partidoId ?? detail?.id ?? null;
+  const displayAsExisting = effectiveId !== null;
 
   useEffect(() => {
     // Reset state when modal closes
@@ -91,6 +111,8 @@ export default function PartidoModal({
       setLoading(false);
       setSelectedReserva(null);
       setIsReservaModalOpen(false);
+      setMatchCandidates([]);
+      setIsMatchModalOpen(false);
       return;
     }
 
@@ -138,9 +160,9 @@ export default function PartidoModal({
     };
   }, [isOpen, isCreate, partidoId]);
 
-  /** Auto-select ciudad based on equipo_local name. */
+  /** Auto-select ciudad based on equipo_local name (stops once persisted). */
   useEffect(() => {
-    if (!isCreate || !form.equipo_local) return;
+    if (displayAsExisting || !form.equipo_local) return;
     const equipo = form.equipo_local.toLowerCase();
     if (equipo.includes("junior")) {
       setForm((prev) => ({ ...prev, ciudad: "Barranquilla" }));
@@ -149,7 +171,7 @@ export default function PartidoModal({
       setForm((prev) => ({ ...prev, ciudad: "Cartagena" }));
       setForm((prev) => ({ ...prev, estadio: "Jaime Morón" }));
     }
-  }, [form.equipo_local, isCreate]);
+  }, [form.equipo_local, displayAsExisting]);
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -176,13 +198,39 @@ export default function PartidoModal({
       ciudad: form.ciudad.trim(),
     };
     try {
-      if (isCreate) {
-        await createPartido(payload);
-      } else if (partidoId) {
-        await updatePartido(partidoId, payload);
+      if (effectiveId) {
+        await updatePartido(effectiveId, payload);
+        onSaved();
+        onClose();
+        return;
       }
+
+      const created = await createPartido(payload);
+
+      let matches: ReservationListItem[] = [];
+      try {
+        const dayKey = rawDateOnly(created.fecha);
+        const response = await fetchReservas({
+          ciudad: created.ciudad,
+          fecha_evento_from: dayKey,
+          fecha_evento_to: dayKey,
+          unassigned_only: true,
+          limit: 100,
+        });
+        matches = response.items;
+      } catch {
+        // Auto-match is best-effort; the partido was already created successfully.
+        matches = [];
+      }
+
       onSaved();
-      onClose();
+      if (matches.length > 0) {
+        setDetail(created);
+        setMatchCandidates(matches);
+        setIsMatchModalOpen(true);
+      } else {
+        onClose();
+      }
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : "No se pudo guardar el partido",
@@ -193,7 +241,7 @@ export default function PartidoModal({
   }
 
   async function handleDelete() {
-    if (!partidoId) return;
+    if (!effectiveId) return;
     const confirmed = window.confirm(
       "¿Eliminar este partido? Se desvinculará de cualquier reserva asociada.",
     );
@@ -202,7 +250,7 @@ export default function PartidoModal({
     setDeleting(true);
     setError(null);
     try {
-      await deletePartido(partidoId);
+      await deletePartido(effectiveId);
       onDeleted();
       onClose();
     } catch (err) {
@@ -223,7 +271,7 @@ export default function PartidoModal({
       className="m-4 max-w-[584px] p-5 sm:p-6"
     >
       <h4 className="mb-5 text-title-sm font-semibold text-gray-800 dark:text-white/90">
-        {isCreate ? "Agregar partido" : "Detalle del partido"}
+        {displayAsExisting ? "Detalle del partido" : "Agregar partido"}
       </h4>
 
       {error ? (
@@ -242,7 +290,7 @@ export default function PartidoModal({
       ) : (
         <>
           {/* Key ensures form fields reset when switching between create/edit modes */}
-          <div key={`form-${isCreate}`} className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2">
+          <div key={`form-${displayAsExisting}`} className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2">
             <div>
               <Label>Equipo local</Label>
               <Input
@@ -356,7 +404,7 @@ export default function PartidoModal({
           ) : null}
 
           <div className="mt-6 flex items-center justify-between gap-3">
-            {!isCreate ? (
+            {displayAsExisting ? (
               <Button
                 size="sm"
                 variant="outline"
@@ -378,12 +426,31 @@ export default function PartidoModal({
                 onClick={handleSave}
                 disabled={!isValid || saving || deleting}
               >
-                {saving ? "Guardando…" : isCreate ? "Crear" : "Guardar cambios"}
+                {saving
+                  ? "Guardando…"
+                  : displayAsExisting
+                    ? "Guardar cambios"
+                    : "Crear"}
               </Button>
             </div>
           </div>
         </>
       )}
+
+      <PartidoMatchedReservasModal
+        isOpen={isMatchModalOpen}
+        partidoId={detail?.id ?? null}
+        ciudad={detail?.ciudad ?? form.ciudad}
+        fecha={detail?.fecha ?? toIsoUtc(form.fecha)}
+        candidates={matchCandidates}
+        onClose={() => setIsMatchModalOpen(false)}
+        onAssigned={(assigned) => {
+          setDetail((prev) =>
+            prev ? { ...prev, reservas: [...prev.reservas, ...assigned] } : prev,
+          );
+          onSaved();
+        }}
+      />
 
       <ReservationDetailModal
         reservation={selectedReserva}

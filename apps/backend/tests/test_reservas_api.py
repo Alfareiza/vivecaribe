@@ -360,6 +360,97 @@ async def test_list_reservas_date_range_excludes_null_fecha(
 
 
 @pytest.mark.asyncio
+async def test_list_reservas_filters_by_ciudad_case_insensitive(
+    auth_client: AsyncClient,
+) -> None:
+    """``ciudad`` matches ``ciudad_experiencia`` exactly, ignoring case."""
+    headers = await auth_headers(auth_client)
+    await auth_client.post(
+        "/reservas",
+        json=_reserva_payload(
+            reserva_reference="CIUDAD-MATCH",
+            ciudad_experiencia="Barranquilla",
+        ),
+        headers=headers,
+    )
+    await auth_client.post(
+        "/reservas",
+        json=_reserva_payload(
+            reserva_reference="CIUDAD-OTHER",
+            ciudad_experiencia="Cartagena",
+        ),
+        headers=headers,
+    )
+    await auth_client.post(
+        "/reservas",
+        json=_reserva_payload(
+            reserva_reference="CIUDAD-SUBSTRING",
+            ciudad_experiencia="Barranquilla Centro",
+        ),
+        headers=headers,
+    )
+
+    response = await auth_client.get(
+        "/reservas",
+        params={"ciudad": "barranquilla"},
+        headers=headers,
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert body["items"][0]["ciudad_experiencia"] == "Barranquilla"
+
+
+@pytest.mark.asyncio
+async def test_list_reservas_unassigned_only(auth_client: AsyncClient) -> None:
+    """``unassigned_only`` restricts to reservas with no linked partido."""
+    headers = await auth_headers(auth_client)
+    partido = (
+        await auth_client.post(
+            "/partidos",
+            json={
+                "equipo_local": "Junior",
+                "equipo_visitante": "Millonarios",
+                "nombre_campeonato": "Colombian League",
+                "estadio": "Metropolitano",
+                "fecha": "2026-09-01T20:00:00Z",
+                "ciudad": "Barranquilla",
+            },
+            headers=headers,
+        )
+    ).json()
+    unassigned = (
+        await auth_client.post(
+            "/reservas",
+            json=_reserva_payload(
+                reserva_reference="UNASSIGNED",
+                partido_id=None,
+            ),
+            headers=headers,
+        )
+    ).json()
+    await auth_client.post(
+        "/reservas",
+        json=_reserva_payload(
+            reserva_reference="ASSIGNED",
+            partido_id=partido["id"],
+        ),
+        headers=headers,
+    )
+
+    response = await auth_client.get(
+        "/reservas",
+        params={"unassigned_only": True},
+        headers=headers,
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert body["items"][0]["id"] == unassigned["id"]
+    assert body["items"][0]["partido_id"] is None
+
+
+@pytest.mark.asyncio
 async def test_list_reservas_empty(auth_client: AsyncClient) -> None:
     """Empty database returns total 0 and empty items."""
     headers = await auth_headers(auth_client)

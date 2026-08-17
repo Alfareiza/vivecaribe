@@ -208,12 +208,16 @@ class SqlAlchemyReservaRepository:
         booking_provider: BookingProvider | None = None,
         fecha_evento_from: date | None = None,
         fecha_evento_to: date | None = None,
+        ciudad: str | None = None,
+        unassigned_only: bool = False,
     ) -> tuple[list[Reserva], int]:
         """Return a filtered page of non-deleted reservations.
 
         Filters compose with AND. Omitted filters are unconstrained.
         When either fecha bound is set, rows with null ``fecha_evento`` are
         excluded. Bounds are inclusive America/Bogota calendar days.
+        ``ciudad`` matches ``ciudad_experiencia`` exactly (case-insensitive).
+        ``unassigned_only`` restricts to rows with no linked partido.
         Ordered by ``fecha_evento`` descending (nulls last).
         """
         filters: list[ColumnElement[bool]] = [ReservaORM.deleted_at.is_(None)]
@@ -223,6 +227,10 @@ class SqlAlchemyReservaRepository:
             filters.append(
                 ReservaORM.booking_provider == booking_provider.value,
             )
+        if ciudad is not None:
+            filters.append(func.lower(ReservaORM.ciudad_experiencia) == ciudad.lower())
+        if unassigned_only:
+            filters.append(ReservaORM.partido_id.is_(None))
         if fecha_evento_from is not None or fecha_evento_to is not None:
             filters.append(ReservaORM.fecha_evento.is_not(None))
             event_day = cast(

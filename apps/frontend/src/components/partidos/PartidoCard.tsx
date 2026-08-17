@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Image from "next/image";
 import { formatRawDateTime, getDateState } from "@/components/reservations/reservationUtils";
 import type { PartidoListItem } from "@/types/partido";
 
@@ -47,12 +48,33 @@ export default function PartidoCard({ partido, onClick }: PartidoCardProps) {
         .animate-partido-glow-pulse {
           animation: partidoGlowPulse 3.5s ease-in-out infinite;
         }
+
+        @keyframes reservaBadgeShine {
+          0% { transform: translateX(-150%) skewX(-20deg); opacity: 0; }
+          15% { opacity: 0.7; }
+          50% { opacity: 1; }
+          85% { opacity: 0.35; }
+          100% { transform: translateX(250%) skewX(-20deg); opacity: 0; }
+        }
+
+        .reserva-badge-shine {
+          position: absolute;
+          inset: 0;
+          width: 45%;
+          background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.85), transparent);
+          opacity: 0;
+          pointer-events: none;
+        }
+
+        .group:hover .reserva-badge-shine {
+          animation: reservaBadgeShine 1.1s ease-in-out;
+        }
       `}</style>
 
       <button
         type="button"
         onClick={onClick}
-        className={`${baseCard} ${currentStateClass}`}
+        className={`group ${baseCard} ${currentStateClass}`}
       >
         {/* Main content */}
         <div className="w-full">
@@ -103,46 +125,48 @@ export default function PartidoCard({ partido, onClick }: PartidoCardProps) {
   );
 }
 
+type ReservaTier = "none" | "bronze" | "silver" | "gold";
+
+function getReservaTier(count: number): ReservaTier {
+  if (count >= 5) return "gold";
+  if (count >= 3) return "silver";
+  if (count >= 1) return "bronze";
+  return "none";
+}
+
+/** Metallic gradient + text/border treatment per tier (light / dark). */
+const TIER_CLASSES: Record<ReservaTier, string> = {
+  none: "bg-gray-100 text-gray-500 border border-transparent dark:bg-gray-800 dark:text-gray-500",
+  bronze:
+    "bg-gradient-to-br from-orange-100 via-amber-300 to-orange-400 text-amber-800 shadow-[0_1px_2px_rgba(180,83,9,0.25)] dark:from-amber-950 dark:via-orange-900 dark:to-amber-900 dark:text-amber-300 dark:border-amber-700/50",
+  silver:
+    "bg-gradient-to-br from-slate-100 via-gray-200 to-slate-300 text-slate-700 shadow-[0_1px_2px_rgba(100,116,139,0.25)] dark:from-slate-700 dark:via-gray-600 dark:to-slate-600 dark:text-slate-100 dark:border-slate-400/40",
+  gold: "bg-gradient-to-br from-yellow-50 via-amber-200 to-yellow-300 text-amber-900 shadow-[0_1px_3px_rgba(217,119,6,0.35)] dark:from-yellow-900 dark:via-amber-800 dark:to-yellow-800 dark:text-yellow-200 dark:border-yellow-600/50",
+};
+
 /**
  * Reserva badge: displays booking icon + count at top-left of card.
- * Muted gray when count is 0, orange-tinted when count > 0.
+ * Tiered like a medal — muted gray at 0, bronze at 1-2, silver at 3-4,
+ * gold at 5+. Non-muted tiers get a diagonal shine sweep on card hover.
  */
 function ReservaBadge({ count }: { count: number }) {
-  const isMuted = count === 0;
+  const tier = getReservaTier(count);
 
   return (
     <div
-      className={`inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors ${
-        isMuted
-          ? "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-500"
-          : "bg-orange-50 text-orange-700 dark:bg-orange-950/50 dark:text-orange-400"
-      }`}
+      className={`relative inline-flex items-center gap-1.5 overflow-hidden rounded-lg px-2 py-1.5 text-xs font-medium transition-colors ${TIER_CLASSES[tier]}`}
     >
-      {/* SVG icon: Ticket/Booking */}
-      <svg
-        width="14"
-        height="14"
-        viewBox="0 0 16 16"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
+      <Image
+        src="/images/icons/ticket.svg"
+        width={14}
+        height={14}
+        alt=""
         className="shrink-0"
-      >
-        <path
-          d="M2 3h12a1 1 0 011 1v8a1 1 0 01-1 1H2a1 1 0 01-1-1V4a1 1 0 011-1z"
-          stroke="currentColor"
-          strokeWidth="1.2"
-          fill="none"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <path
-          d="M5 8h6"
-          stroke="currentColor"
-          strokeWidth="1.2"
-          strokeLinecap="round"
-        />
-      </svg>
-      <span>{count} Reserva{count !== 1 ? "s" : ""}</span>
+      />
+      <span>
+        {count} Reserva{count !== 1 ? "s" : ""}
+      </span>
+      {tier !== "none" ? <span className="reserva-badge-shine" /> : null}
     </div>
   );
 }

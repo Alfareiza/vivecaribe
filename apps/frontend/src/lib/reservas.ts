@@ -13,6 +13,8 @@ export type FetchReservasParams = {
   booking_provider?: string;
   fecha_evento_from?: string;
   fecha_evento_to?: string;
+  ciudad?: string;
+  unassigned_only?: boolean;
 };
 
 export async function fetchReservas(
@@ -31,6 +33,8 @@ export async function fetchReservas(
   if (params.fecha_evento_to) {
     query.set("fecha_evento_to", params.fecha_evento_to);
   }
+  if (params.ciudad) query.set("ciudad", params.ciudad);
+  if (params.unassigned_only) query.set("unassigned_only", "true");
   return apiJson<ReservaListResponse>(`/reservas?${query.toString()}`);
 }
 

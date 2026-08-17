@@ -15,7 +15,6 @@ import {
   PieChartIcon,
   PlugInIcon,
   ShootingStarIcon,
-  TableIcon,
   UserCircleIcon,
 } from "../icons/index";
 import SidebarWidget from "./SidebarWidget";
@@ -34,7 +33,14 @@ const navItems: NavItem[] = [
     subItems: [{ name: "Tours", path: "/", pro: false }],
   },
   {
-    icon: <TableIcon />,
+    icon: (
+      <Image
+        src="/images/icons/ticket.svg"
+        width={24}
+        height={24}
+        alt=""
+      />
+    ),
     name: "Reservas",
     path: "/reservas",
   },

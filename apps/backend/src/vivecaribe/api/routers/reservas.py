@@ -67,6 +67,14 @@ async def list_reservas(
         date | None,
         Query(description="Inclusive upper bound (America/Bogota calendar day)"),
     ] = None,
+    ciudad: Annotated[
+        str | None,
+        Query(description="Exact match against ciudad_experiencia (case-insensitive)"),
+    ] = None,
+    unassigned_only: Annotated[
+        bool,
+        Query(description="Restrict to reservas with no linked partido"),
+    ] = False,
 ) -> ReservaListResponse:
     """Return a filtered, paginated list of reservations (JWT required).
 
@@ -80,6 +88,8 @@ async def list_reservas(
         booking_provider=booking_provider,
         fecha_evento_from=fecha_evento_from,
         fecha_evento_to=fecha_evento_to,
+        ciudad=ciudad,
+        unassigned_only=unassigned_only,
     )
     return ReservaListResponse(
         total=total,
