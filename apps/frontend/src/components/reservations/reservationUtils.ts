@@ -44,6 +44,33 @@ export function formatDisplayDateTime(iso: string | null | undefined): string {
   }).format(date);
 }
 
+export type RawDateTime = {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+};
+
+/** Wall-clock Y-M-D H:M from the ISO digits; ignores any offset/"Z" suffix. */
+export function parseRawDateTime(iso: string): RawDateTime | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(iso);
+  if (!match) return null;
+  return {
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3]),
+    hour: Number(match[4]),
+    minute: Number(match[5]),
+  };
+}
+
+function asUtcDate(parts: RawDateTime): Date {
+  return new Date(
+    Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute),
+  );
+}
+
 /**
  * Same "es-CO" medium/short shape as formatDisplayDateTime, but reads the
  * Y-M-D H:M straight off the ISO string and ignores any offset/"Z" suffix —
@@ -52,23 +79,37 @@ export function formatDisplayDateTime(iso: string | null | undefined): string {
  */
 export function formatRawDateTime(iso: string | null | undefined): string {
   if (!iso) return "—";
-  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(iso);
-  if (!match) return iso;
-  const [, year, month, day, hour, minute] = match;
-  const asUtc = new Date(
-    Date.UTC(
-      Number(year),
-      Number(month) - 1,
-      Number(day),
-      Number(hour),
-      Number(minute),
-    ),
-  );
+  const parts = parseRawDateTime(iso);
+  if (!parts) return iso;
   return new Intl.DateTimeFormat("es-CO", {
     timeZone: "UTC",
     dateStyle: "medium",
     timeStyle: "short",
-  }).format(asUtc);
+  }).format(asUtcDate(parts));
+}
+
+/** English "5:35 p.m." from naive ISO, optionally shifted by minutes. */
+export function formatEnglishTime(iso: string, offsetMinutes = 0): string {
+  const parts = parseRawDateTime(iso);
+  if (!parts) return "—";
+  const date = asUtcDate(parts);
+  date.setUTCMinutes(date.getUTCMinutes() + offsetMinutes);
+  const hour24 = date.getUTCHours();
+  const minute = String(date.getUTCMinutes()).padStart(2, "0");
+  const period = hour24 >= 12 ? "p.m." : "a.m.";
+  const hour12 = hour24 % 12 || 12;
+  return `${hour12}:${minute} ${period}`;
+}
+
+/** English weekday ("Monday") from the naive ISO calendar day. */
+export function formatEnglishWeekday(iso: string): string {
+  const parts = parseRawDateTime(iso);
+  if (!parts) return "";
+  const date = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    timeZone: "UTC",
+  }).format(date);
 }
 
 /** "2 de agosto" — day + full Spanish month name, no time, no year. */

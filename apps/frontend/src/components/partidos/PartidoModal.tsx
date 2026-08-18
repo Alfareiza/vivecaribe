@@ -21,7 +21,7 @@ import {
   updatePartido,
 } from "@/lib/partidos";
 import { fetchReservas } from "@/lib/reservas";
-import { CAMPEONATO_OPTIONS, CIUDAD_OPTIONS, ESTADIO_OPTIONS } from "@/types/partido";
+import { CAMPEONATO_OPTIONS, CIUDAD_OPTIONS, ESTADIO_OPTIONS, EQUIPOS_LOCALES } from "@/types/partido";
 import type { Partido } from "@/types/partido";
 import type { ReservationListItem } from "@/types/reservation";
 import ReservationDetailModal from "@/components/reservations/ReservationDetailModal";
@@ -60,6 +60,7 @@ const campeonatoOptions = CAMPEONATO_OPTIONS.map((value) => ({
 }));
 const estadioOptions = ESTADIO_OPTIONS.map((value) => ({ value, label: value }));
 const ciudadOptions = CIUDAD_OPTIONS.map((value) => ({ value, label: value }));
+const equipoLocalOptions = EQUIPOS_LOCALES.map((value) => ({ value, label: value }));
 
 export default function PartidoModal({
   partidoId,
@@ -281,14 +282,22 @@ export default function PartidoModal({
           <div key={`form-${displayAsExisting}`} className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2">
             <div>
               <Label>Equipo local</Label>
-              <Input
+              <Select
+                options={equipoLocalOptions}
+                placeholder="Selecciona un equipo"
+                defaultValue={form.equipo_local}
+                onChange={(value) =>
+                  update("equipo_local", value)
+                }
+              />
+              {/* <Input
                 type="text"
                 value={form.equipo_local}
                 onChange={(e) =>
                   update("equipo_local", e.target.value.slice(0, 25))
                 }
                 placeholder="Junior"
-              />
+              /> */}
             </div>
             <div>
               <Label>Equipo visitante</Label>
