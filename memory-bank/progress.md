@@ -32,12 +32,16 @@
 | Partidos list split | Merged (#67) | Upcoming asc / "Partidos pasados" divider / past desc |
 | Auto-match reservas + tiered badges | Open (#69) | Ciudad+day match on create, bulk-assign confirm modal, bronze/silver/gold badges |
 | Reservas Create/Edit/Delete UI + validation hardening | Merged (#71) | Closes #40/#41/#70; full CRUD via one modal; Vayara/Otro/Airbnb; max_length/gt=0/phone-`+` validation |
-| Reservas partido linking + income auto-fill + form polish | Open (#73) | Closes #72; partido picker on create (cached, single-select); Ingreso/Ingreso estimado auto-fill via provider rate + live TRM; ViveCaribe label, COP prefix + es-CO number formatting |
+| Reservas partido linking + income auto-fill + form polish | Merged (#73) | Closes #72; partido picker on create (cached, single-select); Ingreso/Ingreso estimado auto-fill via provider rate + live TRM; ViveCaribe label, COP prefix + es-CO number formatting |
+| Vercel Ignored Build Step fix | Open (#74) | Diff against `$VERCEL_GIT_PREVIOUS_SHA` not `HEAD^`, so a multi-commit push whose tip doesn't touch a project's files no longer silently skips that project's build (hit on #66 and #73) |
 
 ## In progress / open children of #41
 
 - #47 — Sign Up / `POST /users` from UI (low priority)
-- #72 — Reservas partido linking + income auto-fill + form polish (open PR #73)
+
+## In progress / open (infra)
+
+- #74 — Vercel Ignored Build Step fix (open PR)
 
 ## In progress / open (Partidos)
 
@@ -71,6 +75,9 @@
 - Isolated Postgres tests ≥ 90% coverage; frontend CI path-filtered build.
 - Compose: Postgres + API + frontend.
 - Migrate workflow on main applies Alembic when migrations change.
+- `scripts/vercel-ignored-build-step.sh` computes each Vercel project's
+  Ignored Build Step decision from `$VERCEL_GIT_PREVIOUS_SHA` (pending
+  wiring into the dashboard field, see "In progress / open (infra)").
 
 ## Left to build
 
@@ -80,8 +87,9 @@
 - Optional: per-user ownership on reservas.
 - Partido↔reserva matching is create-time only, one-shot; no periodic
   re-match for reservas added/edited afterward.
-- Vercel `HEAD^`-based Ignored Build Step fix (`$VERCEL_GIT_PREVIOUS_SHA`)
-  — see techContext.md.
+- Wire `scripts/vercel-ignored-build-step.sh` into both projects'
+  dashboard Ignored Build Step field once PR #74 merges (script itself
+  is done — see techContext.md).
 
 ## Known issues / deliberate non-goals
 

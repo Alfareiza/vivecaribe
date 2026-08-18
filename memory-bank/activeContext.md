@@ -2,15 +2,38 @@
 
 ## Current focus
 
-Reservas partido linking on create + income auto-fill + form polish
-(`#72`, PR #73, open — see below). Builds directly on the full
-Create/Edit/Delete UI (`#40`/`#41`/`#70`, PR #71 — **merged**). Partidos
-`#61`→`#69` (CRUD + UI/UX passes, PR #69) status as of its last update,
-below.
+Vercel Ignored Build Step fix (`#74`, PR open — see below), triggered by
+PR #73's merge silently skipping the frontend production deploy. Reservas
+partido linking + income auto-fill + form polish (`#72`, PR #73 —
+**merged**) built directly on the full Create/Edit/Delete UI
+(`#40`/`#41`/`#70`, PR #71 — **merged**). Partidos `#61`→`#69` (CRUD +
+UI/UX passes, PR #69) status as of its last update, below.
 
 ## Recent decisions
 
-### Reservas partido linking on create + income auto-fill + form polish (#72, PR #73 open)
+### Vercel Ignored Build Step compares last-deployed SHA, not HEAD^ (#74)
+
+- Root cause: dashboard "Ignored Build Step" for both projects ran
+  `git diff HEAD^ HEAD --quiet -- .`. A rebase-merge landing a
+  multi-commit PR (e.g. #73: feature commit + trailing `docs(memory-bank)`
+  commit) can put the tip commit's diff against its own parent at zero
+  even though the branch as a whole changed real files — silently
+  skipping the build. Hit on #66 and again on #73 (frontend production
+  served the pre-#73 build until a manual `vercel --prod` redeploy).
+- Fix: `scripts/vercel-ignored-build-step.sh`, referenced from both
+  projects' dashboard field as
+  `bash "$(git rev-parse --show-toplevel)/scripts/vercel-ignored-build-step.sh"`.
+  Diffs against `$VERCEL_GIT_PREVIOUS_SHA` (the commit Vercel actually
+  last deployed for that project) instead of `HEAD^`, falling back to
+  `HEAD^` only if that env var is unset or unreachable (e.g. first deploy
+  on a new branch). See techContext.md for the manual-redeploy gotcha
+  (`vercel --prod` path-doubling) hit while working around the stale
+  frontend in the meantime.
+- **Manual step still needed**: paste that same command into each
+  project's Vercel dashboard → Settings → Git → Ignored Build Step. The
+  script landing in the repo doesn't change dashboard config by itself.
+
+### Reservas partido linking on create + income auto-fill + form polish (#72, PR #73 — merged)
 
 - New "Partido" section in the create form only (`createMode`) — "+
   Buscar partido" (disabled until Ciudad + Fecha del evento are set)
@@ -230,9 +253,6 @@ below.
 - No provider logo asset for `otro` yet — `ProviderLogo` 404s for it
   (`vayara`/`airbnb`/etc. have real SVGs under
   `public/images/providers/`, `otro` doesn't; cosmetic, non-blocking).
-- Vercel Ignored Build Step compares `HEAD^` not last-deployed SHA — can
-  silently skip a project's build on a multi-commit push (see
-  techContext.md). Not yet fixed on either Vercel project.
 - Partido↔reserva matching only runs on partido *create* and only offers a
   one-time confirmation; no ongoing/periodic re-match for reservas created
   or edited afterward (noted as a future idea before #68/#69 built the
@@ -243,6 +263,8 @@ below.
 
 ## Next
 
-- Merge PR #73 (reservas partido linking + income auto-fill + form polish).
+- Merge PR #74 (Vercel Ignored Build Step fix), then paste the new
+  command into both projects' dashboard Ignored Build Step field
+  (manual, not automatable from the repo).
 - Merge PR #69 (auto-match reservas + tiered badges).
 - Then #47 signup (low priority) if needed.
