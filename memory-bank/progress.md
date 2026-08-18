@@ -31,11 +31,13 @@
 | Partidos reservas_count fix | Merged (#66) | LEFT JOIN + COUNT, no N+1; fixed soft-delete join bug |
 | Partidos list split | Merged (#67) | Upcoming asc / "Partidos pasados" divider / past desc |
 | Auto-match reservas + tiered badges | Open (#69) | Ciudad+day match on create, bulk-assign confirm modal, bronze/silver/gold badges |
-| Reservas Create/Edit/Delete UI + validation hardening | Open (#71) | Closes #40/#41/#70; full CRUD via one modal; Vayara/Otro/Airbnb; max_length/gt=0/phone-`+` validation |
+| Reservas Create/Edit/Delete UI + validation hardening | Merged (#71) | Closes #40/#41/#70; full CRUD via one modal; Vayara/Otro/Airbnb; max_length/gt=0/phone-`+` validation |
+| Reservas partido linking + income auto-fill + form polish | Open (#73) | Closes #72; partido picker on create (cached, single-select); Ingreso/Ingreso estimado auto-fill via provider rate + live TRM; ViveCaribe label, COP prefix + es-CO number formatting |
 
 ## In progress / open children of #41
 
 - #47 — Sign Up / `POST /users` from UI (low priority)
+- #72 — Reservas partido linking + income auto-fill + form polish (open PR #73)
 
 ## In progress / open (Partidos)
 
@@ -55,6 +57,10 @@
 - Reservas validation: `max_length` matches DB columns on every base
   field (was 500ing on overflow before); `price`/`income` > 0; `phone`
   must start with `+` when set (auto-normalized on the form).
+- Reservas create form: pick a partido inline (cached lookup by
+  ciudad+día); Ingreso/Ingreso estimado auto-fill from Precio (provider
+  payout rate + live TRM to COP), editable and stops auto-filling once
+  hand-edited.
 - Partidos CRUD (`/partidos`); optional 1:many with reservas via
   `partido_id`. `/partidos` UI: upcoming/past split list, temporal card
   states, tiered reserva-count badge, auto-match unassigned reservas by
