@@ -2,13 +2,69 @@
 
 ## Current focus
 
-Reservas full Create/Edit/Delete UI — closes `#40`, `#41` epic, `#70`
-(PR #71, open — see below). Partidos `#61`→`#69` (CRUD + UI/UX passes,
-PR #69) status as of its last update, below.
+Reservas partido linking on create + income auto-fill + form polish
+(`#72`, PR #73, open — see below). Builds directly on the full
+Create/Edit/Delete UI (`#40`/`#41`/`#70`, PR #71 — **merged**). Partidos
+`#61`→`#69` (CRUD + UI/UX passes, PR #69) status as of its last update,
+below.
 
 ## Recent decisions
 
-### Reservas full Create/Edit/Delete UI + validation hardening (#40/#41/#70, PR #71 open)
+### Reservas partido linking on create + income auto-fill + form polish (#72, PR #73 open)
+
+- New "Partido" section in the create form only (`createMode`) — "+
+  Buscar partido" (disabled until Ciudad + Fecha del evento are set)
+  looks up same-city/same-day partidos via the existing `fetchPartidos`;
+  results render as a clickable list with a "Vincular" hover affordance
+  (previous plain-list version tested as unclear UX — clicking a row to
+  assign wasn't obvious). Single-select (`reservas.partido_id` is one
+  FK, not many-to-many); resets if Ciudad/Fecha change afterward so a
+  stale link can't silently survive an edit. Lookups are cached
+  client-side for 60s (`partidoLookupCache` in
+  `ReservationDetailModal.tsx`) so repeatedly clicking the button
+  doesn't repeatedly hit the API.
+- `dayWindow`/`partidoLabel` (previously private to `PartidoSelector.tsx`)
+  moved to `reservationUtils.ts` as shared exports — now used by both
+  the edit-mode `PartidoSelector` and the new create-mode picker.
+- Ingreso auto-fills from Precio × a per-provider payout rate
+  (`INCOME_RATE_BY_PROVIDER`: GetYourGuide 70%, Viator 76.34%, Homefans
+  75%, everyone else incl. the new providers 100%) — create mode only,
+  stops once the operator hand-edits Ingreso (a `incomeTouched` flag set
+  only inside that field's own `onChange`, never by the auto-fill
+  effect itself).
+- Ingreso estimado auto-fills the same way: direct copy when Moneda is
+  COP, otherwise a **live** TRM fetch (`apps/frontend/src/lib/trm.ts`,
+  `fetchTrmToCop`, hits `cdn.jsdelivr.net`'s free currency-api, per-key
+  in-memory cache) converts Ingreso to COP — replacing the old
+  `TRM_COP_PLACEHOLDER = 4000` hardcoded guess. Debounced 500ms since
+  Precio's keystroke-by-keystroke typing cascades into this field and
+  would otherwise fire one HTTP request per keystroke. On fetch failure,
+  shows the operator-facing message inline (`role="alert"`) and leaves
+  the field untouched rather than clobbering it. Same "stops once
+  touched" pattern as Ingreso.
+- The read-only Resumen view (existing reservas) had a real bug: it
+  *always* recomputed from the flat placeholder, ignoring any already-
+  stored `income_estimado`. Now: stored value shown directly (no
+  fetch) → COP passthrough → live TRM fetch, in that order, only for
+  reservas missing a stored value. Fetch failure here is quiet ("—", no
+  alert) since viewing a reserva is passive, not an active edit.
+- Form polish: `PROVIDER_LABELS.propio` → "ViveCaribe" (was "Propio"),
+  used everywhere the map is read (form dropdown + table filter). New
+  generic `Input` `prefix` prop (`components/form/input/InputField.tsx`)
+  renders a static left-edge label inside the bordered box — like a
+  phone field's country-code chip — used for Ingreso estimado's "COP"
+  tag instead of cramming "(COP)" into the label (which wrapped and
+  misaligned the row). New `formatPlainNumberCO()` in
+  `reservationUtils.ts` shows es-CO thousands/decimal formatting
+  (`544.252.161,08`) while unfocused, raw digits while focused/editing —
+  scoped to just this one field, not Precio/Ingreso (those vary by
+  Moneda, this one's always COP).
+- Cliente section reflow: row 1 is now Nombre / Personas (narrowed to
+  `sm:w-28`, was stretching full-width) / Menores de edad / Notificado
+  WhatsApp (moved up from row 2); row 2 becomes Teléfono / País, Punto
+  de encuentro / Lugar de recogida, Tipo de tour alone.
+
+### Reservas full Create/Edit/Delete UI + validation hardening (#40/#41/#70, PR #71 — merged)
 
 - `ReservationDetailModal` now handles view, create, and edit in one
   component: `createMode` prop opens a blank form (skips the
@@ -187,6 +243,6 @@ PR #69) status as of its last update, below.
 
 ## Next
 
-- Merge PR #71 (reservas Create/Edit/Delete UI + validation hardening).
+- Merge PR #73 (reservas partido linking + income auto-fill + form polish).
 - Merge PR #69 (auto-match reservas + tiered badges).
 - Then #47 signup (low priority) if needed.

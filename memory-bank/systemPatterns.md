@@ -156,6 +156,61 @@ When Zoho shows an identity email challenge, `ZohoSession` uses the
   right edge — defaulting every tooltip to right-align just moves the
   clipping risk to fields further left in the same row.
 
+### Partido linking + income auto-fill on create (`#72`, PR #73)
+
+- Create-mode-only "Partido" section: "+ Buscar partido" (disabled
+  until Ciudad + Fecha del evento are set) calls the same
+  `fetchPartidos` as the edit-mode `PartidoSelector`, via a 60s
+  module-level cache (`partidoLookupCache` in
+  `ReservationDetailModal.tsx`, keyed by `ciudad|from|to`) so mashing
+  the button doesn't repeat the request. Results are a clickable list
+  (hover shows a "Vincular" affordance — a plain list read as unclear
+  in QA); single-select since `reservas.partido_id` is one FK, not
+  many-to-many. Selection lives in local `selectedPartido` state (not
+  `FormState`, since it holds a full `PartidoListItem` for display) and
+  is sent as `partido_id` only in the create payload — no PATCH, unlike
+  `PartidoSelector` which needs an existing reserva id.
+  `dayWindow`/`partidoLabel` moved from `PartidoSelector.tsx` (private)
+  to `reservationUtils.ts` (shared) since both pickers need them now.
+- **Derived-field-with-override pattern**: Ingreso derives from Precio ×
+  `INCOME_RATE_BY_PROVIDER[booking_provider]`; Ingreso estimado derives
+  from Ingreso (direct copy if Moneda=COP, else a live TRM fetch). Both
+  use a per-field boolean "touched" flag set *only* inside that field's
+  own `onChange` (never by the auto-fill `useEffect` itself), so the
+  effect's own `update()` calls don't self-trip the flag. Once touched,
+  the effect no-ops on further upstream changes — lets an operator
+  correct a value without the form fighting them. Create-mode only;
+  editing an existing reserva never re-derives these.
+- `apps/frontend/src/lib/trm.ts` (`fetchTrmToCop`): free
+  `cdn.jsdelivr.net` currency API, per-currency in-memory
+  `Map<string, Promise<number>>` cache (dedupes concurrent/repeated
+  calls; evicts on failure so a transient error doesn't poison the
+  cache for the rest of the session). Used by both the create form and
+  the view-mode Resumen fallback (below). The TRM-driven auto-fill
+  effect is debounced 500ms — Precio is typed keystroke-by-keystroke,
+  which cascades into Ingreso and then this effect, so without the
+  debounce it fires one HTTP request per keystroke.
+- Fixed a real bug in the read-only Resumen "Ingreso est." row: it
+  unconditionally recomputed from the old `TRM_COP_PLACEHOLDER = 4000`
+  constant, ignoring any already-stored `income_estimado`. Now: stored
+  value (no fetch) → COP passthrough → live fetch, in that order, and
+  only reservas with a `null` `income_estimado` (pre-#73 or pipeline
+  records) trigger the fetch. `TRM_COP_PLACEHOLDER`/`estimateIncomeCOP`/
+  `formatNumberCO` removed as dead code once this landed.
+- Reusable `Input` `prefix` prop (`components/form/input/InputField.tsx`):
+  static left-edge label inside the input's own border (`pl-14` +
+  absolutely-positioned span with a right border) — same visual idea as
+  a phone field's country-code chip. Used for Ingreso estimado's "COP"
+  tag; putting the currency in the *label* instead (`"Ingreso estimado
+  (COP)"`) wrapped the label text and threw off row alignment.
+- `formatPlainNumberCO()` in `reservationUtils.ts`: es-CO thousands/decimal
+  formatting (`544.252.161,08`) for a plain editable amount field —
+  shown while the input is unfocused, swapped for the raw digit string
+  on focus (via a local `incomeEstimadoFocused` state) so the operator
+  edits a normal parseable number, not a formatted string. Scoped to
+  Ingreso estimado only (always COP); Precio/Ingreso vary by Moneda so
+  they stay unformatted.
+
 ### Gotchas found this round
 
 - **Tailwind v4 arbitrary values don't reliably support `fr` inside
