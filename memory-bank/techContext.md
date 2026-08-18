@@ -101,21 +101,33 @@ Production DB for API: Supabase transaction pooler (`:6543`) with `NullPool`
 + disabled prepared statements when `ENVIRONMENT != local`.
 
 Ignored Build Step (not Skip Unaffected Projects): polyglot monorepo without
-JS workspaces. Command pattern:
-`git diff HEAD^ HEAD --quiet -- .` (runs inside Root Directory).
+JS workspaces. Both projects' dashboard "Ignored Build Step" field runs
+`bash "$(git rev-parse --show-toplevel)/scripts/vercel-ignored-build-step.sh"`
+(runs inside each project's Root Directory; fixed in #74).
 
-**Known gotcha**: `HEAD^` is the immediate git parent of the new commit,
-*not* the last commit actually deployed for that project. A single `git
-push` only triggers one build for the branch tip — if that push carries
-multiple commits (e.g. GitHub "Rebase and merge" landing a 2-commit PR) and
-the relevant change lives in an earlier commit than the tip, the tip-only
-`HEAD^` diff can come up empty and the whole build gets silently skipped,
-even though real changes exist relative to what's live in production. Hit
-this on the frontend after merging PR #66 (backend-only tip commit,
-frontend change one commit back) — production served stale frontend code
-until manually redeployed. Fix is comparing against
-`$VERCEL_GIT_PREVIOUS_SHA` instead of `HEAD^`; not yet applied to either
-project as of #69.
+**Known gotcha (fixed #74)**: the original inline command was
+`git diff HEAD^ HEAD --quiet -- .`. `HEAD^` is the immediate git parent of
+the new commit, *not* the last commit actually deployed for that project.
+A single `git push` only triggers one build for the branch tip — if that
+push carries multiple commits (e.g. GitHub "Rebase and merge" landing a
+multi-commit PR) and the relevant change lives in an earlier commit than
+the tip, the tip-only `HEAD^` diff can come up empty and the whole build
+gets silently skipped, even though real changes exist relative to what's
+live in production. Hit twice: PR #66 (backend-only tip commit, frontend
+change one commit back) and PR #73 (docs-only tip commit, feature commit
+one back) — both times production frontend served stale code until a
+manual `vercel --prod` redeploy. `scripts/vercel-ignored-build-step.sh`
+now diffs against `$VERCEL_GIT_PREVIOUS_SHA` (the last commit Vercel
+actually deployed for that project), falling back to `HEAD^` only if that
+env var is unset or points at a commit no longer reachable.
+
+**Manual prod redeploy gotcha**: `vercel --prod` run from inside
+`apps/frontend` (where its own `.vercel/project.json` lives) double-applies
+that project's "Root Directory: apps/frontend" setting, producing a
+"path .../apps/frontend/apps/frontend does not exist" error. Run it from
+the repo root instead, with `VERCEL_ORG_ID`/`VERCEL_PROJECT_ID` env vars
+set to the frontend project's ids (repo root's own `.vercel/project.json`
+links to the *backend* project, `vivecaribe`, not the frontend one).
 
 Portable images (Compose / future AWS):
 
