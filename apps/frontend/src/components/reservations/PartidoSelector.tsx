@@ -5,7 +5,7 @@ import { ApiError } from "@/lib/api";
 import { updateReserva } from "@/lib/reservas";
 import { fetchPartidoById, fetchPartidos } from "@/lib/partidos";
 import type { PartidoListItem } from "@/types/partido";
-import { formatRawDateTime } from "./reservationUtils";
+import { dayWindow, partidoLabel } from "./reservationUtils";
 
 type PartidoSelectorProps = {
   reservationId: string;
@@ -14,18 +14,6 @@ type PartidoSelectorProps = {
   partidoId: string | null;
   onChanged: (partidoId: string | null) => void;
 };
-
-function partidoLabel(partido: PartidoListItem): string {
-  return `${partido.equipo_local} vs ${partido.equipo_visitante} — ${partido.ciudad} (${formatRawDateTime(partido.fecha)})`;
-}
-
-/** Same calendar day as ``fechaEvento``'s raw Y-M-D, as a UTC day window. */
-function dayWindow(fechaEvento: string): { from: string; to: string } | null {
-  const match = /^(\d{4}-\d{2}-\d{2})/.exec(fechaEvento);
-  if (!match) return null;
-  const day = match[1];
-  return { from: `${day}T00:00:00Z`, to: `${day}T23:59:59Z` };
-}
 
 const selectClasses =
   "h-11 w-full appearance-none rounded-lg border border-gray-300 bg-transparent px-3 py-2.5 pr-9 text-theme-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:focus:border-brand-800";

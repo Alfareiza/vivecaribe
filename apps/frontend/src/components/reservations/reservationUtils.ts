@@ -1,4 +1,5 @@
 import type { BadgeColor } from "@/components/ui/badge/Badge";
+import type { PartidoListItem } from "@/types/partido";
 import type { ReservationListItem } from "@/types/reservation";
 
 /** Kept for future estado badges; not used in the current list/modal UI. */
@@ -86,9 +87,6 @@ export function formatPrice(price: string, moneda: string): string {
   return `${moneda} ${price}`;
 }
 
-/** Temporary fixed TRM (COP per USD) until a real rate source is wired up. */
-export const TRM_COP_PLACEHOLDER = 4000;
-
 export function formatCOP(value: number | string | null | undefined): string {
   if (value === null || value === undefined || value === "") return "—";
   const amount = typeof value === "number" ? value : Number(value);
@@ -100,20 +98,15 @@ export function formatCOP(value: number | string | null | undefined): string {
   }).format(amount);
 }
 
-export function formatNumberCO(value: number): string {
-  return new Intl.NumberFormat("es-CO", { maximumFractionDigits: 0 }).format(
-    value,
-  );
-}
-
-/** income x TRM placeholder — computed client-side, not a real conversion. */
-export function estimateIncomeCOP(
-  income: string | null | undefined,
-): number | null {
-  if (!income) return null;
-  const amount = Number(income);
-  if (Number.isNaN(amount)) return null;
-  return amount * TRM_COP_PLACEHOLDER;
+/** "544252161.08" -> "544.252.161,08" — es-CO thousands/decimal separators, no currency symbol, for editable amount inputs. Returns the raw string unchanged if it isn't a plain number. */
+export function formatPlainNumberCO(value: string): string {
+  if (!value.trim()) return value;
+  const amount = Number(value);
+  if (Number.isNaN(amount)) return value;
+  return new Intl.NumberFormat("es-CO", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
 }
 
 export function truncateText(
@@ -139,7 +132,7 @@ export const PROVIDER_LABELS: Record<string, string> = {
   getyourguide: "GetYourGuide",
   viator: "Viator",
   homefans: "Homefans",
-  propio: "Propio",
+  propio: "ViveCaribe",
   vayara: "Vayara",
   otro: "Otro",
   airbnb: "Airbnb",
@@ -160,6 +153,20 @@ export function toIsoUtc(datetimeLocal: string): string {
 export function rawDateOnly(iso: string): string {
   const match = /^(\d{4}-\d{2}-\d{2})/.exec(iso);
   return match ? match[1] : iso;
+}
+
+/** Same calendar day as `fechaEvento`'s raw Y-M-D, as a UTC day window. */
+export function dayWindow(
+  fechaEvento: string,
+): { from: string; to: string } | null {
+  const match = /^(\d{4}-\d{2}-\d{2})/.exec(fechaEvento);
+  if (!match) return null;
+  const day = match[1];
+  return { from: `${day}T00:00:00Z`, to: `${day}T23:59:59Z` };
+}
+
+export function partidoLabel(partido: PartidoListItem): string {
+  return `${partido.equipo_local} vs ${partido.equipo_visitante} — ${partido.ciudad} (${formatRawDateTime(partido.fecha)})`;
 }
 
 /** Local calendar YYYY-MM-DD for inclusive range checks. */
