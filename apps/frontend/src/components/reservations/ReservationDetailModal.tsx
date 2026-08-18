@@ -12,7 +12,7 @@ import InfoHint from "@/components/ui/tooltip/InfoHint";
 import { AngleDownIcon, CalendarIcon, WhatsappIcon } from "@/icons";
 import { ApiError } from "@/lib/api";
 import { COUNTRY_NAMES } from "@/lib/countries";
-import { fetchPartidos } from "@/lib/partidos";
+import { fetchPartidoById, fetchPartidos } from "@/lib/partidos";
 import {
   createReserva,
   deleteReserva,
@@ -468,6 +468,8 @@ export default function ReservationDetailModal({
   const [selectedPartido, setSelectedPartido] = useState<PartidoListItem | null>(null);
   const [partidoCandidates, setPartidoCandidates] = useState<PartidoListItem[] | null>(null);
   const [partidoLookupLoading, setPartidoLookupLoading] = useState(false);
+  // Linked partido for view-mode WhatsApp itinerary (Reservation only has partido_id).
+  const [linkedPartido, setLinkedPartido] = useState<PartidoListItem | null>(null);
 
   // View-mode Resumen: live TRM estimate, only used when the reserva has
   // no stored income_estimado.
@@ -483,6 +485,7 @@ export default function ReservationDetailModal({
     setSelectedPartido(null);
     setPartidoCandidates(null);
     setPartidoLookupLoading(false);
+    setLinkedPartido(null);
   }
 
   useEffect(() => {
@@ -644,12 +647,37 @@ export default function ReservationDetailModal({
     };
   }, [detail]);
 
+  useEffect(() => {
+    const partidoId = detail?.partido_id;
+    if (!partidoId) {
+      setLinkedPartido(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const partido = await fetchPartidoById(partidoId);
+        if (!cancelled) setLinkedPartido(partido);
+      } catch {
+        if (!cancelled) setLinkedPartido(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [detail?.partido_id]);
+
   if (!reservation && !createMode) return null;
 
   const preview = detail ?? reservation;
   const esHoy = detail?.es_hoy ?? reservation?.es_hoy ?? false;
   const titleRef = detail?.reserva_reference;
-  const whatsappUrl = detail ? buildWhatsAppShareUrl(detail) : null;
+  const whatsappWelcomeUrl = detail
+    ? buildWhatsAppShareUrl(detail, "welcome")
+    : null;
+  const whatsappItineraryUrl = detail
+    ? buildWhatsAppShareUrl(detail, "itinerary", linkedPartido)
+    : null;
   const calendarUrl = detail ? buildGoogleCalendarUrl(detail) : null;
   const isFootballTour = detail?.tipo_tour === "football tour";
   const incomeEstimadoCOP =
@@ -895,11 +923,18 @@ export default function ReservationDetailModal({
               className="shrink-0"
               options={[
                 {
-                  id: "whatsapp",
-                  label: "WhatsApp",
+                  id: "whatsapp-welcome",
+                  label: "WhatsApp Welcome",
                   icon: <WhatsappIcon />,
-                  href: whatsappUrl,
-                  disabled: !whatsappUrl,
+                  href: whatsappWelcomeUrl,
+                  disabled: !whatsappWelcomeUrl,
+                },
+                {
+                  id: "whatsapp-itinerary",
+                  label: "WhatsApp Itinerary",
+                  icon: <WhatsappIcon />,
+                  href: whatsappItineraryUrl,
+                  disabled: !whatsappItineraryUrl,
                 },
                 {
                   id: "calendar",
@@ -1125,7 +1160,7 @@ export default function ReservationDetailModal({
                     />
                   </FormField>
                 </div>
-                <div className="sm:w-28 sm:shrink-0">
+                <div className="sm:w-20 sm:shrink-0">
                   <FormField label="Personas">
                     <Input
                       type="number"
@@ -1192,8 +1227,8 @@ export default function ReservationDetailModal({
                   />
                 </FormField>
                 <FormField
-                  label="Lugar de recogida"
-                  hint="Lugar donde se está hospedando o se acordó recoger al cliente."
+                  label="Lugar de entrega"
+                  hint="Lugar donde se está hospedando o se acordó devolver al cliente."
                 >
                   <Input
                     type="text"
@@ -1222,7 +1257,7 @@ export default function ReservationDetailModal({
                 Financiero
               </h5>
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-                <div className="lg:w-28 lg:shrink-0">
+                <div className="lg:w-24 lg:shrink-0">
                   <FormField label="Moneda">
                     <Select
                       key={`moneda-${form.moneda}`}
@@ -1259,7 +1294,7 @@ export default function ReservationDetailModal({
                     />
                   </FormField>
                 </div>
-                <div className="lg:w-56 lg:shrink-0">
+                <div className="lg:w-46 lg:shrink-0">
                   <FormField
                     label="Ingreso estimado"
                     hint={
@@ -1389,7 +1424,7 @@ export default function ReservationDetailModal({
                     }
                   />
                   <DetailRow
-                    label="Lugar de recogida"
+                    label="Lugar de entrega"
                     value={(() => {
                       const { display, truncated } = truncateText(
                         detail.lugar_de_recogida,

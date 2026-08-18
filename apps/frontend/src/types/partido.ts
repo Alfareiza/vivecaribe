@@ -5,17 +5,19 @@ import type { ReservationListItem } from "@/types/reservation";
 export type Campeonato =
   | "Colombian Cup"
   | "Colombian League"
-  | "Copa Libertadores"
-  | "Copa Sudamericana"
+  | "Libertadores Cup"
+  | "Sudamericana Cup"
   | "Colombian Second Division League";
 
 export const CAMPEONATO_OPTIONS: Campeonato[] = [
   "Colombian Cup",
   "Colombian League",
-  "Copa Libertadores",
-  "Copa Sudamericana",
+  "Libertadores Cup",
+  "Sudamericana Cup",
   "Colombian Second Division League",
 ];
+
+export const EQUIPOS_LOCALES = ["Junior", "Real Cartagena", "Colombia", "Otro"]
 
 export type Estadio = "Jaime Morón" | "Romelio Martínez" | "Metropolitano";
 
