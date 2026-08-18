@@ -12,6 +12,7 @@ import InfoHint from "@/components/ui/tooltip/InfoHint";
 import { AngleDownIcon, CalendarIcon, WhatsappIcon } from "@/icons";
 import { ApiError } from "@/lib/api";
 import { COUNTRY_NAMES } from "@/lib/countries";
+import { fetchPartidos } from "@/lib/partidos";
 import {
   createReserva,
   deleteReserva,
@@ -20,8 +21,10 @@ import {
   type ReservaCreatePayload,
   type ReservaUpdatePayload,
 } from "@/lib/reservas";
+import { fetchTrmToCop } from "@/lib/trm";
 import { BOOKING_PROVIDER_OPTIONS } from "@/types/reservation";
 import type { Reservation, ReservationListItem } from "@/types/reservation";
+import type { PartidoListItem } from "@/types/partido";
 import PartidoSelector from "./PartidoSelector";
 import ProviderLogo from "./ProviderLogo";
 import ShareMenu from "./ShareMenu";
@@ -34,14 +37,14 @@ import {
   MEETING_POINT_LABELS,
   PROVIDER_LABELS,
   TIPO_TOUR_LABELS,
-  TRM_COP_PLACEHOLDER,
-  estimateIncomeCOP,
+  dayWindow,
   formatCOP,
+  formatPlainNumberCO,
   formatDisplayDateTime,
-  formatNumberCO,
   formatPaidAtDate,
   formatPrice,
   formatRawDateTime,
+  partidoLabel,
   toDatetimeLocal,
   toIsoUtc,
   truncateText,
@@ -162,6 +165,48 @@ function buildReservaReference(bookingProvider: string): string {
 }
 
 const MAX_CREATE_ATTEMPTS = 5;
+
+/** Repeatedly clicking "Buscar partido" for the same ciudad+día reuses this instead of re-hitting the API every time. */
+const PARTIDO_LOOKUP_CACHE_MS = 60_000;
+const partidoLookupCache = new Map<
+  string,
+  { items: PartidoListItem[]; expiresAt: number }
+>();
+
+async function lookupPartidosCached(
+  ciudad: string,
+  window: { from: string; to: string } | null,
+): Promise<PartidoListItem[]> {
+  const key = `${ciudad}|${window?.from}|${window?.to}`;
+  const cached = partidoLookupCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.items;
+
+  const response = await fetchPartidos({
+    ciudad,
+    fecha_from: window?.from,
+    fecha_to: window?.to,
+    limit: 20,
+  });
+  partidoLookupCache.set(key, {
+    items: response.items,
+    expiresAt: Date.now() + PARTIDO_LOOKUP_CACHE_MS,
+  });
+  return response.items;
+}
+
+/** Ingreso as a fraction of Precio, by provider payout terms. No rule was given for a provider defaults to 100% (same as Propio). */
+const INCOME_RATE_BY_PROVIDER: Record<string, number> = {
+  propio: 1,
+  airbnb: 1,
+  vayara: 1,
+  otro: 1,
+  getyourguide: 0.7,
+  viator: 0.7634,
+  homefans: 0.75,
+};
+
+/** Debounce for the Ingreso-estimado TRM fetch — Precio is typed keystroke by keystroke, which cascades into Ingreso and would otherwise fire one HTTP request per keystroke. */
+const TRM_FETCH_DEBOUNCE_MS = 500;
 
 /**
  * Backend requires a leading "+" (E.164-style) on any non-empty phone.
@@ -371,6 +416,26 @@ function FormField({
   );
 }
 
+/** Same Label-above-control shape as FormField, so a switch lines up with the Inputs/Selects around it instead of sitting inline with its label. */
+function SwitchField({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <div>
+      <Label>{label}</Label>
+      <div className="flex h-11 items-center">
+        <ControlledSwitch checked={checked} onChange={onChange} />
+      </div>
+    </div>
+  );
+}
+
 export default function ReservationDetailModal({
   reservation,
   isOpen,
@@ -390,6 +455,36 @@ export default function ReservationDetailModal({
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Precio -> Ingreso -> Ingreso estimado auto-fill (create mode only);
+  // each stops once the operator edits that specific field by hand.
+  const [incomeTouched, setIncomeTouched] = useState(false);
+  const [incomeEstimadoTouched, setIncomeEstimadoTouched] = useState(false);
+  const [incomeEstimadoFocused, setIncomeEstimadoFocused] = useState(false);
+  const [trmError, setTrmError] = useState<string | null>(null);
+  const [trmLoading, setTrmLoading] = useState(false);
+
+  // Partido picker (create mode only) — kept out of FormState since it
+  // holds a full object for display, not a plain form value.
+  const [selectedPartido, setSelectedPartido] = useState<PartidoListItem | null>(null);
+  const [partidoCandidates, setPartidoCandidates] = useState<PartidoListItem[] | null>(null);
+  const [partidoLookupLoading, setPartidoLookupLoading] = useState(false);
+
+  // View-mode Resumen: live TRM estimate, only used when the reserva has
+  // no stored income_estimado.
+  const [liveIncomeEstimado, setLiveIncomeEstimado] = useState<number | null>(null);
+  const [liveIncomeEstimadoFailed, setLiveIncomeEstimadoFailed] = useState(false);
+
+  function resetAutoFillState() {
+    setIncomeTouched(false);
+    setIncomeEstimadoTouched(false);
+    setIncomeEstimadoFocused(false);
+    setTrmError(null);
+    setTrmLoading(false);
+    setSelectedPartido(null);
+    setPartidoCandidates(null);
+    setPartidoLookupLoading(false);
+  }
+
   useEffect(() => {
     if (!isOpen) {
       setDetail(null);
@@ -397,6 +492,7 @@ export default function ReservationDetailModal({
       setIsEditing(false);
       setForm(CREATE_DEFAULTS);
       setError(null);
+      resetAutoFillState();
       return;
     }
 
@@ -406,6 +502,7 @@ export default function ReservationDetailModal({
       setIsEditing(true);
       setForm(CREATE_DEFAULTS);
       setError(null);
+      resetAutoFillState();
       return;
     }
 
@@ -418,6 +515,7 @@ export default function ReservationDetailModal({
     setRefreshError(null);
     setIsEditing(false);
     setError(null);
+    resetAutoFillState();
 
     let cancelled = false;
     setIsRefreshing(true);
@@ -459,6 +557,93 @@ export default function ReservationDetailModal({
     }));
   }, [form.nombre_experiencia, createMode]);
 
+  // Precio -> Ingreso, until the operator edits Ingreso by hand.
+  useEffect(() => {
+    if (!createMode || incomeTouched) return;
+    const price = Number(form.price);
+    if (!form.price.trim() || Number.isNaN(price)) return;
+    const rate = INCOME_RATE_BY_PROVIDER[form.booking_provider] ?? 1;
+    setForm((prev) => ({ ...prev, income: (price * rate).toFixed(2) }));
+  }, [form.price, form.booking_provider, createMode, incomeTouched]);
+
+  // Ingreso (+ Moneda) -> Ingreso estimado, until the operator edits it by
+  // hand. COP is a direct passthrough; EUR/USD debounce a live TRM fetch
+  // so Precio's keystroke-by-keystroke cascade doesn't fire one request
+  // per keystroke.
+  useEffect(() => {
+    if (!createMode || incomeEstimadoTouched) return;
+    setTrmError(null);
+
+    if (form.moneda === "COP") {
+      setForm((prev) => ({ ...prev, income_estimado: form.income }));
+      return;
+    }
+
+    const income = Number(form.income);
+    if (!form.income.trim() || Number.isNaN(income)) return;
+
+    let cancelled = false;
+    setTrmLoading(true);
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const rate = await fetchTrmToCop(form.moneda);
+          if (!cancelled) {
+            setForm((prev) => ({
+              ...prev,
+              income_estimado: (income * rate).toFixed(2),
+            }));
+          }
+        } catch {
+          if (!cancelled) {
+            setTrmError(
+              "No fue posible calcular el ingreso estimado por un error al buscar el TRM del día",
+            );
+          }
+        } finally {
+          if (!cancelled) setTrmLoading(false);
+        }
+      })();
+    }, TRM_FETCH_DEBOUNCE_MS);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      setTrmLoading(false);
+    };
+  }, [form.income, form.moneda, createMode, incomeEstimadoTouched]);
+
+  // A stale partido link shouldn't silently survive a city/date edit.
+  useEffect(() => {
+    if (!createMode) return;
+    setSelectedPartido(null);
+    setPartidoCandidates(null);
+  }, [form.ciudad_experiencia, form.fecha_evento, createMode]);
+
+  // View-mode Resumen: prefer the stored income_estimado; only fetch a
+  // live TRM when it's missing (old/pipeline records).
+  useEffect(() => {
+    setLiveIncomeEstimado(null);
+    setLiveIncomeEstimadoFailed(false);
+    if (!detail || detail.income_estimado !== null) return;
+    if (detail.moneda === "COP") {
+      setLiveIncomeEstimado(Number(detail.income));
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const rate = await fetchTrmToCop(detail.moneda);
+        if (!cancelled) setLiveIncomeEstimado(Number(detail.income) * rate);
+      } catch {
+        if (!cancelled) setLiveIncomeEstimadoFailed(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [detail]);
+
   if (!reservation && !createMode) return null;
 
   const preview = detail ?? reservation;
@@ -467,7 +652,10 @@ export default function ReservationDetailModal({
   const whatsappUrl = detail ? buildWhatsAppShareUrl(detail) : null;
   const calendarUrl = detail ? buildGoogleCalendarUrl(detail) : null;
   const isFootballTour = detail?.tipo_tour === "football tour";
-  const incomeEstimadoCOP = detail ? estimateIncomeCOP(detail.income) : null;
+  const incomeEstimadoCOP =
+    detail?.income_estimado !== null && detail?.income_estimado !== undefined
+      ? Number(detail.income_estimado)
+      : liveIncomeEstimado;
 
   const isValid =
     form.nombre_experiencia.trim().length > 0 &&
@@ -501,6 +689,23 @@ export default function ReservationDetailModal({
     }
     setIsEditing(false);
     setError(null);
+  }
+
+  async function handleLookupPartidos() {
+    if (!form.ciudad_experiencia || !form.fecha_evento) return;
+    const window = dayWindow(toIsoUtc(form.fecha_evento));
+    setPartidoLookupLoading(true);
+    try {
+      const items = await lookupPartidosCached(
+        form.ciudad_experiencia,
+        window,
+      );
+      setPartidoCandidates(items);
+    } catch {
+      setPartidoCandidates([]);
+    } finally {
+      setPartidoLookupLoading(false);
+    }
   }
 
   async function handleMenoresDeEdadChange(next: boolean) {
@@ -557,6 +762,7 @@ export default function ReservationDetailModal({
           lugar_de_recogida: form.lugar_de_recogida.trim() || null,
           income_estimado: form.income_estimado.trim() || null,
           menores_de_edad: form.menores_de_edad,
+          partido_id: selectedPartido?.id ?? null,
         };
 
         for (let attempt = 1; attempt <= MAX_CREATE_ATTEMPTS; attempt += 1) {
@@ -821,26 +1027,142 @@ export default function ReservationDetailModal({
               </div>
             </section>
 
+            {createMode ? (
+              <section>
+                <h5 className="mb-2 text-theme-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                  Partido
+                </h5>
+                {selectedPartido ? (
+                  <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-100 px-3.5 py-2.5 dark:border-gray-800">
+                    <span className="min-w-0 truncate text-theme-sm text-gray-800 dark:text-white/90">
+                      {partidoLabel(selectedPartido)}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setSelectedPartido(null)}
+                    >
+                      Quitar
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleLookupPartidos}
+                      disabled={
+                        !form.ciudad_experiencia ||
+                        !form.fecha_evento ||
+                        partidoLookupLoading
+                      }
+                    >
+                      {partidoLookupLoading
+                        ? "Buscando…"
+                        : "+ Buscar partido"}
+                    </Button>
+                    {!form.ciudad_experiencia || !form.fecha_evento ? (
+                      <p className="text-theme-xs text-gray-400 dark:text-gray-500">
+                        Completa Ciudad y Fecha del evento para buscar.
+                      </p>
+                    ) : null}
+                    {partidoCandidates !== null ? (
+                      partidoCandidates.length === 0 ? (
+                        <p className="text-theme-xs text-gray-500 dark:text-gray-400">
+                          No se encontraron partidos para esta ciudad y
+                          fecha.
+                        </p>
+                      ) : (
+                        <div className="space-y-1.5">
+                          <p className="text-theme-xs text-gray-500 dark:text-gray-400">
+                            Haz clic en un partido para vincularlo a esta
+                            reserva:
+                          </p>
+                          <ul className="space-y-1.5 rounded-xl border border-gray-100 p-2 dark:border-gray-800">
+                            {partidoCandidates.map((partido) => (
+                              <li key={partido.id}>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedPartido(partido);
+                                    setPartidoCandidates(null);
+                                  }}
+                                  className="group flex w-full items-center justify-between gap-3 rounded-lg border border-transparent px-2.5 py-2 text-left transition-colors hover:border-brand-200 hover:bg-brand-50/50 dark:hover:border-brand-500/30 dark:hover:bg-brand-500/10"
+                                >
+                                  <span className="min-w-0 truncate text-theme-sm text-gray-700 dark:text-gray-300">
+                                    {partidoLabel(partido)}
+                                  </span>
+                                  <span className="shrink-0 text-theme-xs font-medium text-brand-600 opacity-0 transition-opacity group-hover:opacity-100 dark:text-brand-400">
+                                    Vincular
+                                  </span>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )
+                    ) : null}
+                  </div>
+                )}
+              </section>
+            ) : null}
+
             <section>
               <h5 className="mb-2 text-theme-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
                 Cliente
               </h5>
+              <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start">
+                <div className="sm:flex-1">
+                  <FormField label="Nombre">
+                    <Input
+                      type="text"
+                      maxLength={255}
+                      value={form.customer_name}
+                      onChange={(e) =>
+                        update("customer_name", e.target.value)
+                      }
+                      placeholder="Ada Lovelace"
+                    />
+                  </FormField>
+                </div>
+                <div className="sm:w-28 sm:shrink-0">
+                  <FormField label="Personas">
+                    <Input
+                      type="number"
+                      min="0"
+                      value={form.participants}
+                      onChange={(e) =>
+                        update("participants", e.target.value)
+                      }
+                    />
+                  </FormField>
+                </div>
+                <div className="shrink-0">
+                  <SwitchField
+                    label="Menores de edad"
+                    checked={form.menores_de_edad}
+                    onChange={(next) => update("menores_de_edad", next)}
+                  />
+                </div>
+                <div className="shrink-0">
+                  <SwitchField
+                    label="Notificado WhatsApp"
+                    checked={form.notificado_whatsapp}
+                    onChange={(next) =>
+                      update("notificado_whatsapp", next)
+                    }
+                  />
+                </div>
+              </div>
               <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
-                <FormField label="Nombre">
+                <FormField label="Teléfono">
                   <Input
                     type="text"
-                    maxLength={255}
-                    value={form.customer_name}
-                    onChange={(e) => update("customer_name", e.target.value)}
-                    placeholder="Ada Lovelace"
-                  />
-                </FormField>
-                <FormField label="Personas">
-                  <Input
-                    type="number"
-                    min="0"
-                    value={form.participants}
-                    onChange={(e) => update("participants", e.target.value)}
+                    maxLength={64}
+                    value={form.phone}
+                    onChange={(e) => update("phone", e.target.value)}
+                    onBlur={() => update("phone", normalizePhone(form.phone))}
+                    placeholder="+573001112233"
                   />
                 </FormField>
                 <FormField label="País">
@@ -859,16 +1181,6 @@ export default function ReservationDetailModal({
                       <option key={name} value={name} />
                     ))}
                   </datalist>
-                </FormField>
-                <FormField label="Teléfono">
-                  <Input
-                    type="text"
-                    maxLength={64}
-                    value={form.phone}
-                    onChange={(e) => update("phone", e.target.value)}
-                    onBlur={() => update("phone", normalizePhone(form.phone))}
-                    placeholder="+573001112233"
-                  />
                 </FormField>
                 <FormField label="Punto de encuentro">
                   <Select
@@ -902,20 +1214,6 @@ export default function ReservationDetailModal({
                     onChange={(value) => update("tipo_tour", value)}
                   />
                 </FormField>
-                <div className="flex items-center gap-3">
-                  <Label>Menores de edad</Label>
-                  <ControlledSwitch
-                    checked={form.menores_de_edad}
-                    onChange={(next) => update("menores_de_edad", next)}
-                  />
-                </div>
-                <div className="flex items-center gap-3">
-                  <Label>Notificado WhatsApp</Label>
-                  <ControlledSwitch
-                    checked={form.notificado_whatsapp}
-                    onChange={(next) => update("notificado_whatsapp", next)}
-                  />
-                </div>
               </div>
             </section>
 
@@ -953,24 +1251,50 @@ export default function ReservationDetailModal({
                     <Input
                       type="text"
                       value={form.income}
-                      onChange={(e) => update("income", e.target.value)}
+                      onChange={(e) => {
+                        setIncomeTouched(true);
+                        update("income", e.target.value);
+                      }}
                       placeholder="84.35"
                     />
                   </FormField>
                 </div>
-                <div className="flex-1">
+                <div className="lg:w-56 lg:shrink-0">
                   <FormField
                     label="Ingreso estimado"
-                    hint={`Valor que ViveCaribe recibe en pesos colombianos según la TRM del día de pago por parte de ${PROVIDER_LABELS[form.booking_provider] ?? form.booking_provider}.`}
+                    hint={
+                      form.moneda === "COP"
+                        ? "Mismo valor que Ingreso, ya está en COP."
+                        : "Calculado con la TRM real del día sobre el Ingreso."
+                    }
                     hintAlign="right"
                   >
                     <Input
                       type="text"
-                      value={form.income_estimado}
-                      onChange={(e) =>
-                        update("income_estimado", e.target.value)
+                      prefix="COP"
+                      value={
+                        trmLoading
+                          ? "Calculando…"
+                          : incomeEstimadoFocused
+                            ? form.income_estimado
+                            : formatPlainNumberCO(form.income_estimado)
                       }
+                      disabled={trmLoading}
+                      onFocus={() => setIncomeEstimadoFocused(true)}
+                      onBlur={() => setIncomeEstimadoFocused(false)}
+                      onChange={(e) => {
+                        setIncomeEstimadoTouched(true);
+                        update("income_estimado", e.target.value);
+                      }}
                     />
+                    {trmError ? (
+                      <p
+                        role="alert"
+                        className="mt-1.5 text-theme-xs text-error-600 dark:text-error-400"
+                      >
+                        {trmError}
+                      </p>
+                    ) : null}
                   </FormField>
                 </div>
               </div>
@@ -1008,8 +1332,8 @@ export default function ReservationDetailModal({
               <h5 className="mb-2 text-theme-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
                 Cliente
               </h5>
-              <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
-                <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1.5">
+              <div className="flex flex-col gap-4 sm:flex-row sm:gap-x-6">
+                <dl className="grid min-w-0 flex-1 grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1.5">
                   <DetailRow label="Nombre" value={detail.customer_name} />
                   <DetailRow label="Personas" value={detail.participants} />
                   <DetailRow label="Teléfono" value={detail.phone || "—"} />
@@ -1119,11 +1443,15 @@ export default function ReservationDetailModal({
                 <DetailRow
                   label="Ingreso est."
                   value={
-                    <InfoTooltip
-                      label={`TRM Estimada de USD ${formatNumberCO(TRM_COP_PLACEHOLDER)}`}
-                    >
-                      {formatCOP(incomeEstimadoCOP)}
-                    </InfoTooltip>
+                    detail.income_estimado !== null ? (
+                      formatCOP(incomeEstimadoCOP)
+                    ) : liveIncomeEstimadoFailed ? (
+                      "—"
+                    ) : (
+                      <InfoTooltip label={`TRM real del día, ${detail.moneda} → COP`}>
+                        {formatCOP(incomeEstimadoCOP)}
+                      </InfoTooltip>
+                    )
                   }
                 />
                 <DetailRow label="Costos" value={formatCOP(detail.costos)} />
