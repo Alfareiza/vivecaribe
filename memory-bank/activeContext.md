@@ -2,8 +2,9 @@
 
 ## Current focus
 
-Vercel Ignored Build Step fix (`#74`, PR open — see below), triggered by
-PR #73's merge silently skipping the frontend production deploy. Reservas
+Vercel Ignored Build Step fix (`#74` — **merged & wired live**, see
+below), triggered by PR #73's merge silently skipping the frontend
+production deploy. Reservas
 partido linking + income auto-fill + form polish (`#72`, PR #73 —
 **merged**) built directly on the full Create/Edit/Delete UI
 (`#40`/`#41`/`#70`, PR #71 — **merged**). Partidos `#61`→`#69` (CRUD +
@@ -29,9 +30,15 @@ UI/UX passes, PR #69) status as of its last update, below.
   on a new branch). See techContext.md for the manual-redeploy gotcha
   (`vercel --prod` path-doubling) hit while working around the stale
   frontend in the meantime.
-- **Manual step still needed**: paste that same command into each
-  project's Vercel dashboard → Settings → Git → Ignored Build Step. The
-  script landing in the repo doesn't change dashboard config by itself.
+- Ignored Build Step isn't settable via `vercel.json`/`vercel.ts` — it's
+  dashboard-only *or* the REST API's `commandForIgnoringBuildStep` field
+  (`PATCH /v9/projects/{idOrName}`, confirmed via the Vercel docs' project
+  settings + API reference). Wired both projects (`vivecaribe`,
+  `vivecaribe-frontend`) to the script via that API call instead of the
+  dashboard UI — same effect, scriptable/repeatable. Exit-code contract
+  double-checked against the docs: `0` cancels the build, `1` continues
+  it, matching `git diff --quiet`'s native exit codes (no inversion
+  needed in the script).
 
 ### Reservas partido linking on create + income auto-fill + form polish (#72, PR #73 — merged)
 
@@ -263,8 +270,5 @@ UI/UX passes, PR #69) status as of its last update, below.
 
 ## Next
 
-- Merge PR #74 (Vercel Ignored Build Step fix), then paste the new
-  command into both projects' dashboard Ignored Build Step field
-  (manual, not automatable from the repo).
 - Merge PR #69 (auto-match reservas + tiered badges).
 - Then #47 signup (low priority) if needed.
