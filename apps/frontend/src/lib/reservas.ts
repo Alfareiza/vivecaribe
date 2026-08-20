@@ -73,8 +73,8 @@ export type ReservaUpdatePayload = Partial<
     | "meeting_point"
     | "lugar_de_recogida"
     | "income_estimado"
-    | "profit"
-    | "percentage_profit"
+    | "trm_estimado"
+    | "trm_final"
     | "menores_de_edad"
     | "partido_id"
   >
@@ -117,8 +117,7 @@ export type ReservaCreatePayload = {
   meeting_point?: MeetingPoint | string | null;
   lugar_de_recogida?: string | null;
   income_estimado?: string | null;
-  profit?: string | null;
-  percentage_profit?: string | null;
+  trm_estimado?: string | null;
   menores_de_edad?: boolean;
   partido_id?: string | null;
 };

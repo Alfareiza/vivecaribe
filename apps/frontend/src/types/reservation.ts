@@ -67,6 +67,9 @@ export type Reservation = ReservationListItem & {
   meeting_point: MeetingPoint | string | null;
   lugar_de_recogida: string | null;
   income_estimado: string | null;
+  trm_estimado: string | null;
+  trm_final: string | null;
+  income_final: string | null;
   profit: string | null;
   percentage_profit: string | null;
   menores_de_edad: boolean;

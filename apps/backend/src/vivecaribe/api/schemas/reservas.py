@@ -52,8 +52,7 @@ class ReservaCreate(BaseModel):
     meeting_point: MeetingPoint | None = None
     lugar_de_recogida: str | None = Field(default=None, max_length=64)
     income_estimado: Decimal | None = None
-    profit: Decimal | None = None
-    percentage_profit: Decimal | None = None
+    trm_estimado: Decimal | None = None
     menores_de_edad: bool = False
     email_message_id: UUID | None = None
     user_id: UUID | None = None
@@ -74,6 +73,11 @@ class ReservaUpdate(BaseModel):
     Identity and audit fields are intentionally omitted so they stay
     immutable through this endpoint. ``paid_at`` is derived server-side
     from ``booking_provider`` + ``fecha_evento`` and is not writable here.
+    ``trm_estimado`` is normally set at creation from the auto-fetched rate;
+    this endpoint accepts it only to fill in a still-null value (e.g. a
+    legacy reserva) — once set, the router silently drops further attempts
+    to change it. ``profit``/``percentage_profit`` are derived server-side
+    from income, costos, and ``trm_final``.
     """
 
     estado: ReservaEstado | None = None
@@ -97,8 +101,8 @@ class ReservaUpdate(BaseModel):
     meeting_point: MeetingPoint | None = None
     lugar_de_recogida: str | None = Field(default=None, max_length=64)
     income_estimado: Decimal | None = None
-    profit: Decimal | None = None
-    percentage_profit: Decimal | None = None
+    trm_estimado: Decimal | None = None
+    trm_final: Decimal | None = None
     menores_de_edad: bool | None = None
     partido_id: UUID | None = None
 
