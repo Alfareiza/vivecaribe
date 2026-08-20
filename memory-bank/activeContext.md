@@ -2,15 +2,92 @@
 
 ## Current focus
 
-Vercel Ignored Build Step fix (`#74` — **merged & wired live**, see
-below), triggered by PR #73's merge silently skipping the frontend
-production deploy. Reservas
-partido linking + income auto-fill + form polish (`#72`, PR #73 —
-**merged**) built directly on the full Create/Edit/Delete UI
-(`#40`/`#41`/`#70`, PR #71 — **merged**). Partidos `#61`→`#69` (CRUD +
+Reserva financiero: `trm_estimado`/`trm_final` rates + `income_final`,
+edit-form and Resumen redesign (`#78`/`#79`, PR #80 — **merged to
+main**). Built on top of Vercel Ignored Build Step fix (`#74` —
+merged & wired live) and Reservas partido linking + income auto-fill
+(`#72`, PR #73 — merged), which built on the full Create/Edit/Delete UI
+(`#40`/`#41`/`#70`, PR #71 — merged). Partidos `#61`→`#69` (CRUD +
 UI/UX passes, PR #69) status as of its last update, below.
 
 ## Recent decisions
+
+### Reserva financiero: trm_estimado/trm_final rates, income_final, UI redesign (#78/#79, PR #80 — merged)
+
+- New rate pair, both driving a server-computed COP amount the operator
+  never edits directly:
+  - `trm_estimado` — auto-fetched client-side at reserva creation from
+    the same third-party FX source as before (`lib/trm.ts`), stored
+    silently (no visible create-mode input). Editable via `PATCH` only
+    while still `null` (covers legacy/pipeline reservas missing it);
+    once set, the backend router silently drops further attempts to
+    change it rather than erroring — matches the disabled/locked
+    frontend input so a stray client write can't desync from what the
+    UI shows. Drives `income_estimado = income × trm_estimado`.
+  - `trm_final` (renamed from `trm_del_dia` via `alter_column`, data
+    preserved) — always editable, filled in once the operator actually
+    receives payment; no lock. Drives `income_final = income ×
+    trm_final` (`domain/reserva.py`'s `compute_income_final`; COP
+    reservas get a direct passthrough, no conversion). `profit`/
+    `percentage_profit` (`compute_profit`) now take `income_final` +
+    `costos` directly instead of re-deriving the moneda/rate branching
+    inline — `income_final` is the single source of truth for "the
+    real COP amount," computed via a `model_validator` that runs
+    before the profit one (validator order matters here: Pydantic v2
+    runs `mode="after"` validators in class-body definition order).
+- **Derived-field-with-override pattern, revised**: the old "focus =
+  raw, blur = formatted" toggle (`incomeEstimadoFocused` et al.) is
+  gone for `trm_estimado`/`trm_final`/`costos` — found via Playwright
+  QA that it raced a bulk value-set (Playwright `.fill()`, but a real
+  paste operation is the same risk): the field's *displayed* value
+  flips identity on focus/blur via a separate `useState`, and an
+  external tool setting `.value` while that state transition was still
+  in flight got its write silently doubled and *persisted*
+  (`4100` → saved as `41004100.00`). Fields now just show the raw
+  sanitized string unconditionally — no focus-driven re-render, no
+  race. `income_estimado`'s own focus/blur toggle (create-mode only,
+  pre-existing from #72) was left as-is, out of scope, but carries the
+  same theoretical risk if ever revisited.
+- New `sanitizeDecimalInput()` in `ReservationDetailModal.tsx`: strips
+  everything but digits and a single `.` on every keystroke (was a
+  literal bug report — the rate fields accepted arbitrary text with no
+  feedback). Applied to `trm_estimado`, `trm_final`, `costos`.
+- Derived amounts (`income_estimado`, `income_final`) render as
+  `disabled` `Input`s with a "(calculado)" label suffix in the edit
+  form — they were always computed, but looked like ordinary editable
+  fields before. `FormField`'s `label` prop widened `string` →
+  `React.ReactNode` (local component, no other callers) to allow the
+  muted suffix styling. `income_final` has no `FormState` field at all
+  — it's derived inline at render time from `form.income`/
+  `form.trm_final` (`editFormIncomeFinal` in the component body) since
+  it's never submitted, just displayed live as the operator types.
+- Edit form reorganized into two bordered "Estimado"/"Final" panels
+  (rate above the amount it derives, each in its own
+  `rounded-xl border ... bg-gray-50/40` box) instead of `trm_estimado`
+  nested under `income_estimado`'s column while `trm_final` sat in an
+  unrelated row with Costos — the two pairs read as parallel groups
+  now. Consulted `/frontend-design` for this specific micro-layout
+  question; its "bold aesthetic" framing doesn't fit a sober admin CRUD
+  form, so the actual call (locked/derived fields get less visual
+  weight than genuinely editable ones) was made directly.
+- Resumen (view mode) redesigned from a single flat `dl` list into a
+  `StatCard`-based hierarchy: hero row (`Ingreso final`, `Profit` —
+  large/bold `text-title-sm`) + secondary row (`Ingreso`, `Ingreso
+  estimado`, `Costos` — smaller/muted), responsive `grid-cols-1
+  sm:grid-cols-2/3`. Ordering encodes importance per explicit ask:
+  `Ingreso final` most prominent, `Ingreso` second (ahead of `Ingreso
+  estimado`, which is only a creation-time guess). `% Profit` merged
+  into the `Profit` card as a small colored `Badge` (reusing the
+  existing `EcommerceMetrics.tsx` KPI-badge convention) instead of a
+  separate progress-bar card — a bar implies "progress toward a goal,"
+  which a margin percentage isn't; removed the now-dead `PercentageBar`
+  component. Empty hero values render a plain "—" (not an oversized
+  "Pendiente de pago" sentence at hero type size) with the explanation
+  moved to the small caption line instead.
+- QA note: this round's Playwright verification used a throwaway
+  `qa-trm-test@example.com` user registered directly against the local
+  dev backend (`POST /users`) — not a seeded fixture, fine to
+  re-register if needed for future manual QA on this branch/DB.
 
 ### Vercel Ignored Build Step compares last-deployed SHA, not HEAD^ (#74)
 
@@ -154,7 +231,7 @@ UI/UX passes, PR #69) status as of its last update, below.
   edit is wrong. Stick to `eslint` + browser reload while a dev server
   is running.
 
-### Auto-match reservas on partido create + tiered badges (#68 / PR #69, open)
+### Auto-match reservas on partido create + tiered badges (#68 / PR #69 — merged)
 
 - `GET /reservas` gained `ciudad` (exact, case-insensitive) and
   `unassigned_only` filters. On partido create, checks same-ciudad +
@@ -270,5 +347,4 @@ UI/UX passes, PR #69) status as of its last update, below.
 
 ## Next
 
-- Merge PR #69 (auto-match reservas + tiered badges).
-- Then #47 signup (low priority) if needed.
+- #47 signup (low priority) if needed.

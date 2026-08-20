@@ -114,6 +114,64 @@ When Zoho shows an identity email challenge, `ZohoSession` uses the
 - New enums: `TipoTour`, `MeetingPoint` (literal phrase values). Operator
   notes/finance columns nullable except `menores_de_edad` (default false).
 
+### Reserva financiero: trm_estimado/trm_final, income_final (#78/#79, PR #80)
+
+- Same `model_validator(mode="after")` pattern as `paid_at`, chained:
+  `_sync_income_final` (moneda/income/`trm_final` → `income_final`) is
+  defined *before* `_sync_profit` (`income_final`/`costos` → `profit`,
+  `percentage_profit`) in the class body — Pydantic v2 runs `mode="after"`
+  validators in definition order, so `_sync_profit` sees the freshly
+  computed `income_final` on the same pass. `compute_profit()` takes
+  `income_final` + `costos` directly now, not moneda/income/rate — the
+  currency branching lives in exactly one place (`compute_income_final`).
+- `trm_estimado` is "settable once": writable via `ReservaUpdate` only to
+  fill a still-`null` value; the router (`update_reserva`) pops it from
+  the update dict when `existing.trm_estimado is not None` before
+  building the patch, rather than raising — a silent no-op mirrors what
+  the disabled frontend input already communicates, instead of adding a
+  second source of truth (a 409/422) for the same rule.
+- Renaming a live DB column: `op.alter_column(table, old, new_column_name=new)`
+  in its own migration, not a drop+add — preserves data. Don't touch the
+  historical migration that originally created the column under its old
+  name; it stays accurate to what actually happened at that point in
+  history.
+- **Numeric-input sanitization**: `sanitizeDecimalInput()` in
+  `ReservationDetailModal.tsx` strips everything but digits and a single
+  `.` on every `onChange` (collapses extra `.`s instead of rejecting the
+  keystroke) — applied to any field that's a plain rate/cost, not a
+  Precio/Ingreso-style value with its own existing conventions.
+- **Race found via Playwright, not by a human typing**: a field whose
+  *displayed* value flips between raw (focused) and formatted (blurred)
+  via `useState` is unsafe against any bulk value-set — paste, browser
+  autofill, or a test tool's `.fill()` — because the external write can
+  land mid-transition and get silently doubled by React reconciling
+  against a stale DOM value. Fixed by dropping the focus-toggle
+  reformatting entirely for `trm_estimado`/`trm_final`/`costos` (always
+  show the raw sanitized string). `income_estimado`'s pre-existing
+  create-mode toggle (#72) was left alone — out of scope, but carries
+  the same theoretical risk.
+- **Signaling "derived, not editable"**: a `disabled` `Input` +
+  `React.ReactNode` label with a muted "(calculado)" suffix (`FormField`
+  widened from `label: string` in this file only — it's a local
+  component, no other callers) reads far more honestly than a plain
+  enabled-looking input the operator technically shouldn't type into.
+  `income_final` specifically has no `FormState` field at all — it's
+  computed inline at render time from `form.income`/`form.trm_final`
+  since it's display-only and never part of the PATCH payload.
+- **Resumen (view mode) hierarchy**: `StatCard` component (label / big
+  or small value / optional caption) replaces a flat `dl` list — a hero
+  row (`Ingreso final`, `Profit`) at `text-title-sm font-bold` plus a
+  secondary row (`Ingreso`, `Ingreso estimado`, `Costos`) at smaller/
+  muted weight, `grid-cols-1 sm:grid-cols-2/3` for mobile-to-desktop.
+  A percentage read as a `Badge` (green/red, reusing the
+  `EcommerceMetrics.tsx` KPI convention) merged into the amount card it
+  qualifies reads better than a separate progress-bar card — a bar
+  implies "progress toward a goal," a margin percentage isn't one.
+  Empty/pending values render a bare "—" at whatever size the slot is;
+  a full sentence ("Pendiente de pago") at hero type size reads as a
+  layout bug, not a status — push the explanation into the small
+  caption line instead.
+
 ## Reservas Create/Edit/Delete (`#40`/`#41`/`#70`, PR #71)
 
 - `ReservationDetailModal` is the single component for view, create, and

@@ -30,18 +30,15 @@
 | Partidos UI/UX pass | Merged (#65) | Temporal states, badge, ciudad/estadio auto-select, nested reserva modal |
 | Partidos reservas_count fix | Merged (#66) | LEFT JOIN + COUNT, no N+1; fixed soft-delete join bug |
 | Partidos list split | Merged (#67) | Upcoming asc / "Partidos pasados" divider / past desc |
-| Auto-match reservas + tiered badges | Open (#69) | Ciudad+day match on create, bulk-assign confirm modal, bronze/silver/gold badges |
+| Auto-match reservas + tiered badges | Merged (#69) | Ciudad+day match on create, bulk-assign confirm modal, bronze/silver/gold badges |
 | Reservas Create/Edit/Delete UI + validation hardening | Merged (#71) | Closes #40/#41/#70; full CRUD via one modal; Vayara/Otro/Airbnb; max_length/gt=0/phone-`+` validation |
 | Reservas partido linking + income auto-fill + form polish | Merged (#73) | Closes #72; partido picker on create (cached, single-select); Ingreso/Ingreso estimado auto-fill via provider rate + live TRM; ViveCaribe label, COP prefix + es-CO number formatting |
 | Vercel Ignored Build Step fix | Merged (#74) | Diff against `$VERCEL_GIT_PREVIOUS_SHA` not `HEAD^`, so a multi-commit push whose tip doesn't touch a project's files no longer silently skips that project's build (hit on #66 and #73); both dashboards wired to the new script via API |
+| Reserva financiero: trm_estimado/trm_final, income_final, UI redesign | Merged (#78/#79, PR #80) | `trm_estimado` (auto-fetched at creation, editable only while null) + `trm_final` (renamed from `trm_del_dia`, always editable) drive server-computed `income_estimado`/`income_final`; `profit`/`percentage_profit` now derive from `income_final`. Edit form redesigned into paired Estimado/Final panels with disabled "(calculado)" derived fields; Resumen redesigned into a hero (Ingreso final, Profit + % badge)/secondary (Ingreso, Ingreso estimado, Costos) hierarchy. Numeric-only sanitization on rate/cost inputs; fixed a focus-triggered reformat race that could silently double a saved rate |
 
 ## In progress / open children of #41
 
 - #47 — Sign Up / `POST /users` from UI (low priority)
-
-## In progress / open (Partidos)
-
-- #69 — Auto-match reservas on partido create + tiered badges (open PR)
 
 ## Works today
 
@@ -51,6 +48,12 @@
   `fecha_evento_from/to`, `ciudad`, `unassigned_only`) + slim list +
   `es_hoy`; detail by id.
 - Operator/finance fields on create/update/detail; `paid_at` auto-derived.
+- Reserva financiero: `trm_estimado` (auto-fetched from a third-party FX
+  API at creation, locked once set) and `trm_final` (always editable,
+  filled in once payment is received) drive server-computed
+  `income_estimado`/`income_final`; `profit`/`percentage_profit` derive
+  from `income_final`. Edit form and Resumen view both reflect the
+  Estimado/Final pairing with derived fields rendered disabled.
 - Admin UI: authenticated `/reservas` with server pagination/filters and
   Hoy badge; one modal (`ReservationDetailModal`) handles view, create,
   edit, and soft-delete, including all operator/finance fields.

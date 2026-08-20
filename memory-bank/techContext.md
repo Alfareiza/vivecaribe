@@ -77,8 +77,8 @@ Fixtures refuse to reset any database whose name does not end with `_test`.
   (also `workflow_dispatch`).
 - Runs `uv run alembic upgrade head` against repository secret `DATABASE_URL`
   (prod Supabase). Not run in Vercel or Docker Compose entrypoints.
-- Latest schema add: `d4e5f6a7b8c9` operator fields + `paid_at` on `reservas`
-  (#55 / #56).
+- Latest schema add: `trm_estimado`/`trm_final` (renamed from
+  `trm_del_dia`) + `income_final` on `reservas` (#78/#79, PR #80).
 
 ## Env vars (auth / CORS / UI)
 
