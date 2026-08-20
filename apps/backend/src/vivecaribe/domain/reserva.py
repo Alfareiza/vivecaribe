@@ -82,6 +82,47 @@ def _next_thursday_after(event_day: date) -> date:
     return event_day + timedelta(days=days_ahead)
 
 
+def compute_income_final(
+    moneda: str,
+    income: Decimal,
+    trm_final: Decimal | None,
+) -> Decimal | None:
+    """Derive the actual COP income received: ``income`` converted at the
+    real day-of-payment rate.
+
+    A COP reserva needs no conversion. A non-COP reserva needs
+    ``trm_final`` (only known once payment is received) — returns
+    ``None`` until then.
+    """
+    if moneda == "COP":
+        return income
+    if trm_final is None:
+        return None
+    return (income * trm_final).quantize(Decimal("0.01"))
+
+
+def compute_profit(
+    income_final: Decimal | None,
+    costos: Decimal | None,
+) -> tuple[Decimal | None, Decimal | None]:
+    """Derive ``(profit, percentage_profit)`` from actual COP income and costos.
+
+    ``costos`` is always COP. Returns ``(None, None)`` while either input is
+    still missing (e.g. ``income_final`` isn't known until ``trm_final``
+    is filled in for a non-COP reserva).
+    """
+    if income_final is None or costos is None:
+        return None, None
+
+    profit = (income_final - costos).quantize(Decimal("0.01"))
+    percentage_profit = (
+        (profit / income_final * 100).quantize(Decimal("0.01"))
+        if income_final != 0
+        else None
+    )
+    return profit, percentage_profit
+
+
 class Reserva(BaseModel):
     """Business booking created from an ingested booking email.
 
@@ -122,6 +163,9 @@ class Reserva(BaseModel):
     meeting_point: MeetingPoint | None = None
     lugar_de_recogida: str | None = Field(default=None, max_length=64)
     income_estimado: Decimal | None = None
+    trm_estimado: Decimal | None = None
+    trm_final: Decimal | None = None
+    income_final: Decimal | None = None
     profit: Decimal | None = None
     percentage_profit: Decimal | None = None
     menores_de_edad: bool = False
@@ -141,6 +185,26 @@ class Reserva(BaseModel):
         if self.paid_at != expected:
             # Bypass validate_assignment to avoid re-entrant validation.
             object.__setattr__(self, "paid_at", expected)
+        return self
+
+    @model_validator(mode="after")
+    def _sync_income_final(self) -> Self:
+        """Keep ``income_final`` aligned with income, moneda, and trm_final."""
+        income_final = compute_income_final(self.moneda, self.income, self.trm_final)
+        if self.income_final != income_final:
+            # Bypass validate_assignment to avoid re-entrant validation.
+            object.__setattr__(self, "income_final", income_final)
+        return self
+
+    @model_validator(mode="after")
+    def _sync_profit(self) -> Self:
+        """Keep ``profit``/``percentage_profit`` aligned with their inputs."""
+        profit, percentage_profit = compute_profit(self.income_final, self.costos)
+        if self.profit != profit:
+            # Bypass validate_assignment to avoid re-entrant validation.
+            object.__setattr__(self, "profit", profit)
+        if self.percentage_profit != percentage_profit:
+            object.__setattr__(self, "percentage_profit", percentage_profit)
         return self
 
     @model_validator(mode="after")

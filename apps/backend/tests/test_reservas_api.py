@@ -86,8 +86,7 @@ async def test_create_reserva_sets_paid_at_and_operator_fields(
             meeting_point="Door-to-Door",
             lugar_de_recogida="Hotel Caribe",
             income_estimado="90.00",
-            profit="65.00",
-            percentage_profit="72.22",
+            trm_estimado="4100.00",
             menores_de_edad=True,
         ),
         headers=headers,
@@ -101,6 +100,11 @@ async def test_create_reserva_sets_paid_at_and_operator_fields(
     assert body["lugar_de_recogida"] == "Hotel Caribe"
     assert body["menores_de_edad"] is True
     assert body["costos"] == "25.00"
+    assert body["trm_estimado"] == "4100.00"
+    # income_estimado given but trm_final is not set until payment arrives.
+    assert body["trm_final"] is None
+    assert body["profit"] is None
+    assert body["percentage_profit"] is None
     assert body["paid_at"].startswith(paid_at_prefix), body["paid_at"]
 
 
@@ -120,6 +124,126 @@ async def test_create_reserva_paid_at_null_without_fecha_evento(
     )
     assert response.status_code == 201
     assert response.json()["paid_at"] is None
+
+
+@pytest.mark.asyncio
+async def test_create_reserva_cop_profit_computed_without_trm(
+    auth_client: AsyncClient,
+) -> None:
+    """COP reservas compute profit directly, no trm_final needed."""
+    headers = await auth_headers(auth_client)
+    response = await auth_client.post(
+        "/reservas",
+        json=_reserva_payload(
+            reserva_reference="COP-PROFIT-1",
+            moneda="COP",
+            price="100000.00",
+            income="100000.00",
+            costos="40000.00",
+        ),
+        headers=headers,
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body["income_final"] == "100000.00"
+    assert body["profit"] == "60000.00"
+    assert body["percentage_profit"] == "60.00"
+
+
+@pytest.mark.asyncio
+async def test_patch_reserva_sets_trm_final_and_computes_profit(
+    auth_client: AsyncClient,
+) -> None:
+    """Filling trm_final on a non-COP reserva computes profit in COP."""
+    headers = await auth_headers(auth_client)
+    created = await auth_client.post(
+        "/reservas",
+        json=_reserva_payload(
+            reserva_reference="USD-PROFIT-1",
+            moneda="USD",
+            income="100.00",
+            costos="300000.00",
+        ),
+        headers=headers,
+    )
+    assert created.status_code == 201
+    body = created.json()
+    assert body["income_final"] is None
+    assert body["profit"] is None
+    assert body["percentage_profit"] is None
+    reserva_id = body["id"]
+
+    response = await auth_client.patch(
+        f"/reservas/{reserva_id}",
+        json={"trm_final": "4100.00"},
+        headers=headers,
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["trm_final"] == "4100.00"
+    assert body["income_final"] == "410000.00"
+    assert body["profit"] == "110000.00"
+    assert body["percentage_profit"] == "26.83"
+
+
+@pytest.mark.asyncio
+async def test_patch_reserva_trm_estimado_is_immutable(
+    auth_client: AsyncClient,
+) -> None:
+    """trm_estimado is set once at creation and ignored by PATCH."""
+    headers = await auth_headers(auth_client)
+    created = await auth_client.post(
+        "/reservas",
+        json=_reserva_payload(
+            reserva_reference="TRM-LOCKED-1",
+            moneda="USD",
+            trm_estimado="4050.00",
+        ),
+        headers=headers,
+    )
+    assert created.status_code == 201
+    reserva_id = created.json()["id"]
+    assert created.json()["trm_estimado"] == "4050.00"
+
+    response = await auth_client.patch(
+        f"/reservas/{reserva_id}",
+        json={"trm_estimado": "9999.00"},
+        headers=headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["trm_estimado"] == "4050.00"
+
+
+@pytest.mark.asyncio
+async def test_patch_reserva_can_set_trm_estimado_once_when_null(
+    auth_client: AsyncClient,
+) -> None:
+    """trm_estimado starts null and can be set once via PATCH; further edits are ignored."""
+    headers = await auth_headers(auth_client)
+    created = await auth_client.post(
+        "/reservas",
+        json=_reserva_payload(reserva_reference="TRM-FILL-1", moneda="USD"),
+        headers=headers,
+    )
+    assert created.status_code == 201
+    assert created.json()["trm_estimado"] is None
+    reserva_id = created.json()["id"]
+
+    first_set = await auth_client.patch(
+        f"/reservas/{reserva_id}",
+        json={"trm_estimado": "4050.00"},
+        headers=headers,
+    )
+    assert first_set.status_code == 200
+    assert first_set.json()["trm_estimado"] == "4050.00"
+
+    second_attempt = await auth_client.patch(
+        f"/reservas/{reserva_id}",
+        json={"trm_estimado": "9999.00"},
+        headers=headers,
+    )
+    assert second_attempt.status_code == 200
+    assert second_attempt.json()["trm_estimado"] == "4050.00"
 
 
 @pytest.mark.asyncio

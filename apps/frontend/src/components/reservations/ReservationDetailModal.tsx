@@ -79,6 +79,9 @@ type FormState = {
   price: string;
   income: string;
   income_estimado: string;
+  trm_estimado: string;
+  trm_final: string;
+  costos: string;
   notas_personales: string;
   notas_cliente: string;
   tipo_tour: string;
@@ -119,6 +122,9 @@ const CREATE_DEFAULTS: FormState = {
   price: "",
   income: "",
   income_estimado: "",
+  trm_estimado: "",
+  trm_final: "",
+  costos: "",
   notas_personales: "",
   notas_cliente: "",
   tipo_tour: "football tour",
@@ -142,6 +148,9 @@ function seedFormFromDetail(detail: Reservation): FormState {
     price: detail.price,
     income: detail.income,
     income_estimado: detail.income_estimado ?? "",
+    trm_estimado: detail.trm_estimado ?? "",
+    trm_final: detail.trm_final ?? "",
+    costos: detail.costos ?? "",
     notas_personales: detail.notas_personales ?? "",
     notas_cliente: detail.notas_cliente ?? "",
     tipo_tour: detail.tipo_tour ?? "",
@@ -217,6 +226,22 @@ function normalizePhone(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) return trimmed;
   return trimmed.startsWith("+") ? trimmed : `+${trimmed}`;
+}
+
+/**
+ * Strips everything but digits and a decimal point from a numeric-only
+ * input (rates, costs) as the operator types, keeping only the first "."
+ * if they type more than one — so a field like TRM Final can never end
+ * up holding letters or symbols.
+ */
+function sanitizeDecimalInput(value: string): string {
+  const digitsAndDots = value.replace(/[^\d.]/g, "");
+  const firstDot = digitsAndDots.indexOf(".");
+  if (firstDot === -1) return digitsAndDots;
+  return (
+    digitsAndDots.slice(0, firstDot + 1) +
+    digitsAndDots.slice(firstDot + 1).replace(/\./g, "")
+  );
 }
 
 const experienciaOptions = Object.keys(EXPERIENCIA_PRESETS).map((value) => ({
@@ -302,28 +327,47 @@ function InfoTooltip({
   );
 }
 
-/** 0-100% fill bar; green when >= 0, a minimal red sliver when negative. */
-function PercentageBar({ value }: { value: string | null }) {
-  if (value === null) return <span>—</span>;
-  const numeric = Number(value);
-  if (Number.isNaN(numeric)) return <span>—</span>;
-
-  const isNegative = numeric < 0;
-  const width = isNegative ? 4 : Math.max(0, Math.min(100, numeric));
-
+/**
+ * A single financial figure as a card — label on top, value sized by
+ * `emphasis`, an optional caption below (e.g. the FX rate that produced
+ * it). Used to build the Resumen's financial hierarchy: "hero" cards for
+ * the headline outcome (Ingreso final, Profit, % Profit) read much larger
+ * than "secondary" reference cards (Ingreso, Ingreso estimado, Costos).
+ */
+function StatCard({
+  label,
+  value,
+  caption,
+  emphasis = "secondary",
+}: {
+  label: string;
+  value: React.ReactNode;
+  caption?: React.ReactNode;
+  emphasis?: "hero" | "secondary";
+}) {
   return (
-    <div className="flex items-center gap-2">
-      <div className="h-1.5 w-24 shrink-0 overflow-hidden rounded-full bg-gray-100 dark:bg-white/10">
-        <div
-          className={`h-full rounded-full ${isNegative ? "bg-error-500" : "bg-success-500"}`}
-          style={{ width: `${width}%` }}
-        />
-      </div>
-      <span
-        className={`text-sm font-medium tabular-nums ${isNegative ? "text-error-600 dark:text-error-400" : "text-gray-800 dark:text-white/90"}`}
+    <div
+      className={`rounded-xl border border-gray-100 p-3 dark:border-gray-800 ${
+        emphasis === "hero"
+          ? "bg-white dark:bg-white/[0.03]"
+          : "bg-gray-50/60 dark:bg-white/[0.02]"
+      }`}
+    >
+      <p className="text-theme-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">
+        {label}
+      </p>
+      <p
+        className={
+          emphasis === "hero"
+            ? "mt-1 text-title-sm font-bold text-gray-800 dark:text-white/90"
+            : "mt-1 text-sm font-semibold text-gray-700 dark:text-gray-200"
+        }
       >
-        {Math.round(numeric)} %
-      </span>
+        {value}
+      </p>
+      {caption ? (
+        <p className="mt-1 text-theme-xs text-gray-400 dark:text-gray-500">{caption}</p>
+      ) : null}
     </div>
   );
 }
@@ -398,7 +442,7 @@ function FormField({
   hintAlign = "center",
   children,
 }: {
-  label: string;
+  label: React.ReactNode;
   hint?: string;
   hintAlign?: "center" | "right";
   children: React.ReactNode;
@@ -413,6 +457,18 @@ function FormField({
       </Label>
       {children}
     </div>
+  );
+}
+
+/** FormField label suffixed with a muted "(calculado)" — for fields that are always derived, never typed into directly. */
+function CalculatedLabel({ text }: { text: string }) {
+  return (
+    <>
+      {text}{" "}
+      <span className="font-normal normal-case text-gray-300 dark:text-gray-600">
+        (calculado)
+      </span>
+    </>
   );
 }
 
@@ -569,16 +625,19 @@ export default function ReservationDetailModal({
     setForm((prev) => ({ ...prev, income: (price * rate).toFixed(2) }));
   }, [form.price, form.booking_provider, createMode, incomeTouched]);
 
-  // Ingreso (+ Moneda) -> Ingreso estimado, until the operator edits it by
-  // hand. COP is a direct passthrough; EUR/USD debounce a live TRM fetch
-  // so Precio's keystroke-by-keystroke cascade doesn't fire one request
-  // per keystroke.
+  // Ingreso (+ Moneda) -> Ingreso estimado + TRM estimado, until the operator
+  // edits Ingreso estimado by hand — TRM estimado has no manual override UI
+  // in create mode (it's purely a third-party lookup), so it always tracks
+  // the same auto-fill toggle as Ingreso estimado. COP is a direct
+  // passthrough (no TRM applies); the fetched rate becomes trm_estimado and
+  // income_estimado = income * rate, debounced so Precio's keystroke-by-
+  // keystroke cascade doesn't fire one request per keystroke.
   useEffect(() => {
     if (!createMode || incomeEstimadoTouched) return;
     setTrmError(null);
 
     if (form.moneda === "COP") {
-      setForm((prev) => ({ ...prev, income_estimado: form.income }));
+      setForm((prev) => ({ ...prev, income_estimado: form.income, trm_estimado: "" }));
       return;
     }
 
@@ -595,6 +654,7 @@ export default function ReservationDetailModal({
             setForm((prev) => ({
               ...prev,
               income_estimado: (income * rate).toFixed(2),
+              trm_estimado: rate.toFixed(2),
             }));
           }
         } catch {
@@ -615,6 +675,29 @@ export default function ReservationDetailModal({
       setTrmLoading(false);
     };
   }, [form.income, form.moneda, createMode, incomeEstimadoTouched]);
+
+  // Edit mode: once the operator finishes filling in a previously-null
+  // trm_estimado, derive Ingreso estimado the same way creation does
+  // (income * trm_estimado) — same formula, just triggered by manual entry
+  // instead of the auto-fetch. Only applies while trm_estimado is still the
+  // editable/unlocked case; stops once the operator edits Ingreso estimado
+  // by hand.
+  useEffect(() => {
+    if (createMode || detail?.trm_estimado != null || incomeEstimadoTouched) {
+      return;
+    }
+    const rate = Number(form.trm_estimado);
+    const income = Number(form.income);
+    if (!form.trm_estimado.trim() || Number.isNaN(rate)) return;
+    if (!form.income.trim() || Number.isNaN(income)) return;
+    setForm((prev) => ({ ...prev, income_estimado: (income * rate).toFixed(2) }));
+  }, [
+    form.trm_estimado,
+    form.income,
+    createMode,
+    detail?.trm_estimado,
+    incomeEstimadoTouched,
+  ]);
 
   // A stale partido link shouldn't silently survive a city/date edit.
   useEffect(() => {
@@ -684,6 +767,23 @@ export default function ReservationDetailModal({
     detail?.income_estimado !== null && detail?.income_estimado !== undefined
       ? Number(detail.income_estimado)
       : liveIncomeEstimado;
+  // Whether to show TRM estimado as a locked caption vs. an editable input.
+  // Must come from `detail` (fixed for the whole edit session), not the
+  // live `form.trm_estimado` — that flips truthy after the operator's very
+  // first keystroke, which would yank the input out from under them mid-edit.
+  const trmEstimadoLocked = detail?.trm_estimado != null;
+  // Live preview of Ingreso final in the edit form — income_final has no
+  // backing FormState field (it's never submitted, purely derived for
+  // display), so it's recomputed straight from income + trm_final on every
+  // render instead.
+  const editFormIncomeFinal = (() => {
+    const income = Number(form.income);
+    if (!form.income.trim() || Number.isNaN(income)) return null;
+    if (form.moneda === "COP") return income;
+    const rate = Number(form.trm_final);
+    if (!form.trm_final.trim() || Number.isNaN(rate)) return null;
+    return income * rate;
+  })();
 
   const isValid =
     form.nombre_experiencia.trim().length > 0 &&
@@ -789,6 +889,10 @@ export default function ReservationDetailModal({
           meeting_point: form.meeting_point || null,
           lugar_de_recogida: form.lugar_de_recogida.trim() || null,
           income_estimado: form.income_estimado.trim() || null,
+          trm_estimado:
+            form.moneda.trim() === "COP"
+              ? null
+              : form.trm_estimado.trim() || null,
           menores_de_edad: form.menores_de_edad,
           partido_id: selectedPartido?.id ?? null,
         };
@@ -834,6 +938,11 @@ export default function ReservationDetailModal({
         meeting_point: form.meeting_point || null,
         lugar_de_recogida: form.lugar_de_recogida.trim() || null,
         income_estimado: form.income_estimado.trim() || null,
+        costos: form.costos.trim() || null,
+        trm_estimado:
+          form.moneda.trim() === "COP" ? null : form.trm_estimado.trim() || null,
+        trm_final:
+          form.moneda.trim() === "COP" ? null : form.trm_final.trim() || null,
         menores_de_edad: form.menores_de_edad,
       };
       const updated = await updateReserva(detail.id, payload);
@@ -1294,45 +1403,161 @@ export default function ReservationDetailModal({
                     />
                   </FormField>
                 </div>
-                <div className="lg:w-46 lg:shrink-0">
+                {createMode ? (
+                  <div className="lg:w-46 lg:shrink-0">
+                    <FormField
+                      label="Ingreso estimado"
+                      hint={
+                        form.moneda === "COP"
+                          ? "Mismo valor que Ingreso, ya está en COP."
+                          : "Calculado con el TRM estimado (de un tercero) sobre el Ingreso."
+                      }
+                      hintAlign="right"
+                    >
+                      <Input
+                        type="text"
+                        prefix="COP"
+                        value={
+                          trmLoading
+                            ? "Calculando…"
+                            : incomeEstimadoFocused
+                              ? form.income_estimado
+                              : formatPlainNumberCO(form.income_estimado)
+                        }
+                        disabled={trmLoading}
+                        onFocus={() => setIncomeEstimadoFocused(true)}
+                        onBlur={() => setIncomeEstimadoFocused(false)}
+                        onChange={(e) => {
+                          setIncomeEstimadoTouched(true);
+                          update("income_estimado", e.target.value);
+                        }}
+                      />
+                      {trmError ? (
+                        <p
+                          role="alert"
+                          className="mt-1.5 text-theme-xs text-error-600 dark:text-error-400"
+                        >
+                          {trmError}
+                        </p>
+                      ) : null}
+                    </FormField>
+                  </div>
+                ) : null}
+              </div>
+
+              {/* Edit mode only: Estimado (creation-time guess) and Final
+                  (post-payment reality) each get their own bordered panel,
+                  rate above the amount it derives — so the two pairs read as
+                  parallel, separate groups instead of one field tucked under
+                  Ingreso estimado and the other stranded in an unrelated row.
+                  Both derived amounts render disabled: they're always
+                  computed, never typed into directly. */}
+              {!createMode && form.moneda !== "COP" ? (
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <div className="rounded-xl border border-gray-100 bg-gray-50/40 p-3 dark:border-gray-800 dark:bg-white/[0.02]">
+                    <p className="mb-2 text-theme-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                      Estimado
+                    </p>
+                    <div className="space-y-3">
+                      <FormField
+                        label="TRM estimado"
+                        hint={
+                          trmEstimadoLocked
+                            ? "Se fijó al crear la reserva y ya no se puede editar."
+                            : "Tomado de un tercero al crear la reserva; aquí se puede completar si quedó vacío. Solo números."
+                        }
+                      >
+                        <Input
+                          type="text"
+                          prefix="COP"
+                          placeholder="0.00"
+                          disabled={trmEstimadoLocked}
+                          value={
+                            trmEstimadoLocked
+                              ? formatPlainNumberCO(form.trm_estimado)
+                              : form.trm_estimado
+                          }
+                          onChange={
+                            trmEstimadoLocked
+                              ? undefined
+                              : (e) =>
+                                  update(
+                                    "trm_estimado",
+                                    sanitizeDecimalInput(e.target.value),
+                                  )
+                          }
+                        />
+                      </FormField>
+                      <FormField label={<CalculatedLabel text="Ingreso estimado" />}>
+                        <Input
+                          type="text"
+                          prefix="COP"
+                          placeholder="Pendiente"
+                          disabled
+                          value={formatPlainNumberCO(form.income_estimado)}
+                        />
+                      </FormField>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-gray-100 bg-gray-50/40 p-3 dark:border-gray-800 dark:bg-white/[0.02]">
+                    <p className="mb-2 text-theme-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                      Final
+                    </p>
+                    <div className="space-y-3">
+                      <FormField
+                        label="TRM Final"
+                        hint="Se llena cuando se recibe el pago; hasta entonces el profit queda pendiente. Solo números."
+                      >
+                        <Input
+                          type="text"
+                          prefix="COP"
+                          placeholder="0.00"
+                          value={form.trm_final}
+                          onChange={(e) =>
+                            update(
+                              "trm_final",
+                              sanitizeDecimalInput(e.target.value),
+                            )
+                          }
+                        />
+                      </FormField>
+                      <FormField label={<CalculatedLabel text="Ingreso final" />}>
+                        <Input
+                          type="text"
+                          prefix="COP"
+                          placeholder="Pendiente TRM Final"
+                          disabled
+                          value={
+                            editFormIncomeFinal !== null
+                              ? formatPlainNumberCO(editFormIncomeFinal.toFixed(2))
+                              : ""
+                          }
+                        />
+                      </FormField>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {!createMode ? (
+                <div className="mt-4">
                   <FormField
-                    label="Ingreso estimado"
-                    hint={
-                      form.moneda === "COP"
-                        ? "Mismo valor que Ingreso, ya está en COP."
-                        : "Calculado con la TRM real del día sobre el Ingreso."
-                    }
-                    hintAlign="right"
+                    label="Costos"
+                    hint="Costos de la reserva, en COP. Solo números."
                   >
                     <Input
                       type="text"
                       prefix="COP"
-                      value={
-                        trmLoading
-                          ? "Calculando…"
-                          : incomeEstimadoFocused
-                            ? form.income_estimado
-                            : formatPlainNumberCO(form.income_estimado)
+                      placeholder="0.00"
+                      value={form.costos}
+                      onChange={(e) =>
+                        update("costos", sanitizeDecimalInput(e.target.value))
                       }
-                      disabled={trmLoading}
-                      onFocus={() => setIncomeEstimadoFocused(true)}
-                      onBlur={() => setIncomeEstimadoFocused(false)}
-                      onChange={(e) => {
-                        setIncomeEstimadoTouched(true);
-                        update("income_estimado", e.target.value);
-                      }}
                     />
-                    {trmError ? (
-                      <p
-                        role="alert"
-                        className="mt-1.5 text-theme-xs text-error-600 dark:text-error-400"
-                      >
-                        {trmError}
-                      </p>
-                    ) : null}
                   </FormField>
                 </div>
-              </div>
+              ) : null}
             </section>
 
             <section>
@@ -1464,42 +1689,109 @@ export default function ReservationDetailModal({
               <h5 className="mb-2 text-theme-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
                 Resumen
               </h5>
-              <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1.5 rounded-xl border border-gray-100 p-3.5 dark:border-gray-800">
-                <DetailRow
-                  label="Ingreso"
-                  value={
-                    <InfoTooltip
-                      label={`El cliente pagó ${formatPrice(detail.price, detail.moneda)} en total`}
-                    >
-                      {formatPrice(detail.income, detail.moneda)}
-                    </InfoTooltip>
-                  }
-                />
-                <DetailRow
-                  label="Ingreso est."
-                  value={
-                    detail.income_estimado !== null ? (
-                      formatCOP(incomeEstimadoCOP)
-                    ) : liveIncomeEstimadoFailed ? (
-                      "—"
-                    ) : (
-                      <InfoTooltip label={`TRM real del día, ${detail.moneda} → COP`}>
-                        {formatCOP(incomeEstimadoCOP)}
+              <div className="rounded-xl border border-gray-100 p-3.5 dark:border-gray-800">
+                {/* Hero row: the bottom line — what actually happened.
+                    Ingreso final always resolves (COP needs no conversion,
+                    so it's just Ingreso there), so it anchors the section
+                    at the largest size, alongside the profit it produces.
+                    Empty values render as a plain "—" at hero size — a full
+                    sentence ("Pendiente TRM del pago") reads as an error at that
+                    scale, so the explanation moves to the small caption
+                    instead. */}
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <StatCard
+                    emphasis="hero"
+                    label="Ingreso final"
+                    value={formatCOP(detail.income_final)}
+                    caption={
+                      detail.moneda !== "COP" && detail.trm_final === null
+                        ? "Pendiente TRM del pago"
+                        : undefined
+                    }
+                  />
+                  <StatCard
+                    emphasis="hero"
+                    label="Profit"
+                    value={
+                      <span className="inline-flex flex-wrap items-center gap-2">
+                        <span
+                          className={
+                            detail.profit !== null && Number(detail.profit) < 0
+                              ? "text-error-600 dark:text-error-400"
+                              : undefined
+                          }
+                        >
+                          {formatCOP(detail.profit)}
+                        </span>
+                        {detail.percentage_profit !== null ? (
+                          <Badge
+                            size="sm"
+                            color={
+                              Number(detail.percentage_profit) < 0 ? "error" : "success"
+                            }
+                          >
+                            {Math.round(Number(detail.percentage_profit))}%
+                          </Badge>
+                        ) : null}
+                      </span>
+                    }
+                    caption={
+                      detail.costos !== null
+                        ? `Costos: ${formatCOP(detail.costos)}`
+                        : "Costos sin definir"
+                    }
+                  />
+                </div>
+
+                {/* Secondary row: supporting reference figures — Ingreso is
+                    the second-most important number (what the client's
+                    payment nominally is before conversion/costs), Ingreso
+                    estimado is only a creation-time guess, and Costos feeds
+                    the hero Profit card above. */}
+                <div
+                  className={`mt-3 grid grid-cols-1 gap-3 ${
+                    detail.moneda === "COP" ? "sm:grid-cols-2" : "sm:grid-cols-3"
+                  }`}
+                >
+                  <StatCard
+                    label="Ingreso"
+                    value={
+                      <InfoTooltip
+                        label={`El cliente pagó ${formatPrice(detail.price, detail.moneda)} en total`}
+                      >
+                        {formatPrice(detail.income, detail.moneda)}
                       </InfoTooltip>
-                    )
-                  }
-                />
-                <DetailRow label="Costos" value={formatCOP(detail.costos)} />
-                <DetailRow label="Profit" value={formatCOP(detail.profit)} />
-                <DetailRow
-                  label="% Profit"
-                  value={<PercentageBar value={detail.percentage_profit} />}
-                />
-                <DetailRow
-                  label="Pago estimado"
-                  value={formatPaidAtDate(detail.paid_at)}
-                />
-              </dl>
+                    }
+                  />
+                  {detail.moneda !== "COP" ? (
+                    <StatCard
+                      label="Ingreso estimado"
+                      value={
+                        detail.trm_estimado !== null || liveIncomeEstimadoFailed ? (
+                          formatCOP(incomeEstimadoCOP)
+                        ) : (
+                          <InfoTooltip label={`TRM real del día, ${detail.moneda} → COP`}>
+                            {formatCOP(incomeEstimadoCOP)}
+                          </InfoTooltip>
+                        )
+                      }
+                      caption={
+                        detail.trm_estimado !== null
+                          ? `TRM estimado: ${formatCOP(detail.trm_estimado)}`
+                          : undefined
+                      }
+                    />
+                  ) : null}
+                  <StatCard label="Costos" value={formatCOP(detail.costos)} />
+                </div>
+
+                <p className="mt-3 text-theme-xs text-gray-400 dark:text-gray-500">
+                  Pago estimado:{" "}
+                  <span className="font-medium text-gray-600 dark:text-gray-300">
+                    {formatPaidAtDate(detail.paid_at)}
+                  </span>
+                </p>
+              </div>
 
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <div>

@@ -127,9 +127,14 @@ async def update_reserva(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Reserva {reserva_id} not found",
         )
+    update_data = payload.model_dump(exclude_unset=True)
+    if existing.trm_estimado is not None:
+        # trm_estimado is settable once (e.g. a legacy null value); once
+        # populated, further attempts to change it are silently dropped.
+        update_data.pop("trm_estimado", None)
     updated = existing.model_copy(
         update={
-            **payload.model_dump(exclude_unset=True),
+            **update_data,
             "updated_at": datetime.now(UTC),
         },
     )

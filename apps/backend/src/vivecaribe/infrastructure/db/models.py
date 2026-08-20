@@ -206,6 +206,9 @@ class ReservaORM(Base):
         Numeric(12, 2),
         nullable=True,
     )
+    trm_estimado: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    trm_final: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    income_final: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     profit: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     percentage_profit: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 2),
