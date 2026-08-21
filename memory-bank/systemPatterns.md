@@ -319,6 +319,78 @@ When Zoho shows an identity email challenge, `ZohoSession` uses the
   reused rather than adding a dedicated `/partidos/{id}/candidate-reservas`
   endpoint.
 
+## Gastos: partido-level expenses split across reservas (#81)
+
+- `Gasto` (`domain/gasto.py`): `partido_id` + `categoria`
+  (`GastoCategoria` StrEnum: Comida y/o Snacks, Transporte, Boletas,
+  Apoyos, Otros) + `monto`, DB-unique on `(partido_id, categoria)` — at
+  most one amount per category per partido, not a repeatable line-item
+  list. `gasto_reserva_splits` persists each linked reserva's share
+  (`gasto_id`, `reserva_id`, `monto`), FK `ondelete="CASCADE"` on both.
+- **Recompute is centralized, not per-repository**: a single
+  module-level `_recompute_gasto_splits(session, partido_id)` in
+  `infrastructure/db/repositories.py` — deletes and reinserts every
+  split row for the partido's gastos (cheap at ≤5 gastos), shares each
+  proportional to `participants` among non-deleted linked reservas,
+  and sets each reserva's `costos` = sum of its shares (or `None` when
+  the partido has zero gastos, not `0` — those are different facts).
+  Called from `SqlAlchemyGastoRepository.upsert`/`delete` **and**
+  `SqlAlchemyReservaRepository.save`/`soft_delete` — a cross-aggregate
+  concern doesn't belong owned by either repository alone.
+- `Reserva.costos` dropped from `ReservaCreate`/`ReservaUpdate` — it's
+  derived, matching the `paid_at`/`income_final` "computed, not
+  client-writable" convention from #55/#78, but computed by a
+  repository-level recompute instead of a domain `model_validator`
+  (it depends on sibling reservas across the partido, which a single
+  entity's own validator can't see).
+- `SqlAlchemyReservaRepository.save()` must explicitly null `costos`
+  whenever a reserva ends up with `partido_id is None` — the
+  post-unlink recompute call only updates reservas *still* linked to
+  the old partido, so the just-unlinked row needs its own direct reset
+  or it goes stale (real bug, found via manual PATCH testing, not
+  caught by the original test suite before #81's tests were added).
+- **`categoria` is a query param, not a path segment** on
+  `PUT`/`DELETE /partidos/{id}/gastos` — "Comida y/o Snacks" contains a
+  literal `/`, which breaks path-segment routing even percent-encoded
+  (`%2F`): ASGI servers decode it before route matching. Any future
+  closed-value field whose display text might contain `/` should default
+  to a query param if it needs to appear in a URL at all.
+- Frontend: collapsed-by-default dropdown (header = label + `Total $X`
+  `Badge` + `AngleDownIcon`), reusing `ReservationDetailModal`'s
+  pre-existing `CollapsibleMetadata` visual language for both the
+  Partido (editable) and Reserva (read-only) instances. `inert={!open}`
+  on the collapsed panel keeps it out of tab order — `CollapsibleMetadata`
+  itself doesn't do this yet (pre-existing gap, left alone). Chevron
+  rotation is **not** always `rotate-180`: this feature uses `-rotate-90`
+  (down → right) per explicit user preference, so don't assume every
+  new collapsible in this app wants the up-flip.
+- Editable Gastos rows (Partido modal) are a compact single-row list
+  (icon chip + label + input), each auto-saving independently on blur;
+  a whole-number `sanitizeIntegerInput`/`formatIntegerCO` pair (no `.`
+  accepted) instead of the decimal-aware helpers used elsewhere, backed
+  by a small dedicated `<input>` (not the shared `Input` component,
+  which hardcodes `h-11`). The proportion-of-total indicator is a thin
+  bar drawn on the row's own bottom divider (`absolute inset-x-0
+  bottom-0 h-0.5`, width = share%) — adds no extra layout height, unlike
+  an earlier card-grid version that gave each category its own
+  label-row + input-row + bar-row and pushed the modal title off-screen
+  on shorter viewports.
+- **Per-field auto-save reseed race**: don't reseed *every* field's
+  local draft from a fresh server response on every save — a
+  `useEffect` keyed on the whole `detail` object re-ran on each
+  individual field's save round-trip and could silently overwrite a
+  sibling field's still-unsaved in-progress draft with its last-
+  committed value. Key the reseed on a stable id (`detail?.id`, fires
+  once per loaded entity) and have the save handler patch only its own
+  field from its own response.
+- **Coverage tool gotcha (project-wide, not gasto-specific)**:
+  `[tool.coverage.run]` needs `concurrency = ["greenlet", "thread"]`
+  when SQLAlchemy's async engine is in play — its greenlet-based DBAPI
+  bridge isn't followed by coverage.py's default thread-only trace hook,
+  which was silently under-reporting every async DB code path's real
+  coverage project-wide (89.95% measured → 95.94% after the one-line
+  config fix, no test changes).
+
 ### Frontend patterns worth reusing
 
 - **Date state**: `getDateState()` in `reservationUtils.ts` classifies an
@@ -360,8 +432,10 @@ When Zoho shows an identity email challenge, `ZohoSession` uses the
 | `users` | `email` unique |
 | `refresh_tokens` | `token_hash` unique; `family_id` for rotation/reuse revoke |
 | `email_messages` | `(source, mailbox_message_id)` |
-| `reservas` | `(booking_provider, reserva_reference)`; soft delete via `deleted_at`; operator/finance + `paid_at` (#55); nullable `partido_id` FK `SET NULL` (#61); `sender`/`subject`/`fecha_email_recibido` nullable (#70) |
+| `reservas` | `(booking_provider, reserva_reference)`; soft delete via `deleted_at`; operator/finance + `paid_at` (#55); nullable `partido_id` FK `SET NULL` (#61); `sender`/`subject`/`fecha_email_recibido` nullable (#70); `costos` fully derived, no longer client-writable (#81) |
 | `partidos` | soft delete via `deleted_at`; indexed on `fecha`, `ciudad` (#61) |
+| `gastos` | unique `(partido_id, categoria)`; FK `partido_id` `CASCADE` (#81) |
+| `gasto_reserva_splits` | unique `(gasto_id, reserva_id)`; FKs `gasto_id`/`reserva_id` `CASCADE`; fully recomputed (delete+reinsert) on every relevant change, not incrementally patched (#81) |
 
 ## Deviations from the original architecture plan
 

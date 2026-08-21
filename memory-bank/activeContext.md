@@ -2,15 +2,117 @@
 
 ## Current focus
 
-Reserva financiero: `trm_estimado`/`trm_final` rates + `income_final`,
-edit-form and Resumen redesign (`#78`/`#79`, PR #80 — **merged to
-main**). Built on top of Vercel Ignored Build Step fix (`#74` —
-merged & wired live) and Reservas partido linking + income auto-fill
-(`#72`, PR #73 — merged), which built on the full Create/Edit/Delete UI
-(`#40`/`#41`/`#70`, PR #71 — merged). Partidos `#61`→`#69` (CRUD +
-UI/UX passes, PR #69) status as of its last update, below.
+Gastos: partido-level expense tracking, split across linked reservas
+by participant count (`#81`, PR open). Built on top of Reserva
+financiero (`#78`/`#79`, PR #80 — merged to main), which built on
+Vercel Ignored Build Step fix (`#74` — merged & wired live) and
+Reservas partido linking + income auto-fill (`#72`, PR #73 — merged),
+which built on the full Create/Edit/Delete UI (`#40`/`#41`/`#70`,
+PR #71 — merged). Partidos `#61`→`#69` (CRUD + UI/UX passes, PR #69)
+status as of its last update, below.
 
 ## Recent decisions
+
+### Gastos: partido-level expenses split across reservas (#81, PR open)
+
+- New `Gasto` entity: one row per `(partido_id, categoria)` — a fixed
+  5-value `GastoCategoria` StrEnum (Comida y/o Snacks, Transporte,
+  Boletas, Apoyos, Otros), `monto` in COP, DB-unique on the pair. The
+  operator sets/clears one amount per category rather than managing a
+  free-form list — a real product constraint ("categories are usually
+  not repeated"), not an arbitrary simplification.
+- New `gasto_reserva_splits` table: persisted per-reserva share,
+  proportional to `participants` among the partido's non-deleted
+  linked reservas. Recomputed (delete-then-reinsert, cheap at ≤5 gastos
+  per partido) by a single shared `_recompute_gasto_splits(session,
+  partido_id)` function called from **four** places:
+  `SqlAlchemyGastoRepository.upsert`/`delete`, and
+  `SqlAlchemyReservaRepository.save`/`soft_delete` (the latter two also
+  cover a reserva joining/leaving a partido and participant-count
+  edits) — a cross-aggregate recompute doesn't belong on either
+  repository alone, so it lives as a module-level function both share.
+- `Reserva.costos` is no longer client-writable (dropped from
+  `ReservaCreate`/`ReservaUpdate`) — it's the sum of that reserva's
+  gasto shares, `None` when its partido has zero gastos (distinct from
+  a confirmed `0`), `None` again if the reserva has no partido at all.
+  Migration resets every existing `costos` to `NULL` (one-time; it's
+  switching from manually-entered to fully derived). `profit`/
+  `percentage_profit` keep deriving from `costos` unchanged.
+- **Real bug found via `SqlAlchemyReservaRepository.save`'s own recompute
+  logic**: unlinking a reserva from its partido via `PATCH
+  /reservas/{id}` (`partido_id: null`) left `costos` stale, because the
+  post-unlink recompute only touches reservas *still* linked to the old
+  partido — the just-unlinked row is invisible to that query. Fixed by
+  explicitly zeroing `costos` whenever `save()` observes the row ending
+  up with no `partido_id`, independent of the recompute calls. The
+  existing bulk `unlink_partido()` (used on partido soft-delete) already
+  did this per-row; the single-reserva PATCH path didn't.
+- **Routing gotcha**: `categoria` travels as a **query parameter**, not
+  a path segment, on `PUT`/`DELETE /partidos/{id}/gastos`. "Comida y/o
+  Snacks" contains a literal `/`, which 404s even percent-encoded
+  (`%2F`) — ASGI servers decode `%2F` before route matching, so a
+  `{categoria}` path param can never match it. Query values have no
+  such restriction. Found via a real failing curl the user pasted in,
+  not by writing a test first.
+- Frontend: both the Partido modal (editable) and Reserva modal
+  (read-only) render Gastos as a collapsed-by-default dropdown —
+  header shows the label + a `Total $X` `Badge` + a chevron, matching
+  the pre-existing `CollapsibleMetadata` pattern in
+  `ReservationDetailModal.tsx`. Collapsed content gets `inert={!open}`
+  so it's out of tab order, not just visually hidden (an a11y gap the
+  pre-existing `CollapsibleMetadata` also has, left alone there —
+  out of scope this round). **Chevron direction, explicit user
+  correction**: default (closed) `AngleDownIcon` points down; the
+  natural "expand" rotation is `rotate-180` (→ up, matches
+  `CollapsibleMetadata`) but this user wants a right-pointing triangle
+  on expand instead — `-rotate-90`, not `rotate-180`. Don't assume the
+  180°-flip convention generalizes to every new collapsible in this app.
+- Partido modal's Gastos editor is a compact single-row-per-category
+  list (icon chip + label + input), not a card grid — cards (icon+label
+  row, input row, separate proportion-bar row, ×5 in a 2-col grid) ate
+  enough vertical space to push the modal title off-screen on shorter
+  viewports. Fixed by (a) collapsing by default, (b) wrapping the whole
+  modal body in `max-h-[min(65vh,34rem)] overflow-y-auto` (title/footer
+  stay pinned — same pattern `ReservationDetailModal` already used), and
+  (c) the proportion bar moved onto the row's own bottom divider
+  (`absolute inset-x-0 bottom-0 h-0.5`, width = share%) instead of a
+  separate layout row, so it costs no extra height.
+- Gasto amounts are **whole pesos, no decimals** — a dedicated
+  `sanitizeIntegerInput`/`formatIntegerCO` pair (digits-only, no `.`
+  accepted at all) instead of reusing `sanitizeDecimalInput`/
+  `formatPlainNumberCO`. A smaller custom `<input>` (h-8) replaces the
+  shared `Input` component in this one section only, since that
+  component hardcodes `h-11` with no size prop — not worth widening its
+  contract for one denser table.
+- **Race found via `playwright-cli`, not a human typing**: each gasto
+  field auto-saves independently on blur, but the original
+  `useEffect` reseeding all 5 drafts from `detail.gastos` on every
+  `detail` update meant one field's async save response could arrive
+  *after* the operator had already started typing into a sibling field,
+  silently reverting that sibling's still-unsaved draft back to its
+  last-committed value. Fixed by keying the reseed effect on
+  `detail?.id` (fires once per loaded partido, not on every save
+  round-trip) and having `handleGastoBlur` patch only its own category's
+  draft from the save response.
+- **Coverage-measurement gotcha, project-wide fix**: adding the gasto
+  repository code dropped backend coverage to 89.95% (gate is 90%)
+  despite the new code being heavily exercised by new tests —
+  `[tool.coverage.run]` had no `concurrency` setting, and SQLAlchemy's
+  async engine bridges DBAPI calls through `greenlet`, which
+  `coverage.py`'s default thread-only trace hook doesn't follow.
+  `concurrency = ["greenlet", "thread"]` in `pyproject.toml` took
+  measured coverage from 89.95% → 95.94% instantly, no test changes —
+  this was under-reporting real coverage on **every** async DB code
+  path in the project already, not something newly broken by this PR.
+- New `tests/test_gastos_api.py`: upsert-is-create-or-update, the
+  slash-categoria routing case explicitly, split proportional to
+  participants (verified per-category, not just the total), recompute
+  on a reserva joining an already-gasto'd partido, `costos` resets on
+  unlink, `costos` stays `None` (not `0`) until the first gasto exists.
+  `test_reservas_api.py`'s three tests that used to set `costos`
+  directly in the create/patch payload were rewritten to go through a
+  real partido+single-reserva link instead (that reserva gets 100% of
+  the gasto, same assertions as before).
 
 ### Reserva financiero: trm_estimado/trm_final rates, income_final, UI redesign (#78/#79, PR #80 — merged)
 
