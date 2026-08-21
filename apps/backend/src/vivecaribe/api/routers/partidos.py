@@ -8,7 +8,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
 
-from vivecaribe.api.deps import CurrentUser, PartidoRepo, ReservaRepo
+from vivecaribe.api.deps import CurrentUser, GastoRepo, PartidoRepo, ReservaRepo
+from vivecaribe.api.schemas.gastos import GastoItem
 from vivecaribe.api.schemas.partidos import (
     PartidoCreate,
     PartidoListResponse,
@@ -22,15 +23,6 @@ from vivecaribe.domain.partido import Partido
 router = APIRouter(tags=["partidos"])
 
 
-async def _to_response(partido: Partido, reservas: ReservaRepo) -> PartidoResponse:
-    """Build a ``PartidoResponse`` embedding its linked reservas (informational)."""
-    linked = await reservas.list_by_partido(partido.id)
-    return PartidoResponse(
-        **partido.model_dump(),
-        reservas=[ReservaShortItem.model_validate(item) for item in linked],
-    )
-
-
 @router.post(
     "/partidos",
     response_model=PartidoResponse,
@@ -40,12 +32,19 @@ async def create_partido(
     payload: PartidoCreate,
     partidos: PartidoRepo,
     reservas: ReservaRepo,
+    gastos: GastoRepo,
     _current_user: CurrentUser,
 ) -> PartidoResponse:
     """Create a partido (JWT required)."""
     partido = Partido(**payload.model_dump())
     saved = await partidos.save(partido)
-    return await _to_response(saved, reservas)
+    linked = await reservas.list_by_partido(saved.id)
+    registered = await gastos.list_by_partido(saved.id)
+    return PartidoResponse(
+        **saved.model_dump(),
+        reservas=[ReservaShortItem.model_validate(item) for item in linked],
+        gastos=[GastoItem.model_validate(item) for item in registered],
+    )
 
 
 @router.get("/partidos", response_model=PartidoListResponse)
@@ -92,6 +91,7 @@ async def get_partido(
     partido_id: UUID,
     partidos: PartidoRepo,
     reservas: ReservaRepo,
+    gastos: GastoRepo,
     _current_user: CurrentUser,
 ) -> PartidoResponse:
     """Return a single partido by id, with its linked reservas (JWT required)."""
@@ -101,7 +101,13 @@ async def get_partido(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Partido {partido_id} not found",
         )
-    return await _to_response(partido, reservas)
+    linked = await reservas.list_by_partido(partido.id)
+    registered = await gastos.list_by_partido(partido.id)
+    return PartidoResponse(
+        **partido.model_dump(),
+        reservas=[ReservaShortItem.model_validate(item) for item in linked],
+        gastos=[GastoItem.model_validate(item) for item in registered],
+    )
 
 
 @router.patch("/partidos/{partido_id}", response_model=PartidoResponse)
@@ -110,6 +116,7 @@ async def update_partido(
     payload: PartidoUpdate,
     partidos: PartidoRepo,
     reservas: ReservaRepo,
+    gastos: GastoRepo,
     _current_user: CurrentUser,
 ) -> PartidoResponse:
     """Partially update a partido (JWT required)."""
@@ -126,7 +133,13 @@ async def update_partido(
         },
     )
     saved = await partidos.save(updated)
-    return await _to_response(saved, reservas)
+    linked = await reservas.list_by_partido(saved.id)
+    registered = await gastos.list_by_partido(saved.id)
+    return PartidoResponse(
+        **saved.model_dump(),
+        reservas=[ReservaShortItem.model_validate(item) for item in linked],
+        gastos=[GastoItem.model_validate(item) for item in registered],
+    )
 
 
 @router.delete(

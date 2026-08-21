@@ -242,6 +242,86 @@ class ReservaORM(Base):
     )
 
 
+class GastoORM(Base):
+    """Persisted partido-level expense in one fixed category.
+
+    At most one row exists per ``(partido_id, categoria)`` — the operator
+    sets one amount per category rather than a repeatable list.
+    """
+
+    __tablename__ = "gastos"
+    __table_args__ = (
+        UniqueConstraint(
+            "partido_id",
+            "categoria",
+            name="uq_gastos_partido_id_categoria",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+    )
+    partido_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("partidos.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    categoria: Mapped[str] = mapped_column(String(32), nullable=False)
+    monto: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class GastoReservaSplitORM(Base):
+    """Persisted per-reserva share of a ``GastoORM``.
+
+    Recomputed (deleted and reinserted) by
+    ``SqlAlchemyGastoRepository`` / ``_recompute_gasto_splits`` whenever a
+    gasto changes or a partido's linked reservas change. Feeds the owning
+    reserva's derived ``costos``.
+    """
+
+    __tablename__ = "gasto_reserva_splits"
+    __table_args__ = (
+        UniqueConstraint(
+            "gasto_id",
+            "reserva_id",
+            name="uq_gasto_reserva_splits_gasto_id_reserva_id",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+    )
+    gasto_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("gastos.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    reserva_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("reservas.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    monto: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+
+
 class PartidoORM(Base):
     """Persisted football match, optionally linked to many reservas."""
 

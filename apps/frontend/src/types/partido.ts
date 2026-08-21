@@ -1,6 +1,7 @@
 /** Partido (match) shapes aligned with API OpenAPI schemas. */
 
 import type { ReservationListItem } from "@/types/reservation";
+import type { GastoItem } from "@/types/gasto";
 
 export type Campeonato =
   | "Colombian Cup"
@@ -53,4 +54,8 @@ export type Partido = PartidoListItem & {
   updated_at: string;
   /** Non-deleted reservas linked to this partido; informational only. */
   reservas: ReservationListItem[];
+  /** Registered expense categories (at most one row per category). */
+  gastos: GastoItem[];
+  /** Sum of every registered gasto category. */
+  gastos_total: string;
 };

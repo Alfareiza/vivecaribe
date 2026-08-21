@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
+from vivecaribe.api.schemas.gastos import GastoItem
 from vivecaribe.api.schemas.reservas import ReservaShortItem
 from vivecaribe.domain.enums import Campeonato, Ciudad, Estadio
 from vivecaribe.domain.partido import Partido
@@ -62,11 +64,20 @@ class PartidoResponse(Partido):
 
     ``reservas`` lists the non-deleted reservations currently linked to this
     partido; it is informational only — associating/dissociating a reserva
-    happens from the Reserva side.
+    happens from the Reserva side. ``gastos`` lists the registered expense
+    categories (at most one row per category); managed via
+    ``PUT``/``DELETE /partidos/{id}/gastos/{categoria}``.
     """
 
     deleted_at: datetime | None = Field(default=None, exclude=True)
     reservas: list[ReservaShortItem] = Field(default_factory=list)
+    gastos: list[GastoItem] = Field(default_factory=list)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def gastos_total(self) -> Decimal:
+        """Sum of every registered gasto category for this partido."""
+        return sum((g.monto for g in self.gastos), Decimal(0))
 
 
 class PartidoListResponse(BaseModel):

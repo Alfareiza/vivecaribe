@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from vivecaribe import __version__
 from vivecaribe.api import deps
-from vivecaribe.api.routers import auth, automation, health, partidos, reservas
+from vivecaribe.api.routers import auth, automation, gastos, health, partidos, reservas
 from vivecaribe.logging import configure_logging, logger
 from vivecaribe.settings import get_settings
 
@@ -81,6 +81,7 @@ def create_app() -> FastAPI:
     app.include_router(automation.router)
     app.include_router(reservas.router)
     app.include_router(partidos.router)
+    app.include_router(gastos.router)
     return app
 
 

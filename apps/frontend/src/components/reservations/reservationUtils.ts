@@ -139,6 +139,22 @@ export function formatCOP(value: number | string | null | undefined): string {
   }).format(amount);
 }
 
+/**
+ * Strips everything but digits and a decimal point from a numeric-only
+ * input (rates, costs, gastos) as the operator types, keeping only the
+ * first "." if they type more than one — so a plain-decimal field can
+ * never end up holding letters or symbols.
+ */
+export function sanitizeDecimalInput(value: string): string {
+  const digitsAndDots = value.replace(/[^\d.]/g, "");
+  const firstDot = digitsAndDots.indexOf(".");
+  if (firstDot === -1) return digitsAndDots;
+  return (
+    digitsAndDots.slice(0, firstDot + 1) +
+    digitsAndDots.slice(firstDot + 1).replace(/\./g, "")
+  );
+}
+
 /** "544252161.08" -> "544.252.161,08" — es-CO thousands/decimal separators, no currency symbol, for editable amount inputs. Returns the raw string unchanged if it isn't a plain number. */
 export function formatPlainNumberCO(value: string): string {
   if (!value.trim()) return value;
@@ -147,6 +163,21 @@ export function formatPlainNumberCO(value: string): string {
   return new Intl.NumberFormat("es-CO", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
+  }).format(amount);
+}
+
+/** Strips everything but digits — for whole-peso amount inputs (e.g. gastos) that don't take cents. */
+export function sanitizeIntegerInput(value: string): string {
+  return value.replace(/[^\d]/g, "");
+}
+
+/** "544252161" -> "544.252.161" — es-CO thousands separator, no decimals, no currency symbol. Returns the raw string unchanged if it isn't a plain number. */
+export function formatIntegerCO(value: string): string {
+  if (!value.trim()) return value;
+  const amount = Number(value);
+  if (Number.isNaN(amount)) return value;
+  return new Intl.NumberFormat("es-CO", {
+    maximumFractionDigits: 0,
   }).format(amount);
 }
 

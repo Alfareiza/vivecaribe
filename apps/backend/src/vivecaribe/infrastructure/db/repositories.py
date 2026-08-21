@@ -3,19 +3,23 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
+from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, Date, and_, cast, func, select
+from sqlalchemy import ColumnElement, Date, and_, cast, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from vivecaribe.domain.email_message import EmailMessage
-from vivecaribe.domain.enums import BookingProvider, ReservaEstado
+from vivecaribe.domain.enums import BookingProvider, GastoCategoria, ReservaEstado
+from vivecaribe.domain.gasto import Gasto
 from vivecaribe.domain.partido import Partido
 from vivecaribe.domain.refresh_token import RefreshToken
 from vivecaribe.domain.reserva import Reserva
 from vivecaribe.domain.user import User
 from vivecaribe.infrastructure.db.models import (
     EmailMessageORM,
+    GastoORM,
+    GastoReservaSplitORM,
     PartidoORM,
     RefreshTokenORM,
     ReservaORM,
@@ -27,6 +31,65 @@ def _apply_fields(row: object, data: dict[str, object]) -> None:
     """Copy ``data`` keys onto an ORM instance."""
     for key, value in data.items():
         setattr(row, key, value)
+
+
+async def _recompute_gasto_splits(session: AsyncSession, partido_id: UUID) -> None:
+    """Recompute every gasto's per-reserva split for ``partido_id`` and sync ``costos``.
+
+    Each reserva's share of a gasto is proportional to its ``participants``
+    among the partido's non-deleted linked reservas. Deletes and reinserts
+    every split row for the partido's gastos in one pass — simplest way to
+    stay correct after any gasto/reserva-link/participant-count change, and
+    cheap given the tiny row counts involved (at most 5 gastos).
+
+    A reserva's ``costos`` becomes the sum of its shares when the partido
+    has at least one gasto, or ``None`` when it has none yet (distinct from
+    "confirmed zero"). Shared by ``SqlAlchemyGastoRepository`` and
+    ``SqlAlchemyReservaRepository`` so both mutation paths stay in sync.
+    """
+    gastos_result = await session.execute(
+        select(GastoORM).where(GastoORM.partido_id == partido_id),
+    )
+    gastos = list(gastos_result.scalars())
+
+    reservas_result = await session.execute(
+        select(ReservaORM).where(
+            ReservaORM.partido_id == partido_id,
+            ReservaORM.deleted_at.is_(None),
+        ),
+    )
+    reservas = list(reservas_result.scalars())
+    total_participants = sum(r.participants for r in reservas)
+
+    gasto_ids = [g.id for g in gastos]
+    if gasto_ids:
+        await session.execute(
+            delete(GastoReservaSplitORM).where(
+                GastoReservaSplitORM.gasto_id.in_(gasto_ids),
+            ),
+        )
+
+    costos_by_reserva: dict[UUID, Decimal] = {r.id: Decimal(0) for r in reservas}
+    if total_participants > 0:
+        for gasto in gastos:
+            for reserva in reservas:
+                share = (
+                    gasto.monto * reserva.participants / total_participants
+                ).quantize(Decimal("0.01"))
+                if share <= 0:
+                    continue
+                session.add(
+                    GastoReservaSplitORM(
+                        gasto_id=gasto.id,
+                        reserva_id=reserva.id,
+                        monto=share,
+                    ),
+                )
+                costos_by_reserva[reserva.id] += share
+
+    for reserva in reservas:
+        reserva.costos = costos_by_reserva[reserva.id] if gastos else None
+    await session.flush()
 
 
 class SqlAlchemyUserRepository:
@@ -163,7 +226,12 @@ class SqlAlchemyReservaRepository:
         return Reserva.model_validate(row) if row else None
 
     async def save(self, reserva: Reserva) -> Reserva:
-        """Insert or update a reservation and return the persisted entity."""
+        """Insert or update a reservation and return the persisted entity.
+
+        Recomputes gasto splits for any partido this reserva was or is now
+        linked to, when the link or ``participants`` changes — ``costos``
+        is derived from those splits and would otherwise go stale.
+        """
         row = await self._session.get(ReservaORM, reserva.id)
         payload = reserva.model_dump()
         payload["booking_provider"] = reserva.booking_provider.value
@@ -176,12 +244,33 @@ class SqlAlchemyReservaRepository:
             if reserva.meeting_point is not None
             else None
         )
+
+        old_partido_id: UUID | None = None
+        old_participants: int | None = None
         if row is None:
             row = ReservaORM(**payload)
             self._session.add(row)
         else:
+            old_partido_id = row.partido_id
+            old_participants = row.participants
             _apply_fields(row, payload)
+
+        if row.partido_id is None:
+            # No partido to derive costos from — a recompute for the old
+            # partido (below) only updates reservas still linked to it, so
+            # this row must be reset explicitly or it goes stale.
+            row.costos = None
         await self._session.flush()
+
+        new_partido_id = row.partido_id
+        if new_partido_id is not None and (
+            old_partido_id != new_partido_id
+            or old_participants != row.participants
+        ):
+            await _recompute_gasto_splits(self._session, new_partido_id)
+        if old_partido_id is not None and old_partido_id != new_partido_id:
+            await _recompute_gasto_splits(self._session, old_partido_id)
+
         await self._session.refresh(row)
         return Reserva.model_validate(row)
 
@@ -258,7 +347,11 @@ class SqlAlchemyReservaRepository:
         return items, total
 
     async def soft_delete(self, reserva_id: UUID) -> bool:
-        """Mark a reservation as deleted. Return ``False`` if missing."""
+        """Mark a reservation as deleted. Return ``False`` if missing.
+
+        Recomputes its partido's gasto splits afterward — removing a
+        participant changes every remaining reserva's share.
+        """
         result = await self._session.execute(
             select(ReservaORM).where(
                 ReservaORM.id == reserva_id,
@@ -271,7 +364,10 @@ class SqlAlchemyReservaRepository:
         now = datetime.now(UTC)
         row.deleted_at = now
         row.updated_at = now
+        partido_id = row.partido_id
         await self._session.flush()
+        if partido_id is not None:
+            await _recompute_gasto_splits(self._session, partido_id)
         return True
 
     async def list_by_partido(self, partido_id: UUID) -> list[Reserva]:
@@ -285,7 +381,9 @@ class SqlAlchemyReservaRepository:
         return [Reserva.model_validate(row) for row in result.scalars()]
 
     async def unlink_partido(self, partido_id: UUID) -> int:
-        """Clear ``partido_id`` on every reservation linked to it. Return count."""
+        """Clear ``partido_id`` (and derived ``costos``) on every reservation
+        linked to it. Return count.
+        """
         result = await self._session.execute(
             select(ReservaORM).where(ReservaORM.partido_id == partido_id),
         )
@@ -293,6 +391,7 @@ class SqlAlchemyReservaRepository:
         now = datetime.now(UTC)
         for row in rows:
             row.partido_id = None
+            row.costos = None
             row.updated_at = now
         await self._session.flush()
         return len(rows)
@@ -414,6 +513,89 @@ class SqlAlchemyPartidoRepository:
         row.updated_at = now
         await self._session.flush()
         return True
+
+
+class SqlAlchemyGastoRepository:
+    """Gasto persistence backed by PostgreSQL, plus reserva-split recomputation.
+
+    A gasto only ever exists as at most one row per ``(partido_id,
+    categoria)`` — callers set or clear a category's amount rather than
+    creating/deleting arbitrary rows.
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        """Bind this repository to an open async session."""
+        self._session = session
+
+    async def _get_row(
+        self,
+        partido_id: UUID,
+        categoria: GastoCategoria,
+    ) -> GastoORM | None:
+        result = await self._session.execute(
+            select(GastoORM).where(
+                GastoORM.partido_id == partido_id,
+                GastoORM.categoria == categoria.value,
+            ),
+        )
+        return result.scalar_one_or_none()
+
+    async def list_by_partido(self, partido_id: UUID) -> list[Gasto]:
+        """Return every gasto category registered for ``partido_id``."""
+        result = await self._session.execute(
+            select(GastoORM).where(GastoORM.partido_id == partido_id),
+        )
+        return [Gasto.model_validate(row) for row in result.scalars()]
+
+    async def upsert(
+        self,
+        partido_id: UUID,
+        categoria: GastoCategoria,
+        monto: Decimal,
+    ) -> Gasto:
+        """Create or update the single gasto for ``(partido_id, categoria)``.
+
+        Recomputes this partido's reserva splits afterward.
+        """
+        row = await self._get_row(partido_id, categoria)
+        now = datetime.now(UTC)
+        if row is None:
+            row = GastoORM(partido_id=partido_id, categoria=categoria.value, monto=monto)
+            self._session.add(row)
+        else:
+            row.monto = monto
+            row.updated_at = now
+        await self._session.flush()
+        await _recompute_gasto_splits(self._session, partido_id)
+        await self._session.refresh(row)
+        return Gasto.model_validate(row)
+
+    async def delete(self, partido_id: UUID, categoria: GastoCategoria) -> bool:
+        """Remove the gasto for ``(partido_id, categoria)``. Return ``False`` if missing.
+
+        Recomputes this partido's reserva splits afterward.
+        """
+        row = await self._get_row(partido_id, categoria)
+        if row is None:
+            return False
+        await self._session.delete(row)
+        await self._session.flush()
+        await _recompute_gasto_splits(self._session, partido_id)
+        return True
+
+    async def shares_by_reserva(
+        self,
+        reserva_id: UUID,
+    ) -> list[tuple[GastoCategoria, Decimal]]:
+        """Return this reserva's ``(categoria, monto)`` share of each of its
+        partido's gastos, from the persisted split table.
+        """
+        result = await self._session.execute(
+            select(GastoORM.categoria, GastoReservaSplitORM.monto)
+            .join(GastoReservaSplitORM, GastoReservaSplitORM.gasto_id == GastoORM.id)
+            .where(GastoReservaSplitORM.reserva_id == reserva_id),
+        )
+        return [(GastoCategoria(categoria), monto) for categoria, monto in result.all()]
 
 
 class SqlAlchemyEmailMessageRepository:

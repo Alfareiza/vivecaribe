@@ -11,6 +11,20 @@ from httpx import AsyncClient
 from tests.conftest import auth_headers
 
 
+def _partido_payload(**overrides: Any) -> dict[str, Any]:
+    """Build a valid ``POST /partidos`` body with optional overrides."""
+    payload: dict[str, Any] = {
+        "equipo_local": "Junior",
+        "equipo_visitante": "Millonarios",
+        "nombre_campeonato": "Colombian League",
+        "estadio": "Metropolitano",
+        "fecha": "2026-09-01T20:00:00Z",
+        "ciudad": "Barranquilla",
+    }
+    payload.update(overrides)
+    return payload
+
+
 def _reserva_payload(**overrides: Any) -> dict[str, Any]:
     """Build a valid ``POST /reservas`` body with optional overrides."""
     payload: dict[str, Any] = {
@@ -82,7 +96,6 @@ async def test_create_reserva_sets_paid_at_and_operator_fields(
             notas_cliente="Prefiere inglés",
             tipo_tour="city tour",
             notas_personales="VIP",
-            costos="25.00",
             meeting_point="Door-to-Door",
             lugar_de_recogida="Hotel Caribe",
             income_estimado="90.00",
@@ -99,7 +112,8 @@ async def test_create_reserva_sets_paid_at_and_operator_fields(
     assert body["meeting_point"] == "Door-to-Door"
     assert body["lugar_de_recogida"] == "Hotel Caribe"
     assert body["menores_de_edad"] is True
-    assert body["costos"] == "25.00"
+    # Not linked to a partido — costos has nothing to derive from.
+    assert body["costos"] is None
     assert body["trm_estimado"] == "4100.00"
     # income_estimado given but trm_final is not set until payment arrives.
     assert body["trm_final"] is None
@@ -130,8 +144,22 @@ async def test_create_reserva_paid_at_null_without_fecha_evento(
 async def test_create_reserva_cop_profit_computed_without_trm(
     auth_client: AsyncClient,
 ) -> None:
-    """COP reservas compute profit directly, no trm_final needed."""
+    """COP reservas compute profit directly, no trm_final needed.
+
+    ``costos`` is no longer client-writable — it's derived from this
+    reserva's share of its partido's gastos (see ``test_gastos_api.py``
+    for split-across-multiple-reservas coverage). As the sole reserva
+    linked to the partido here, it gets the full gasto amount.
+    """
     headers = await auth_headers(auth_client)
+    partido = await auth_client.post(
+        "/partidos",
+        json=_partido_payload(),
+        headers=headers,
+    )
+    assert partido.status_code == 201
+    partido_id = partido.json()["id"]
+
     response = await auth_client.post(
         "/reservas",
         json=_reserva_payload(
@@ -139,12 +167,26 @@ async def test_create_reserva_cop_profit_computed_without_trm(
             moneda="COP",
             price="100000.00",
             income="100000.00",
-            costos="40000.00",
+            participants=1,
+            partido_id=partido_id,
         ),
         headers=headers,
     )
     assert response.status_code == 201
-    body = response.json()
+    reserva_id = response.json()["id"]
+
+    gasto = await auth_client.put(
+        f"/partidos/{partido_id}/gastos",
+        params={"categoria": "Transporte"},
+        json={"monto": "40000.00"},
+        headers=headers,
+    )
+    assert gasto.status_code == 200
+
+    body = (
+        await auth_client.get(f"/reservas/{reserva_id}", headers=headers)
+    ).json()
+    assert body["costos"] == "40000.00"
     assert body["income_final"] == "100000.00"
     assert body["profit"] == "60000.00"
     assert body["percentage_profit"] == "60.00"
@@ -156,22 +198,44 @@ async def test_patch_reserva_sets_trm_final_and_computes_profit(
 ) -> None:
     """Filling trm_final on a non-COP reserva computes profit in COP."""
     headers = await auth_headers(auth_client)
+    partido = await auth_client.post(
+        "/partidos",
+        json=_partido_payload(),
+        headers=headers,
+    )
+    assert partido.status_code == 201
+    partido_id = partido.json()["id"]
+
     created = await auth_client.post(
         "/reservas",
         json=_reserva_payload(
             reserva_reference="USD-PROFIT-1",
             moneda="USD",
             income="100.00",
-            costos="300000.00",
+            participants=1,
+            partido_id=partido_id,
         ),
         headers=headers,
     )
     assert created.status_code == 201
-    body = created.json()
+    reserva_id = created.json()["id"]
+
+    gasto = await auth_client.put(
+        f"/partidos/{partido_id}/gastos",
+        params={"categoria": "Transporte"},
+        json={"monto": "300000.00"},
+        headers=headers,
+    )
+    assert gasto.status_code == 200
+
+    body = (
+        await auth_client.get(f"/reservas/{reserva_id}", headers=headers)
+    ).json()
+    assert body["costos"] == "300000.00"
+    # income_final is still pending — trm_final not set yet.
     assert body["income_final"] is None
     assert body["profit"] is None
     assert body["percentage_profit"] is None
-    reserva_id = body["id"]
 
     response = await auth_client.patch(
         f"/reservas/{reserva_id}",

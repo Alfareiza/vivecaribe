@@ -60,6 +60,10 @@ addopts = [
 source = ["src/vivecaribe"]
 branch = false
 omit = ["*/__init__.py"]
+# SQLAlchemy's async engine bridges DBAPI calls through greenlet; without
+# this, coverage.py's default thread-based trace hook misses lines executed
+# inside those greenlet context switches, undercounting real coverage.
+concurrency = ["greenlet", "thread"]
 
 [tool.coverage.report]
 fail_under = 90
