@@ -2,18 +2,123 @@
 
 ## Current focus
 
-Gastos: partido-level expense tracking, split across linked reservas
-by participant count (`#81`, PR open). Built on top of Reserva
-financiero (`#78`/`#79`, PR #80 — merged to main), which built on
-Vercel Ignored Build Step fix (`#74` — merged & wired live) and
-Reservas partido linking + income auto-fill (`#72`, PR #73 — merged),
-which built on the full Create/Edit/Delete UI (`#40`/`#41`/`#70`,
-PR #71 — merged). Partidos `#61`→`#69` (CRUD + UI/UX passes, PR #69)
-status as of its last update, below.
+Reservas/partidos UX polish: wider notas fields, partido participants
+count, date-only `fecha_evento`, collapsible notas, consolidated
+reservas filter menu (`#83`, PR #84 — merged to main). Built on top of
+Gastos (`#81`, PR #82 — merged), which built on Reserva financiero
+(`#78`/`#79`, PR #80 — merged), which built on Vercel Ignored Build
+Step fix (`#74` — merged & wired live) and Reservas partido linking +
+income auto-fill (`#72`, PR #73 — merged), which built on the full
+Create/Edit/Delete UI (`#40`/`#41`/`#70`, PR #71 — merged). Partidos
+`#61`→`#69` (CRUD + UI/UX passes, PR #69) status as of its last
+update, below.
 
 ## Recent decisions
 
-### Gastos: partido-level expenses split across reservas (#81, PR open)
+### Reservas/partidos UX polish: notas length, participants count, date-only fecha_evento, filter menu (#83, PR #84 — merged)
+
+- `notas_cliente`/`notas_personales` widened 255 → 5000 chars (domain,
+  ORM `String(5000)`, `ReservaCreate`/`ReservaUpdate`, migration
+  `a2b3c4d5e6f7` via `op.alter_column`).
+- `GET /partidos` gained `participants_count` in the same
+  LEFT JOIN query that already produced `reservas_count` —
+  `func.coalesce(func.sum(ReservaORM.participants), 0)` alongside the
+  existing `func.count`, same `GROUP BY partido.id`, no second query.
+  Frontend: a flat (untiered) badge next to the existing tiered reserva
+  badge — headcounts are unbounded sums across bookings, so a
+  bronze/silver/gold medal scale (tuned for small reserva counts)
+  doesn't map cleanly onto them. `justify-between` puts reserva badge
+  left, participants badge right (explicit user correction — first pass
+  had them the other way round).
+- Reserva modal notas: replaced two always-expanded `TextArea`s
+  (side-by-side 2-col grid) with two independently collapsible rows
+  (collapsed by default, one-line truncated preview, tap to expand) —
+  local `NotaRow` component in `ReservationDetailModal.tsx` following
+  the file's existing chevron-rotate + `grid-template-rows` collapse
+  pattern (`gastoExpanded`/`CollapsibleMetadata`), not a new mechanism.
+- `fecha_evento` is edited as a date-only `<input type="date">`
+  everywhere (reservas table filter target, reserva create/edit form,
+  partido modals' linked-reserva rows) instead of `datetime-local`; a
+  literal `T12:00:00Z` noon placeholder is appended client-side
+  (`toIsoUtcAtNoon()`) before the API call, matching this codebase's
+  existing "naive digits, no real timezone math" convention
+  (`toIsoUtc()` already just appended `:00Z` the same way) — noon is
+  comfortably clear of any midnight boundary once the backend converts
+  to America/Bogota for filtering/display, so it doesn't matter whether
+  it's read as literal-noon or true-UTC-noon. New `formatRawDate()` /
+  `rawDateOnly()` display helpers so no stored time-of-day (including
+  legacy non-noon values) leaks into any UI surface.
+- **Real bug, backend already correct**: before touching the reservas
+  filter, verified via new integration tests
+  (`test_list_reservas_date_filter_uses_bogota_calendar_day`,
+  `..._includes_late_evening_events`) that the existing `fecha_evento`
+  range filter already does inclusive America/Bogota calendar-day
+  comparison correctly — no fix needed there, just regression coverage
+  locking in behavior that was already right.
+- Reservas table: Estado/Proveedor/Fecha evento consolidated behind a
+  single filter-icon button + count badge, reusing the existing
+  `Dropdown` component (`ui/dropdown/Dropdown.tsx`, same one `ShareMenu`
+  uses) rather than building a new popover primitive. `key={reset
+  token}` on each control forces a remount back to its default when
+  "Limpiar filtros" is clicked (this codebase's `Select`/`DatePicker`
+  are both uncontrolled-after-mount, so a `key` bump is the established
+  way to force-resync them — see systemPatterns.md's existing
+  uncontrolled-`Select` note).
+- **Real bug, found via user report**: the outer `ReservationsTable`
+  wrapper had `overflow-hidden` (for the table's rounded corners); when
+  the filtered result set shrinks (e.g. the empty state), that
+  wrapper's height shrinks with it and clips the bottom of the
+  absolutely-positioned filter dropdown, which is taller than the
+  now-short content. Fixed by dropping `overflow-hidden` from the outer
+  card — nothing else in that container actually depended on it.
+- **Real bug, found via user report**: clicking the "Fecha evento"
+  *label* (not the input) was opening the calendar — the shared
+  `DatePicker`'s `label` prop renders a `<label htmlFor={id}>`, and a
+  label click natively fires focus+click on its associated input,
+  which flatpickr treats identically to a direct click. Fixed narrowly
+  (this one usage only): don't pass `DatePicker`'s `label` prop here,
+  render a plain non-associated `<p>` above it instead. Left the shared
+  component's `label` prop/behavior alone — it's correct, standard a11y
+  behavior for ordinary form fields; this is a narrow case where a
+  calendar popup inside a small popover makes that native behavior feel
+  like an unwanted click target.
+- **Real bug, found via user report**: selecting a `fecha_evento` date
+  range only ever captured the *first* click — flatpickr's `onChange`
+  fires after every intermediate click (including just the first one),
+  and the handler committed `dateFrom`/`dateTo` state on every fire.
+  That state update re-rendered `ReservationsTable`, creating a new
+  inline `onChange` closure, which — since `onChange` was in the shared
+  `DatePicker`'s init `useEffect` dependency array — destroyed and
+  recreated the flatpickr instance mid-selection, wiping the pending
+  "desde" click before "hasta" could be picked. Fixed by adding
+  `onClose` support to the shared `DatePicker` (flatpickr's `onClose`
+  hook fires once, when the calendar actually closes) and moving the
+  commit there, wrapped in `useCallback` for a stable identity. General
+  lesson for this component: any handler passed to `DatePicker` in
+  `mode="range"` that triggers a parent re-render must either be
+  `useCallback`-stabilized or live in `onClose`, not `onChange`.
+- **SVGR/svgo gotcha, found while adding the filter icon**: a source
+  SVG whose `viewBox` exactly matches its own `width`/`height`
+  attributes (e.g. `viewBox="0 0 20 20" width="20" height="20"`) gets
+  its `viewBox` silently stripped by svgo's default `removeViewBox`
+  plugin during the `@svgr/webpack` build (no custom svgo config in
+  this project). Without a `viewBox`, an SVG forced to a different CSS
+  size (e.g. Tailwind `size-4` on a 20-native icon) doesn't scale — it
+  clips/offsets instead, which can render as an apparently-blank icon
+  depending on how much the path overlaps the forced box. First filter
+  icon (20×20, `width`/`height` set) hit this and looked invisible;
+  swapping to a source SVG with **no `width`/`height` attributes at
+  all** (just `viewBox`) — same shape as the icons already in
+  `src/icons/*.svg` — avoids the strip entirely and scales correctly
+  at any size class. Check any newly-added icon renders at its intended
+  size before trusting it compiled correctly; a missing/stripped
+  `viewBox` won't error, it just silently misrenders.
+- Added `public/images/providers/otro.svg` (a user-supplied outline
+  icon) — `booking_provider: "otro"` had no icon file and was 404ing
+  against `ProviderLogo`'s `/images/providers/{provider}.svg` lookup
+  (noted as a known gap below since #70; now closed).
+
+### Gastos: partido-level expenses split across reservas (#81, PR #82 — merged)
 
 - New `Gasto` entity: one row per `(partido_id, categoria)` — a fixed
   5-value `GastoCategoria` StrEnum (Comida y/o Snacks, Transporte,
@@ -436,9 +541,6 @@ status as of its last update, below.
 - Hourly Colombia-window ingest still needs Pro (Hobby Cron is once/day).
   API-project Cron was removed; ingest is triggered by an external scheduler.
 - Stored dates eventually all America/Bogota (noted during #46).
-- No provider logo asset for `otro` yet — `ProviderLogo` 404s for it
-  (`vayara`/`airbnb`/etc. have real SVGs under
-  `public/images/providers/`, `otro` doesn't; cosmetic, non-blocking).
 - Partido↔reserva matching only runs on partido *create* and only offers a
   one-time confirmation; no ongoing/periodic re-match for reservas created
   or edited afterward (noted as a future idea before #68/#69 built the

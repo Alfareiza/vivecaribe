@@ -86,10 +86,12 @@ check this setting first before writing more tests to compensate.
   (also `workflow_dispatch`).
 - Runs `uv run alembic upgrade head` against repository secret `DATABASE_URL`
   (prod Supabase). Not run in Vercel or Docker Compose entrypoints.
-- Latest schema add: `gastos` + `gasto_reserva_splits` tables, plus a
-  one-time reset of `reservas.costos` to `NULL` (#81, migration
-  `958c6f8b6a56`) — `costos` becomes fully derived from gastos.
-  Previous: `trm_estimado`/`trm_final` (renamed from `trm_del_dia`) +
+- Latest schema add: `reservas.notas_cliente`/`notas_personales` widened
+  `String(255)` → `String(5000)` (#83, migration `a2b3c4d5e6f7`).
+  Previous: `gastos` + `gasto_reserva_splits` tables, plus a one-time
+  reset of `reservas.costos` to `NULL` (#81, migration `958c6f8b6a56`) —
+  `costos` becomes fully derived from gastos. Before that:
+  `trm_estimado`/`trm_final` (renamed from `trm_del_dia`) +
   `income_final` on `reservas` (#78/#79, PR #80).
 
 ## Env vars (auth / CORS / UI)

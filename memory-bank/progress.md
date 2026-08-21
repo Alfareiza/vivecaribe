@@ -35,7 +35,8 @@
 | Reservas partido linking + income auto-fill + form polish | Merged (#73) | Closes #72; partido picker on create (cached, single-select); Ingreso/Ingreso estimado auto-fill via provider rate + live TRM; ViveCaribe label, COP prefix + es-CO number formatting |
 | Vercel Ignored Build Step fix | Merged (#74) | Diff against `$VERCEL_GIT_PREVIOUS_SHA` not `HEAD^`, so a multi-commit push whose tip doesn't touch a project's files no longer silently skips that project's build (hit on #66 and #73); both dashboards wired to the new script via API |
 | Reserva financiero: trm_estimado/trm_final, income_final, UI redesign | Merged (#78/#79, PR #80) | `trm_estimado` (auto-fetched at creation, editable only while null) + `trm_final` (renamed from `trm_del_dia`, always editable) drive server-computed `income_estimado`/`income_final`; `profit`/`percentage_profit` now derive from `income_final`. Edit form redesigned into paired Estimado/Final panels with disabled "(calculado)" derived fields; Resumen redesigned into a hero (Ingreso final, Profit + % badge)/secondary (Ingreso, Ingreso estimado, Costos) hierarchy. Numeric-only sanitization on rate/cost inputs; fixed a focus-triggered reformat race that could silently double a saved rate |
-| Gastos: partido-level expenses split across reservas | PR open (#81) | New `Gasto`/`gasto_reserva_splits` tables — one gasto per `(partido, categoria)`, split proportional to each linked reserva's `participants`, recomputed on every gasto/link/participant change. `Reserva.costos` no longer client-writable, fully derived. Collapsed-by-default Gastos dropdown in both the Partido (editable) and Reserva (read-only) modals; scrollable modal body so the section can't push the title off-screen. Fixed a real routing bug (categoria as query param, not path segment — some labels contain `/`), a real stale-costos-on-unlink bug, and a real coverage-measurement gap (`concurrency = ["greenlet", "thread"]`) |
+| Gastos: partido-level expenses split across reservas | Merged (#82) | New `Gasto`/`gasto_reserva_splits` tables — one gasto per `(partido, categoria)`, split proportional to each linked reserva's `participants`, recomputed on every gasto/link/participant change. `Reserva.costos` no longer client-writable, fully derived. Collapsed-by-default Gastos dropdown in both the Partido (editable) and Reserva (read-only) modals; scrollable modal body so the section can't push the title off-screen. Fixed a real routing bug (categoria as query param, not path segment — some labels contain `/`), a real stale-costos-on-unlink bug, and a real coverage-measurement gap (`concurrency = ["greenlet", "thread"]`) |
+| Reservas/partidos UX polish: notas length, participants count, date-only fecha_evento, filter menu | Merged (#83, PR #84) | `notas_cliente`/`notas_personales` 255→5000 chars; `GET /partidos` gained `participants_count` (SUM of participants, same LEFT JOIN as `reservas_count`) shown as a flat badge; reserva notas are now independently collapsible rows; `fecha_evento` edited as date-only everywhere with an internal noon placeholder; reservas table filters (Estado/Proveedor/Fecha evento) consolidated behind one filter-icon menu. Fixed a mobile column-alignment bug, an `overflow-hidden` clipping bug on the new filter dropdown, a label-click-opens-calendar bug, a date-range-only-captures-first-click bug (flatpickr `onChange`→`onClose`), and the missing `otro` provider icon (was 404ing) |
 
 ## In progress / open children of #41
 
@@ -67,14 +68,22 @@
   hand-edited.
 - Partidos CRUD (`/partidos`); optional 1:many with reservas via
   `partido_id`. `/partidos` UI: upcoming/past split list, temporal card
-  states, tiered reserva-count badge, auto-match unassigned reservas by
-  ciudad+day on create with bulk-assign confirmation.
+  states, tiered reserva-count badge + flat participants-count badge
+  (`participants_count`, SUM across linked reservas), auto-match
+  unassigned reservas by ciudad+day on create with bulk-assign
+  confirmation.
 - Gastos: `PUT`/`DELETE /partidos/{id}/gastos` (categoria as query
   param) register a partido's per-category expenses; each linked
   reserva's `costos` derives automatically from its participant-
   proportional share, kept live as gastos/links/participant counts
   change. Collapsed-by-default UI in both the Partido and Reserva
   modals.
+- Reserva modal: notas render as independently collapsible rows
+  (collapsed by default). `fecha_evento` is a date-only field
+  everywhere in the UI (table, modals) with a noon placeholder appended
+  internally before the API call. Reservas table filters consolidated
+  behind a single filter-icon menu with an active-count badge and
+  "Limpiar filtros".
 - Shared pulse loading for auth gate, reservas fetch, and sign-in submit.
 - Automation POST accepts JWT **or** `CRON_SECRET`; GET same auth.
 - Pipeline GYG / Viator / Homefans / Propio (Zoho); idempotent persistence.

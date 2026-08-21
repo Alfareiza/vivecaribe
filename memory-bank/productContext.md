@@ -71,3 +71,20 @@ structured reservations operators can trust, while remaining an API platform
   edited from the partido side) so the operator can see exactly how
   much of the shared spend landed on that specific booking, and how it
   feeds that reserva's profit.
+
+### Reservas/partidos UX polish (`#83`)
+
+- Partido cards show total headcount at a glance (`participants_count`
+  badge, alongside the reserva-count badge) so an operator can gauge a
+  match's scale without opening it.
+- Reserva notas (personal + client-facing) collapse to a one-line
+  preview by default — most reservas don't need them visible, but they
+  should never be more than a tap away.
+- `fecha_evento` is a pure date everywhere an operator sees or edits
+  it — the time-of-day was never operationally meaningful and only
+  added noise (and, before this round, an actual UI gap: the picker
+  exposed an hour/minute the app never used for anything).
+- Reservas filters (Estado, Proveedor, Fecha evento) live behind one
+  "Filtros" button with an active-count badge instead of three
+  always-visible controls, keeping the list's header compact while
+  still surfacing at a glance whether any filter is active.

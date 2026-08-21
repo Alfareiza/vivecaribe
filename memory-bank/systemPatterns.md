@@ -391,6 +391,91 @@ When Zoho shows an identity email challenge, `ZohoSession` uses the
   coverage project-wide (89.95% measured → 95.94% after the one-line
   config fix, no test changes).
 
+## Reservas/partidos UX polish (#83)
+
+- `GET /partidos`'s `participants_count` reuses the exact `reservas_count`
+  query shape (#66): same outer join, same `GROUP BY partido.id`, just an
+  extra `func.coalesce(func.sum(ReservaORM.participants), 0)` selected
+  alongside `func.count(ReservaORM.id)` — one query, two aggregates, no
+  new join. `coalesce` matters here (unlike `count`, which is naturally 0
+  for a partido with no reservas) since `sum` over zero rows is SQL
+  `NULL`.
+- **Collapsible content, independent per instance**: `NotaRow` (local to
+  `ReservationDetailModal.tsx`) is the "most compact" version of this
+  app's existing chevron + `grid-template-rows` collapse mechanic
+  (`gastoExpanded`/`CollapsibleMetadata`, #81) — collapsed state shows
+  just a label + truncated single-line preview inline in the header row
+  itself (no separate always-visible content area at all), each row's
+  `open` state is its own local `useState` so two notas fields expand
+  independently. Reach for this shape specifically when "most compact
+  possible" is the ask; the section-level `CollapsibleMetadata` pattern
+  (header + hidden panel) fits better for multi-field groups.
+- **Date-only editing, datetime storage**: when a field is edited as a
+  date but stored as `datetime` (`fecha_evento`), pick one fixed
+  time-of-day to append client-side rather than plumbing a real
+  date-vs-datetime distinction through the API — `toIsoUtcAtNoon()`
+  literally appends `T12:00:00Z` to the date string, same "naive digits,
+  no real UTC math" convention `toIsoUtc()` already used for
+  `datetime-local` inputs. Noon is far enough from any midnight boundary
+  that it doesn't matter whether a reader treats those digits as literal
+  local time or true UTC — either interpretation still lands on the same
+  calendar day after any reasonable timezone shift. Pair this with
+  display helpers (`formatRawDate`/`rawDateOnly`) that never surface the
+  time-of-day, so legacy non-noon values (real email-derived times from
+  before this change) don't leak an inconsistent-looking time into the
+  UI.
+- **Filter menu**: reuse the existing generic `Dropdown`
+  (`ui/dropdown/Dropdown.tsx`) + `dropdown-toggle` trigger-button class
+  pattern already used by `ShareMenu.tsx`, rather than a new popover
+  component. This app's `Select`/`DatePicker` are both uncontrolled after
+  mount (see the existing uncontrolled-`Select` note below) — a shared
+  `filterResetToken` counter, bumped on "Limpiar filtros" and included in
+  each control's `key`, is what actually resets their displayed value;
+  the "Limpiar filtros" button itself just calls the plain state setters.
+- **`DatePicker` in `mode="range"`: use `onClose`, not `onChange`, for
+  anything that triggers a parent re-render.** flatpickr's `onChange`
+  fires after *every* click, including the first of a two-click range —
+  if the handler updates state that re-renders the component tree, and
+  that handler wasn't a stable reference, the shared `DatePicker`'s init
+  `useEffect` (keyed on `onChange`) tears down and rebuilds the flatpickr
+  instance mid-selection, silently dropping the in-progress "desde"
+  click. `onClose` (added to `DatePicker`'s prop surface in #83) fires
+  once, when the calendar actually closes with the final selection —
+  commit state there instead, and wrap the handler in `useCallback` for a
+  stable identity regardless.
+- **A `<label htmlFor>` inside a small popover can be an unwanted click
+  target for a non-text-input control.** `DatePicker`'s built-in `label`
+  prop renders an associated `<label>`; clicking it natively focuses+
+  clicks the input, which flatpickr treats as "open the calendar" — fine
+  for an ordinary form field, surprising inside a compact filter panel
+  where the label reads as inert text. Fix narrowly per-usage (skip the
+  `label` prop, render a plain `<p>`) rather than changing the shared
+  component's default a11y behavior.
+- **An ancestor's `overflow-hidden` can clip an absolutely-positioned
+  dropdown once its sibling content shrinks.** `ReservationsTable`'s
+  outer card had `overflow-hidden` for the table's rounded corners; a
+  filter dropdown positioned `absolute` inside that same card gets
+  clipped at the card's *current* height once the filtered result set
+  (and therefore the card) shrinks — most visible in the empty state.
+  If a dropdown/popover lives inside a container whose height is
+  data-dependent, that container almost certainly shouldn't have
+  `overflow-hidden`.
+- **SVGR/svgo silently strips a "redundant" `viewBox`.** Any source SVG
+  under `src/icons/*.svg` or `public/images/icons/*.svg` whose `viewBox`
+  exactly mirrors its own `width`/`height` attributes (e.g.
+  `viewBox="0 0 20 20" width="20" height="20"`) loses that `viewBox`
+  during the `@svgr/webpack` build (svgo's default `removeViewBox`
+  plugin, no custom svgo config in this project). Without a `viewBox`,
+  forcing the icon to a different CSS size than its native
+  `width`/`height` (e.g. Tailwind `size-4` on a 20-native icon) doesn't
+  scale the artwork — it clips/offsets it, which can look like a
+  completely blank icon depending on how the path overlaps the forced
+  box. All of this project's existing icons already omit `width`/
+  `height` entirely (just `viewBox`), which is why they don't hit this —
+  match that shape for any new icon, and actually look at the rendered
+  result at its real usage size before trusting a new icon compiled
+  correctly (a stripped `viewBox` doesn't error, it just misrenders).
+
 ### Frontend patterns worth reusing
 
 - **Date state**: `getDateState()` in `reservationUtils.ts` classifies an
@@ -423,7 +508,9 @@ When Zoho shows an identity email challenge, `ZohoSession` uses the
   trades away `currentColor` theming (the icon renders at a fixed color,
   not tinted by sidebar active/hover state or badge tier) for a single
   source-of-truth file. `src/icons/*.svg` (SVGR, `currentColor`-themed) is
-  the older pattern for icons that predate this decision.
+  the older pattern for icons that predate this decision. Either way, omit
+  `width`/`height` attributes on the source SVG (keep only `viewBox`) —
+  see the SVGR/svgo `viewBox`-stripping gotcha above (#83).
 
 ## Persistence
 
@@ -432,7 +519,7 @@ When Zoho shows an identity email challenge, `ZohoSession` uses the
 | `users` | `email` unique |
 | `refresh_tokens` | `token_hash` unique; `family_id` for rotation/reuse revoke |
 | `email_messages` | `(source, mailbox_message_id)` |
-| `reservas` | `(booking_provider, reserva_reference)`; soft delete via `deleted_at`; operator/finance + `paid_at` (#55); nullable `partido_id` FK `SET NULL` (#61); `sender`/`subject`/`fecha_email_recibido` nullable (#70); `costos` fully derived, no longer client-writable (#81) |
+| `reservas` | `(booking_provider, reserva_reference)`; soft delete via `deleted_at`; operator/finance + `paid_at` (#55); nullable `partido_id` FK `SET NULL` (#61); `sender`/`subject`/`fecha_email_recibido` nullable (#70); `costos` fully derived, no longer client-writable (#81); `notas_cliente`/`notas_personales` `String(5000)`, widened from 255 (#83) |
 | `partidos` | soft delete via `deleted_at`; indexed on `fecha`, `ciudad` (#61) |
 | `gastos` | unique `(partido_id, categoria)`; FK `partido_id` `CASCADE` (#81) |
 | `gasto_reserva_splits` | unique `(gasto_id, reserva_id)`; FKs `gasto_id`/`reserva_id` `CASCADE`; fully recomputed (delete+reinsert) on every relevant change, not incrementally patched (#81) |
