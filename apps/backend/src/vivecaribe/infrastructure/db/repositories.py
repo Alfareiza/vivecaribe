@@ -370,6 +370,38 @@ class SqlAlchemyReservaRepository:
             await _recompute_gasto_splits(self._session, partido_id)
         return True
 
+    async def cancel(
+        self,
+        reserva_id: UUID,
+        motivo_cancelacion: str,
+    ) -> Reserva | None:
+        """Cancel a reservation, storing the reason. Return ``None`` if
+        missing, deleted, or already cancelled.
+
+        Recomputes its partido's gasto splits afterward — a cancelled
+        reserva no longer counts toward the split.
+        """
+        result = await self._session.execute(
+            select(ReservaORM).where(
+                ReservaORM.id == reserva_id,
+                ReservaORM.deleted_at.is_(None),
+                ReservaORM.estado != ReservaEstado.CANCELADA.value,
+            ),
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            return None
+        now = datetime.now(UTC)
+        row.estado = ReservaEstado.CANCELADA.value
+        row.motivo_cancelacion = motivo_cancelacion
+        row.updated_at = now
+        partido_id = row.partido_id
+        await self._session.flush()
+        if partido_id is not None:
+            await _recompute_gasto_splits(self._session, partido_id)
+        await self._session.refresh(row)
+        return Reserva.model_validate(row)
+
     async def list_by_partido(self, partido_id: UUID) -> list[Reserva]:
         """Return all non-deleted reservations linked to ``partido_id``."""
         result = await self._session.execute(

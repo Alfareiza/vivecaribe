@@ -58,6 +58,8 @@ type ReservationDetailModalProps = {
   onClose: () => void;
   /** Opens the modal as a blank create form instead of loading `reservation`. */
   createMode?: boolean;
+  /** Opens straight into edit mode instead of view mode (ignored in createMode, which is always editing). */
+  initialEditing?: boolean;
   /** Called after a successful create or update so the parent list can refresh. */
   onSaved?: () => void;
   /** Called after a successful soft-delete so the parent list can refresh. */
@@ -537,6 +539,7 @@ export default function ReservationDetailModal({
   isOpen,
   onClose,
   createMode = false,
+  initialEditing = false,
   onSaved,
   onDeleted,
 }: ReservationDetailModalProps) {
@@ -627,6 +630,10 @@ export default function ReservationDetailModal({
         if (!cancelled) {
           setDetail(fresh);
           setRefreshError(null);
+          if (initialEditing) {
+            setForm(seedFormFromDetail(fresh));
+            setIsEditing(true);
+          }
         }
       } catch (err) {
         if (!cancelled) {
@@ -644,7 +651,7 @@ export default function ReservationDetailModal({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, reservation, createMode]);
+  }, [isOpen, reservation, createMode, initialEditing]);
 
   useEffect(() => {
     if (!createMode) return;
@@ -1114,6 +1121,17 @@ export default function ReservationDetailModal({
           >
             {error}
           </p>
+        ) : null}
+
+        {!createMode && !isEditing && detail?.estado === "cancelada" ? (
+          <div className="mb-4 rounded-xl border border-error-200 bg-error-50 px-3.5 py-3 dark:border-error-500/30 dark:bg-error-500/10">
+            <p className="text-sm font-semibold text-error-700 dark:text-error-400">
+              Reserva cancelada
+            </p>
+            <p className="mt-1 text-theme-sm text-error-600 dark:text-error-400">
+              {detail.motivo_cancelacion || "Sin motivo registrado"}
+            </p>
+          </div>
         ) : null}
 
         {!createMode && !isEditing && preview ? (

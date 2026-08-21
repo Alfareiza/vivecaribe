@@ -4,7 +4,9 @@ import React, { useCallback, useEffect, useState } from "react";
 import DatePicker from "@/components/form/date-picker";
 import Select from "@/components/form/Select";
 import Pagination from "@/components/tables/Pagination";
+import Badge from "@/components/ui/badge/Badge";
 import Button from "@/components/ui/button/Button";
+import ConfirmDialog from "@/components/ui/confirm-dialog/ConfirmDialog";
 import {
   Table,
   TableBody,
@@ -15,14 +17,23 @@ import {
 import { Dropdown } from "@/components/ui/dropdown/Dropdown";
 import InlineLoading from "@/components/ui/loading/InlineLoading";
 import { useModal } from "@/hooks/useModal";
-import { fetchReservas } from "@/lib/reservas";
+import { ApiError } from "@/lib/api";
+import { cancelReserva, fetchReservas } from "@/lib/reservas";
 import { BOOKING_PROVIDER_OPTIONS } from "@/types/reservation";
 import type { ReservationListItem } from "@/types/reservation";
 import { FilterIcon } from "@/icons";
 import ProviderLogo from "./ProviderLogo";
 import ReservationDetailModal from "./ReservationDetailModal";
 import { EsHoyStatusDot } from "./StatusDot";
-import { formatRawDate, formatPrice, PROVIDER_LABELS } from "./reservationUtils";
+import {
+  formatRawDate,
+  formatPrice,
+  getEstadoBadgeColor,
+  formatEstadoLabel,
+  PROVIDER_LABELS,
+} from "./reservationUtils";
+
+const CANCELADA = "cancelada";
 
 const PAGE_SIZE = 20;
 
@@ -47,7 +58,13 @@ const providerOptions = [
 export default function ReservationsTable() {
   const { isOpen, openModal, closeModal } = useModal();
   const [selected, setSelected] = useState<ReservationListItem | null>(null);
+  const [openInEditMode, setOpenInEditMode] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [cancelling, setCancelling] = useState<ReservationListItem | null>(
+    null,
+  );
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
   const [items, setItems] = useState<ReservationListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
@@ -98,6 +115,13 @@ export default function ReservationsTable() {
 
   const handleRowClick = (reservation: ReservationListItem) => {
     setSelected(reservation);
+    setOpenInEditMode(false);
+    openModal();
+  };
+
+  const handleEditAction = (reservation: ReservationListItem) => {
+    setSelected(reservation);
+    setOpenInEditMode(true);
     openModal();
   };
 
@@ -108,7 +132,30 @@ export default function ReservationsTable() {
     }
     closeModal();
     setSelected(null);
+    setOpenInEditMode(false);
   };
+
+  function handleCancelAction(reservation: ReservationListItem) {
+    setCancelError(null);
+    setCancelling(reservation);
+  }
+
+  async function handleCancelConfirm(motivo: string) {
+    if (!cancelling) return;
+    setCancelSubmitting(true);
+    setCancelError(null);
+    try {
+      await cancelReserva(cancelling.id, motivo);
+      setCancelling(null);
+      void loadPage();
+    } catch (err) {
+      setCancelError(
+        err instanceof ApiError ? err.message : "No se pudo cancelar la reserva",
+      );
+    } finally {
+      setCancelSubmitting(false);
+    }
+  }
 
   const resetPage = () => setCurrentPage(1);
 
@@ -242,6 +289,7 @@ export default function ReservationsTable() {
                       "Fecha evento",
                       "Pax",
                       "Precio",
+                      "Acciones",
                     ].map((header) => (
                       <TableCell
                         key={header}
@@ -258,60 +306,105 @@ export default function ReservationsTable() {
                   {items.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={5}
+                        colSpan={6}
                         className="px-5 py-8 text-center text-theme-sm text-gray-500 dark:text-gray-400"
                       >
                         No hay reservas que coincidan con los filtros.
                       </TableCell>
                     </TableRow>
                   ) : (
-                    items.map((reservation) => (
-                      <TableRow
-                        key={reservation.id}
-                        className="cursor-pointer hover:bg-gray-50 dark:hover:bg-white/[0.02]"
-                        onClick={() => handleRowClick(reservation)}
-                      >
-                        <TableCell className="px-4 py-3 text-start">
-                          <div className="flex flex-col items-start gap-3 xl:flex-row xl:items-center">
-                            <ProviderLogo
-                              provider={reservation.booking_provider}
-                              size={28}
-                            />
-                            <div className="order-3 flex min-w-0 items-center gap-2 xl:order-2">
-                              <span className="block font-medium text-theme-sm text-gray-800 dark:text-white/90">
-                                {reservation.nombre_experiencia}
-                              </span>
-                              <EsHoyStatusDot
-                                esHoy={reservation.es_hoy}
-                                tooltipSide="right"
+                    items.map((reservation) => {
+                      const isCancelled = reservation.estado === CANCELADA;
+                      return (
+                        <TableRow
+                          key={reservation.id}
+                          className="cursor-pointer hover:bg-gray-50 dark:hover:bg-white/[0.02]"
+                          onClick={() => handleRowClick(reservation)}
+                        >
+                          <TableCell className="px-4 py-3 text-start">
+                            <div className="flex flex-col items-start gap-3 xl:flex-row xl:items-center">
+                              <ProviderLogo
+                                provider={reservation.booking_provider}
+                                size={28}
                               />
+                              <div className="order-3 flex min-w-0 flex-wrap items-center gap-2 xl:order-2">
+                                <span className="block font-medium text-theme-sm text-gray-800 dark:text-white/90">
+                                  {reservation.nombre_experiencia}
+                                </span>
+                                <EsHoyStatusDot
+                                  esHoy={reservation.es_hoy}
+                                  tooltipSide="right"
+                                />
+                                {isCancelled ? (
+                                  <Badge
+                                    size="sm"
+                                    color={getEstadoBadgeColor(reservation.estado)}
+                                  >
+                                    {formatEstadoLabel(reservation.estado)}
+                                  </Badge>
+                                ) : null}
+                              </div>
                             </div>
-                          </div>
-                          <span className="mt-1 block text-theme-xs text-gray-500 dark:text-gray-400 xl:pl-10">
-                            {reservation.ciudad_experiencia}
-                          </span>
-                        </TableCell>
-                        <TableCell className="px-4 py-3 text-start">
-                          <span className="block font-medium text-theme-sm text-gray-800 dark:text-white/90">
-                            {reservation.customer_name}
-                          </span>
-                          <span className="block text-theme-xs text-gray-500 dark:text-gray-400">
-                            {[reservation.phone, reservation.pais_del_visitante]
-                              .filter(Boolean)
-                              .join(" · ") || "—"}
-                          </span>
-                        </TableCell>
-                        <TableCell className="px-4 py-3 text-start text-theme-sm text-gray-500 dark:text-gray-400">
-                          {formatRawDate(reservation.fecha_evento)}
-                        </TableCell>
-                        <TableCell className="px-4 py-3 text-start text-theme-sm text-gray-500 dark:text-gray-400">
-                          {reservation.participants}
-                        </TableCell>
-                        <TableCell className="px-4 py-3 text-start text-theme-sm text-gray-500 dark:text-gray-400">
-                          {formatPrice(reservation.income, reservation.moneda)}
-                        </TableCell>
-                      </TableRow>
-                    ))
+                            <span className="mt-1 block text-theme-xs text-gray-500 dark:text-gray-400 xl:pl-10">
+                              {reservation.ciudad_experiencia}
+                            </span>
+                          </TableCell>
+                          <TableCell className="px-4 py-3 text-start">
+                            <span className="block font-medium text-theme-sm text-gray-800 dark:text-white/90">
+                              {reservation.customer_name}
+                            </span>
+                            <span className="block text-theme-xs text-gray-500 dark:text-gray-400">
+                              {[reservation.phone, reservation.pais_del_visitante]
+                                .filter(Boolean)
+                                .join(" · ") || "—"}
+                            </span>
+                          </TableCell>
+                          <TableCell className="px-4 py-3 text-start text-theme-sm text-gray-500 dark:text-gray-400">
+                            {formatRawDate(reservation.fecha_evento)}
+                          </TableCell>
+                          <TableCell className="px-4 py-3 text-start text-theme-sm text-gray-500 dark:text-gray-400">
+                            {reservation.participants}
+                          </TableCell>
+                          <TableCell className="px-4 py-3 text-start text-theme-sm text-gray-500 dark:text-gray-400">
+                            {formatPrice(reservation.income, reservation.moneda)}
+                          </TableCell>
+                          <TableCell className="px-4 py-3 text-start">
+                            <div
+                              className="flex items-center gap-2"
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleEditAction(reservation)}
+                              >
+                                Editar
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={isCancelled}
+                                onClick={() => handleCancelAction(reservation)}
+                                className={
+                                  isCancelled
+                                    ? undefined
+                                    : "!text-error-600 dark:!text-error-400"
+                                }
+                              >
+                                Cancelar
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleRowClick(reservation)}
+                              >
+                                Ver
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
                   )}
                 </TableBody>
               </Table>
@@ -332,9 +425,37 @@ export default function ReservationsTable() {
         reservation={isCreateOpen ? null : selected}
         isOpen={isOpen || isCreateOpen}
         createMode={isCreateOpen}
+        initialEditing={openInEditMode}
         onClose={handleCloseModal}
         onSaved={() => void loadPage()}
         onDeleted={() => void loadPage()}
+      />
+
+      <ConfirmDialog
+        isOpen={cancelling !== null}
+        title="Cancelar reserva"
+        description={
+          cancelling
+            ? `¿Cancelar la reserva de ${cancelling.customer_name}? Esta acción no se puede deshacer.`
+            : undefined
+        }
+        confirmLabel="Confirmar"
+        cancelLabel="Salir"
+        destructive
+        textInput={{
+          label: "Motivo de cancelación",
+          placeholder: "Ej. Cliente no llegó al punto de encuentro",
+          maxLength: 255,
+          required: true,
+        }}
+        loading={cancelSubmitting}
+        error={cancelError}
+        onConfirm={(motivo) => void handleCancelConfirm(motivo)}
+        onClose={() => {
+          if (cancelSubmitting) return;
+          setCancelling(null);
+          setCancelError(null);
+        }}
       />
     </div>
   );

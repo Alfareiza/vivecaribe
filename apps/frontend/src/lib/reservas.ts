@@ -133,3 +133,14 @@ export async function createReserva(
 export async function deleteReserva(id: string): Promise<void> {
   await apiJson<null>(`/reservas/${id}`, { method: "DELETE" });
 }
+
+export async function cancelReserva(
+  id: string,
+  motivo_cancelacion: string,
+): Promise<Reservation> {
+  return apiJson<Reservation>(`/reservas/${id}/cancelar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ motivo_cancelacion }),
+  });
+}

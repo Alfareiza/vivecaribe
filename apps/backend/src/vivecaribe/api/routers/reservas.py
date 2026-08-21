@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from vivecaribe.api.deps import CurrentUser, GastoRepo, ReservaRepo
 from vivecaribe.api.schemas.gastos import GastoShareItem
 from vivecaribe.api.schemas.reservas import (
+    ReservaCancelRequest,
     ReservaCreate,
     ReservaListResponse,
     ReservaResponse,
@@ -160,6 +161,48 @@ async def update_reserva(
     shares = await gastos.shares_by_reserva(saved.id)
     return ReservaResponse(
         **saved.model_dump(),
+        gastos=[
+            GastoShareItem(categoria=categoria, monto=monto)
+            for categoria, monto in shares
+        ],
+    )
+
+
+@router.post("/reservas/{reserva_id}/cancelar", response_model=ReservaResponse)
+async def cancel_reserva(
+    reserva_id: UUID,
+    payload: ReservaCancelRequest,
+    reservas: ReservaRepo,
+    gastos: GastoRepo,
+    _current_user: CurrentUser,
+) -> ReservaResponse:
+    """Cancel a reservation, recording the reason (JWT required).
+
+    Sets ``estado`` to ``CANCELADA`` and stores ``motivo_cancelacion``,
+    then recomputes the linked partido's gasto split, since a cancelled
+    reserva no longer counts toward it. 404 if missing, 409 if already
+    cancelled.
+    """
+    existing = await reservas.get_by_id(reserva_id)
+    if existing is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Reserva {reserva_id} not found",
+        )
+    if existing.estado == ReservaEstado.CANCELADA:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Reserva {reserva_id} is already cancelled",
+        )
+    cancelled = await reservas.cancel(reserva_id, payload.motivo_cancelacion)
+    if cancelled is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Reserva {reserva_id} is already cancelled",
+        )
+    shares = await gastos.shares_by_reserva(cancelled.id)
+    return ReservaResponse(
+        **cancelled.model_dump(),
         gastos=[
             GastoShareItem(categoria=categoria, monto=monto)
             for categoria, monto in shares
