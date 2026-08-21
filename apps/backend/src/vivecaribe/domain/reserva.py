@@ -156,9 +156,9 @@ class Reserva(BaseModel):
     price: Decimal
     income: Decimal
     notificado_whatsapp: bool = False
-    notas_cliente: str | None = Field(default=None, max_length=255)
+    notas_cliente: str | None = Field(default=None, max_length=5000)
     tipo_tour: TipoTour | None = None
-    notas_personales: str | None = Field(default=None, max_length=255)
+    notas_personales: str | None = Field(default=None, max_length=5000)
     costos: Decimal | None = None
     meeting_point: MeetingPoint | None = None
     lugar_de_recogida: str | None = Field(default=None, max_length=64)

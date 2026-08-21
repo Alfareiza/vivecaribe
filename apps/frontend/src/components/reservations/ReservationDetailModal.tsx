@@ -44,11 +44,11 @@ import {
   formatDisplayDateTime,
   formatPaidAtDate,
   formatPrice,
-  formatRawDateTime,
+  formatRawDate,
   partidoLabel,
+  rawDateOnly,
   sanitizeDecimalInput,
-  toDatetimeLocal,
-  toIsoUtc,
+  toIsoUtcAtNoon,
   truncateText,
 } from "./reservationUtils";
 
@@ -134,7 +134,7 @@ function seedFormFromDetail(detail: Reservation): FormState {
   return {
     nombre_experiencia: detail.nombre_experiencia,
     ciudad_experiencia: detail.ciudad_experiencia,
-    fecha_evento: detail.fecha_evento ? toDatetimeLocal(detail.fecha_evento) : "",
+    fecha_evento: detail.fecha_evento ? rawDateOnly(detail.fecha_evento) : "",
     booking_provider: detail.booking_provider,
     customer_name: detail.customer_name,
     participants: String(detail.participants),
@@ -281,6 +281,63 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
         {value}
       </dd>
     </>
+  );
+}
+
+/**
+ * A single nota as a compact, independently collapsible row — collapsed by
+ * default showing just the label and a one-line truncated preview; expands
+ * to reveal the full text. Rows without content show "Sin notas" and can't
+ * be toggled.
+ */
+function NotaRow({ label, value }: { label: string; value: string | null }) {
+  const [open, setOpen] = useState(false);
+  const hasContent = Boolean(value);
+
+  return (
+    <div className="rounded-lg border border-gray-100 dark:border-gray-800">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => hasContent && setOpen((v) => !v)}
+        disabled={!hasContent}
+        className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left disabled:cursor-default"
+      >
+        <AngleDownIcon
+          className={`size-3.5 shrink-0 text-gray-400 transition-transform duration-200 ${
+            open ? "-rotate-90" : ""
+          } ${hasContent ? "" : "invisible"}`}
+        />
+        <span className="shrink-0 text-theme-xs font-medium text-gray-400 dark:text-gray-500">
+          {label}
+        </span>
+        {hasContent ? (
+          !open ? (
+            <span className="min-w-0 flex-1 truncate text-right text-theme-xs text-gray-500 dark:text-gray-400">
+              {value}
+            </span>
+          ) : null
+        ) : (
+          <span className="min-w-0 flex-1 truncate text-right text-theme-xs text-gray-300 dark:text-gray-600">
+            Sin notas
+          </span>
+        )}
+      </button>
+      {hasContent ? (
+        <div
+          className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+            open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+          }`}
+          inert={!open}
+        >
+          <div className="overflow-hidden">
+            <p className="whitespace-pre-wrap break-words border-t border-gray-100 px-2.5 py-2 text-theme-sm text-gray-700 dark:border-gray-800 dark:text-gray-300">
+              {value}
+            </p>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -806,7 +863,7 @@ export default function ReservationDetailModal({
 
   async function handleLookupPartidos() {
     if (!form.ciudad_experiencia || !form.fecha_evento) return;
-    const window = dayWindow(toIsoUtc(form.fecha_evento));
+    const window = dayWindow(form.fecha_evento);
     setPartidoLookupLoading(true);
     try {
       const items = await lookupPartidosCached(
@@ -859,7 +916,7 @@ export default function ReservationDetailModal({
           fecha_email_recibido: new Date().toISOString(),
           nombre_experiencia: form.nombre_experiencia.trim(),
           ciudad_experiencia: form.ciudad_experiencia.trim(),
-          fecha_evento: form.fecha_evento ? toIsoUtc(form.fecha_evento) : null,
+          fecha_evento: form.fecha_evento ? toIsoUtcAtNoon(form.fecha_evento) : null,
           participants: Number(form.participants),
           customer_name: form.customer_name.trim(),
           phone: normalizePhone(form.phone),
@@ -908,7 +965,7 @@ export default function ReservationDetailModal({
         booking_provider: form.booking_provider,
         nombre_experiencia: form.nombre_experiencia.trim(),
         ciudad_experiencia: form.ciudad_experiencia.trim(),
-        fecha_evento: form.fecha_evento ? toIsoUtc(form.fecha_evento) : null,
+        fecha_evento: form.fecha_evento ? toIsoUtcAtNoon(form.fecha_evento) : null,
         participants: Number(form.participants),
         customer_name: form.customer_name.trim(),
         phone: form.phone.trim(),
@@ -1067,7 +1124,7 @@ export default function ReservationDetailModal({
             <p className="mt-1 text-theme-sm text-gray-500 dark:text-gray-400">
               {[
                 preview.ciudad_experiencia,
-                formatRawDateTime(preview.fecha_evento),
+                formatRawDate(preview.fecha_evento),
               ]
                 .filter(Boolean)
                 .join(" · ")}
@@ -1146,7 +1203,7 @@ export default function ReservationDetailModal({
                 <div className="sm:w-[220px] sm:shrink-0">
                   <FormField label="Fecha del evento">
                     <Input
-                      type="datetime-local"
+                      type="date"
                       value={form.fecha_evento}
                       onChange={(e) => update("fecha_evento", e.target.value)}
                     />
@@ -1779,31 +1836,9 @@ export default function ReservationDetailModal({
                 </p>
               </div>
 
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <div>
-                  <p className="mb-1 text-theme-xs font-medium text-gray-400 dark:text-gray-500">
-                    Notas personales
-                  </p>
-                  <TextArea
-                    value={detail.notas_personales ?? ""}
-                    onChange={() => {}}
-                    rows={2}
-                    disabled
-                    placeholder="Sin notas"
-                  />
-                </div>
-                <div>
-                  <p className="mb-1 text-theme-xs font-medium text-gray-400 dark:text-gray-500">
-                    Notas cliente
-                  </p>
-                  <TextArea
-                    value={detail.notas_cliente ?? ""}
-                    onChange={() => {}}
-                    rows={2}
-                    disabled
-                    placeholder="Sin notas"
-                  />
-                </div>
+              <div className="mt-3 space-y-1.5">
+                <NotaRow label="Notas personales" value={detail.notas_personales} />
+                <NotaRow label="Notas cliente" value={detail.notas_cliente} />
               </div>
             </section>
 

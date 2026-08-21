@@ -10,6 +10,8 @@ type PropsType = {
   id: string;
   mode?: "single" | "multiple" | "range" | "time";
   onChange?: Hook | Hook[];
+  /** Fires once the calendar closes — the right hook for range mode, where onChange fires after every intermediate click. */
+  onClose?: Hook | Hook[];
   defaultDate?: DateOption;
   label?: string;
   placeholder?: string;
@@ -19,6 +21,7 @@ export default function DatePicker({
   id,
   mode,
   onChange,
+  onClose,
   label,
   defaultDate,
   placeholder,
@@ -31,6 +34,7 @@ export default function DatePicker({
       dateFormat: "Y-m-d",
       defaultDate,
       onChange,
+      onClose,
     });
 
     return () => {
@@ -38,7 +42,7 @@ export default function DatePicker({
         flatPickr.destroy();
       }
     };
-  }, [mode, onChange, id, defaultDate]);
+  }, [mode, onChange, onClose, id, defaultDate]);
 
   return (
     <div>

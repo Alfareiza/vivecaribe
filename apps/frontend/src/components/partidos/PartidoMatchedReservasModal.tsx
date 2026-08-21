@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import Button from "@/components/ui/button/Button";
 import { Modal } from "@/components/ui/modal";
 import ProviderLogo from "@/components/reservations/ProviderLogo";
-import { formatRawDateTime } from "@/components/reservations/reservationUtils";
+import { formatRawDate, formatRawDateTime } from "@/components/reservations/reservationUtils";
 import { updateReserva } from "@/lib/reservas";
 import type { ReservationListItem } from "@/types/reservation";
 
@@ -149,7 +149,7 @@ export default function PartidoMatchedReservasModal({
                   {reserva.customer_name}
                 </p>
                 <p className="text-theme-xs text-gray-500 dark:text-gray-400">
-                  {formatRawDateTime(reserva.fecha_evento)}
+                  {formatRawDate(reserva.fecha_evento)}
                 </p>
               </div>
               <span className="shrink-0 text-theme-xs font-medium text-gray-500 dark:text-gray-400">

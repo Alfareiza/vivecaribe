@@ -46,9 +46,9 @@ class ReservaCreate(BaseModel):
     price: Decimal = Field(gt=0)
     income: Decimal = Field(gt=0)
     notificado_whatsapp: bool = False
-    notas_cliente: str | None = Field(default=None, max_length=255)
+    notas_cliente: str | None = Field(default=None, max_length=5000)
     tipo_tour: TipoTour | None = None
-    notas_personales: str | None = Field(default=None, max_length=255)
+    notas_personales: str | None = Field(default=None, max_length=5000)
     meeting_point: MeetingPoint | None = None
     lugar_de_recogida: str | None = Field(default=None, max_length=64)
     income_estimado: Decimal | None = None
@@ -96,9 +96,9 @@ class ReservaUpdate(BaseModel):
     income: Decimal | None = Field(default=None, gt=0)
     notificado_whatsapp: bool | None = None
     subject: str | None = Field(default=None, max_length=998)
-    notas_cliente: str | None = Field(default=None, max_length=255)
+    notas_cliente: str | None = Field(default=None, max_length=5000)
     tipo_tour: TipoTour | None = None
-    notas_personales: str | None = Field(default=None, max_length=255)
+    notas_personales: str | None = Field(default=None, max_length=5000)
     meeting_point: MeetingPoint | None = None
     lugar_de_recogida: str | None = Field(default=None, max_length=64)
     income_estimado: Decimal | None = None

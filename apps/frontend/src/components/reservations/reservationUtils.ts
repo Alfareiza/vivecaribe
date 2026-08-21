@@ -88,6 +88,21 @@ export function formatRawDateTime(iso: string | null | undefined): string {
   }).format(asUtcDate(parts));
 }
 
+/**
+ * Same raw-digit parsing as formatRawDateTime, but date-only (no time-of-day)
+ * — for fecha_evento, which is UI-edited as a date and stored with an
+ * internal noon placeholder that shouldn't leak into the display.
+ */
+export function formatRawDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const parts = parseRawDateTime(iso);
+  if (!parts) return iso;
+  return new Intl.DateTimeFormat("es-CO", {
+    timeZone: "UTC",
+    dateStyle: "medium",
+  }).format(asUtcDate(parts));
+}
+
 /** English "5:35 p.m." from naive ISO, optionally shifted by minutes. */
 export function formatEnglishTime(iso: string, offsetMinutes = 0): string {
   const parts = parseRawDateTime(iso);
@@ -219,6 +234,17 @@ export function toDatetimeLocal(iso: string): string {
 /** "2026-09-01T20:00" -> "2026-09-01T20:00:00Z" for the API payload. */
 export function toIsoUtc(datetimeLocal: string): string {
   return `${datetimeLocal}:00Z`;
+}
+
+/**
+ * "2026-09-01" -> "2026-09-01T12:00:00Z" for the API payload. fecha_evento
+ * is edited as a date-only field in the UI; noon is an internal placeholder
+ * time-of-day so the stored value stays a comfortable midday timestamp
+ * (never crosses a calendar-day boundary once the backend converts it to
+ * America/Bogota for filtering/display).
+ */
+export function toIsoUtcAtNoon(dateOnly: string): string {
+  return `${dateOnly}T12:00:00Z`;
 }
 
 /** "2026-09-01T20:00:00Z" -> "2026-09-01" (raw calendar day, no timezone shift). */

@@ -44,6 +44,8 @@ export type PartidoListItem = {
   ciudad: Ciudad | string;
   /** Count of linked non-deleted reservas (computed via LEFT JOIN in backend). */
   reservas_count: number;
+  /** Sum of `participants` across linked non-deleted reservas (computed in backend). */
+  participants_count: number;
   /** Full reservas array only included in detail response (GET /partidos/{id}). */
   reservas?: ReservationListItem[];
 };
