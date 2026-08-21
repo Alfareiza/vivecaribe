@@ -253,6 +253,42 @@ async def test_partido_embeds_linked_reservas(auth_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_partido_excludes_cancelled_reserva_from_linked_list(
+    auth_client: AsyncClient,
+) -> None:
+    """A cancelled reserva drops out of the partido's embedded ``reservas`` list."""
+    headers = await auth_headers(auth_client)
+    partido = (
+        await auth_client.post("/partidos", json=_partido_payload(), headers=headers)
+    ).json()
+    kept = (
+        await auth_client.post(
+            "/reservas",
+            json=_reserva_payload(partido_id=partido["id"]),
+            headers=headers,
+        )
+    ).json()
+    cancelled = (
+        await auth_client.post(
+            "/reservas",
+            json=_reserva_payload(partido_id=partido["id"]),
+            headers=headers,
+        )
+    ).json()
+
+    cancel = await auth_client.post(
+        f"/reservas/{cancelled['id']}/cancelar",
+        json={"motivo_cancelacion": "Cliente no llegó al punto de encuentro"},
+        headers=headers,
+    )
+    assert cancel.status_code == 200
+
+    detail = await auth_client.get(f"/partidos/{partido['id']}", headers=headers)
+    linked_ids = [item["id"] for item in detail.json()["reservas"]]
+    assert linked_ids == [kept["id"]]
+
+
+@pytest.mark.asyncio
 async def test_list_partidos_includes_reservas_count(auth_client: AsyncClient) -> None:
     """``GET /partidos`` reports how many non-deleted reservas each partido has."""
     headers = await auth_headers(auth_client)
@@ -342,6 +378,42 @@ async def test_list_partidos_excludes_deleted_reservas_from_count(
     assert partido["id"] in items
     assert items[partido["id"]]["reservas_count"] == 0
     assert items[partido["id"]]["participants_count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_list_partidos_excludes_cancelled_reservas_from_count(
+    auth_client: AsyncClient,
+) -> None:
+    """A cancelled reserva doesn't count toward ``reservas_count``/``participants_count``."""
+    headers = await auth_headers(auth_client)
+    partido = (
+        await auth_client.post("/partidos", json=_partido_payload(), headers=headers)
+    ).json()
+    await auth_client.post(
+        "/reservas",
+        json=_reserva_payload(partido_id=partido["id"], participants=3),
+        headers=headers,
+    )
+    cancelled = (
+        await auth_client.post(
+            "/reservas",
+            json=_reserva_payload(partido_id=partido["id"], participants=5),
+            headers=headers,
+        )
+    ).json()
+
+    cancel = await auth_client.post(
+        f"/reservas/{cancelled['id']}/cancelar",
+        json={"motivo_cancelacion": "Cambio de planes"},
+        headers=headers,
+    )
+    assert cancel.status_code == 200
+
+    response = await auth_client.get("/partidos", headers=headers)
+    assert response.status_code == 200
+    items = {item["id"]: item for item in response.json()["items"]}
+    assert items[partido["id"]]["reservas_count"] == 1
+    assert items[partido["id"]]["participants_count"] == 3
 
 
 @pytest.mark.asyncio

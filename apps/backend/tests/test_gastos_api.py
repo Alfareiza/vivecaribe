@@ -243,6 +243,53 @@ async def test_split_proportional_to_participants(
 
 
 @pytest.mark.asyncio
+async def test_split_excludes_cancelled_reserva(auth_client: AsyncClient) -> None:
+    """Cancelling a reserva drops it from the split and clears its ``costos``."""
+    headers = await auth_headers(auth_client)
+    partido_id = await _create_partido(auth_client, headers)
+    alice = await _create_reserva(
+        auth_client,
+        headers,
+        customer_name="Alice",
+        participants=3,
+        partido_id=partido_id,
+    )
+    bob = await _create_reserva(
+        auth_client,
+        headers,
+        customer_name="Bob",
+        participants=1,
+        partido_id=partido_id,
+    )
+    await auth_client.put(
+        f"/partidos/{partido_id}/gastos",
+        params={"categoria": "Transporte"},
+        json={"monto": "80000.00"},
+        headers=headers,
+    )
+
+    cancel = await auth_client.post(
+        f"/reservas/{bob['id']}/cancelar",
+        json={"motivo_cancelacion": "Cliente no llegó al punto de encuentro"},
+        headers=headers,
+    )
+    assert cancel.status_code == 200
+    assert cancel.json()["costos"] is None
+
+    alice_body = (
+        await auth_client.get(f"/reservas/{alice['id']}", headers=headers)
+    ).json()
+    bob_body = (
+        await auth_client.get(f"/reservas/{bob['id']}", headers=headers)
+    ).json()
+
+    # Bob is cancelled and no longer part of the split, so Alice absorbs
+    # the full 80000 despite the partido having 3+1 participants on paper.
+    assert alice_body["costos"] == "80000.00"
+    assert bob_body["costos"] is None
+
+
+@pytest.mark.asyncio
 async def test_split_recomputes_when_reserva_joins_partido(
     auth_client: AsyncClient,
 ) -> None:
