@@ -173,6 +173,7 @@ class ReservaORM(Base):
     reserva_reference: Mapped[str] = mapped_column(String(512), nullable=False)
     sender: Mapped[str | None] = mapped_column(String(320), nullable=True)
     estado: Mapped[str] = mapped_column(String(32), nullable=False)
+    motivo_cancelacion: Mapped[str | None] = mapped_column(String(255), nullable=True)
     subject: Mapped[str | None] = mapped_column(String(998), nullable=True)
     fecha_email_recibido: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),

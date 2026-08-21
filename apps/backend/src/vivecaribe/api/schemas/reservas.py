@@ -116,6 +116,12 @@ class ReservaUpdate(BaseModel):
         return value
 
 
+class ReservaCancelRequest(BaseModel):
+    """Payload for ``POST /reservas/{id}/cancelar``."""
+
+    motivo_cancelacion: str = Field(min_length=1, max_length=255)
+
+
 class ReservaShortItem(BaseModel):
     """Slim reservation row for ``GET /reservas`` list pages."""
 
@@ -123,6 +129,7 @@ class ReservaShortItem(BaseModel):
 
     id: UUID
     booking_provider: BookingProvider
+    estado: ReservaEstado
     ciudad_experiencia: str
     nombre_experiencia: str
     participants: int

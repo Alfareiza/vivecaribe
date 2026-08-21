@@ -189,7 +189,7 @@ async def test_create_reserva_cop_profit_computed_without_trm(
     assert body["costos"] == "40000.00"
     assert body["income_final"] == "100000.00"
     assert body["profit"] == "60000.00"
-    assert body["percentage_profit"] == "60.00"
+    assert body["percentage_profit"] == "150.00"
 
 
 @pytest.mark.asyncio
@@ -247,7 +247,7 @@ async def test_patch_reserva_sets_trm_final_and_computes_profit(
     assert body["trm_final"] == "4100.00"
     assert body["income_final"] == "410000.00"
     assert body["profit"] == "110000.00"
-    assert body["percentage_profit"] == "26.83"
+    assert body["percentage_profit"] == "36.67"
 
 
 @pytest.mark.asyncio
@@ -597,6 +597,7 @@ async def test_get_reserva_unauthenticated_returns_401(
 _LIST_ITEM_KEYS = {
     "id",
     "booking_provider",
+    "estado",
     "ciudad_experiencia",
     "nombre_experiencia",
     "participants",
@@ -715,7 +716,7 @@ async def test_list_reservas_filters_compose(auth_client: AsyncClient) -> None:
     assert body["total"] == 1
     assert len(body["items"]) == 1
     assert body["items"][0]["customer_name"] == "Ada Lovelace"
-    assert "estado" not in body["items"][0]
+    assert body["items"][0]["estado"] == "confirmada"
 
 
 @pytest.mark.asyncio
@@ -1005,6 +1006,114 @@ async def test_patch_reserva_unauthenticated_returns_401(
     response = await auth_client.patch(
         f"/reservas/{uuid4()}",
         json={"estado": "confirmada"},
+    )
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_cancel_reserva_sets_estado_and_motivo(
+    auth_client: AsyncClient,
+) -> None:
+    """POST .../cancelar sets estado=cancelada and stores the reason."""
+    headers = await auth_headers(auth_client)
+    created = await auth_client.post(
+        "/reservas",
+        json=_reserva_payload(reserva_reference="GYG-CANCEL-1"),
+        headers=headers,
+    )
+    assert created.status_code == 201
+    reserva_id = created.json()["id"]
+
+    cancelled = await auth_client.post(
+        f"/reservas/{reserva_id}/cancelar",
+        json={"motivo_cancelacion": "Cliente no llegó al punto de encuentro"},
+        headers=headers,
+    )
+    assert cancelled.status_code == 200
+    body = cancelled.json()
+    assert body["estado"] == "cancelada"
+    assert body["motivo_cancelacion"] == "Cliente no llegó al punto de encuentro"
+
+    fetched = await auth_client.get(f"/reservas/{reserva_id}", headers=headers)
+    assert fetched.status_code == 200
+    assert fetched.json()["estado"] == "cancelada"
+    assert (
+        fetched.json()["motivo_cancelacion"]
+        == "Cliente no llegó al punto de encuentro"
+    )
+
+
+@pytest.mark.asyncio
+async def test_cancel_reserva_already_cancelled_returns_409(
+    auth_client: AsyncClient,
+) -> None:
+    """Cancelling a reserva twice returns 409 on the second attempt."""
+    headers = await auth_headers(auth_client)
+    created = await auth_client.post(
+        "/reservas",
+        json=_reserva_payload(reserva_reference="GYG-CANCEL-2"),
+        headers=headers,
+    )
+    assert created.status_code == 201
+    reserva_id = created.json()["id"]
+
+    first = await auth_client.post(
+        f"/reservas/{reserva_id}/cancelar",
+        json={"motivo_cancelacion": "Cambio de planes"},
+        headers=headers,
+    )
+    assert first.status_code == 200
+
+    second = await auth_client.post(
+        f"/reservas/{reserva_id}/cancelar",
+        json={"motivo_cancelacion": "Otra razón"},
+        headers=headers,
+    )
+    assert second.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_cancel_reserva_missing_returns_404(auth_client: AsyncClient) -> None:
+    """Unknown UUID returns 404."""
+    headers = await auth_headers(auth_client)
+    response = await auth_client.post(
+        f"/reservas/{uuid4()}/cancelar",
+        json={"motivo_cancelacion": "Cualquier razón"},
+        headers=headers,
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_cancel_reserva_blank_motivo_returns_422(
+    auth_client: AsyncClient,
+) -> None:
+    """Empty motivo_cancelacion fails validation."""
+    headers = await auth_headers(auth_client)
+    created = await auth_client.post(
+        "/reservas",
+        json=_reserva_payload(reserva_reference="GYG-CANCEL-3"),
+        headers=headers,
+    )
+    assert created.status_code == 201
+    reserva_id = created.json()["id"]
+
+    response = await auth_client.post(
+        f"/reservas/{reserva_id}/cancelar",
+        json={"motivo_cancelacion": ""},
+        headers=headers,
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_cancel_reserva_unauthenticated_returns_401(
+    auth_client: AsyncClient,
+) -> None:
+    """Missing Bearer token returns 401."""
+    response = await auth_client.post(
+        f"/reservas/{uuid4()}/cancelar",
+        json={"motivo_cancelacion": "Cualquier razón"},
     )
     assert response.status_code == 401
 

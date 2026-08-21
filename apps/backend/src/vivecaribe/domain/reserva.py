@@ -116,9 +116,7 @@ def compute_profit(
 
     profit = (income_final - costos).quantize(Decimal("0.01"))
     percentage_profit = (
-        (profit / income_final * 100).quantize(Decimal("0.01"))
-        if income_final != 0
-        else None
+        (profit / costos * 100).quantize(Decimal("0.01")) if costos != 0 else None
     )
     return profit, percentage_profit
 
@@ -143,6 +141,7 @@ class Reserva(BaseModel):
     reserva_reference: str
     sender: str | None
     estado: ReservaEstado
+    motivo_cancelacion: str | None = Field(default=None, max_length=255)
     subject: str | None
     fecha_email_recibido: datetime | None
     nombre_experiencia: str

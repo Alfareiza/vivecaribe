@@ -2,7 +2,6 @@ import type { BadgeColor } from "@/components/ui/badge/Badge";
 import type { PartidoListItem } from "@/types/partido";
 import type { ReservationListItem } from "@/types/reservation";
 
-/** Kept for future estado badges; not used in the current list/modal UI. */
 export function getEstadoBadgeColor(estado: string): BadgeColor {
   switch (estado.trim().toLowerCase()) {
     case "confirmada":
