@@ -44,21 +44,26 @@ async def _recompute_gasto_splits(session: AsyncSession, partido_id: UUID) -> No
 
     A reserva's ``costos`` becomes the sum of its shares when the partido
     has at least one gasto, or ``None`` when it has none yet (distinct from
-    "confirmed zero"). Shared by ``SqlAlchemyGastoRepository`` and
-    ``SqlAlchemyReservaRepository`` so both mutation paths stay in sync.
+    "confirmed zero"). Cancelled reservas never receive a share and always
+    end up with ``costos = None``. Shared by ``SqlAlchemyGastoRepository``
+    and ``SqlAlchemyReservaRepository`` so both mutation paths stay in sync.
     """
     gastos_result = await session.execute(
         select(GastoORM).where(GastoORM.partido_id == partido_id),
     )
     gastos = list(gastos_result.scalars())
 
-    reservas_result = await session.execute(
+    linked_result = await session.execute(
         select(ReservaORM).where(
             ReservaORM.partido_id == partido_id,
             ReservaORM.deleted_at.is_(None),
         ),
     )
-    reservas = list(reservas_result.scalars())
+    linked = list(linked_result.scalars())
+    reservas = [r for r in linked if r.estado != ReservaEstado.CANCELADA.value]
+    cancelled = [r for r in linked if r.estado == ReservaEstado.CANCELADA.value]
+    for reserva in cancelled:
+        reserva.costos = None
     total_participants = sum(r.participants for r in reservas)
 
     gasto_ids = [g.id for g in gastos]
@@ -403,11 +408,12 @@ class SqlAlchemyReservaRepository:
         return Reserva.model_validate(row)
 
     async def list_by_partido(self, partido_id: UUID) -> list[Reserva]:
-        """Return all non-deleted reservations linked to ``partido_id``."""
+        """Return all non-deleted, non-cancelled reservations linked to ``partido_id``."""
         result = await self._session.execute(
             select(ReservaORM).where(
                 ReservaORM.partido_id == partido_id,
                 ReservaORM.deleted_at.is_(None),
+                ReservaORM.estado != ReservaEstado.CANCELADA.value,
             ),
         )
         return [Reserva.model_validate(row) for row in result.scalars()]
@@ -481,10 +487,10 @@ class SqlAlchemyPartidoRepository:
 
         Each item is a plain dict (partido fields + ``reservas_count`` +
         ``participants_count``), built from a single LEFT JOIN + COUNT/SUM
-        query — no N+1. The non-deleted filter on reservas lives in the
-        join's ON clause, not WHERE, so a partido whose reservas are all
-        soft-deleted still appears (with counts 0) instead of being dropped
-        from the page entirely.
+        query — no N+1. The non-deleted/non-cancelled filter on reservas
+        lives in the join's ON clause, not WHERE, so a partido whose
+        reservas are all soft-deleted or cancelled still appears (with
+        counts 0) instead of being dropped from the page entirely.
         """
         filters: list[ColumnElement[bool]] = [PartidoORM.deleted_at.is_(None)]
         if ciudad is not None:
@@ -521,6 +527,7 @@ class SqlAlchemyPartidoRepository:
                 and_(
                     ReservaORM.partido_id == PartidoORM.id,
                     ReservaORM.deleted_at.is_(None),
+                    ReservaORM.estado != ReservaEstado.CANCELADA.value,
                 ),
             )
             .where(where_clause)
