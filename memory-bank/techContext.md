@@ -71,14 +71,26 @@ Fixtures refuse to reset any database whose name does not end with `_test`.
 - **Frontend job:** path-filtered (`apps/frontend/**`); `npm ci` +
   `npm run build` (Node 22).
 
+**Coverage gotcha (#81)**: `[tool.coverage.run]` needs
+`concurrency = ["greenlet", "thread"]` — SQLAlchemy's async engine
+bridges DBAPI calls through `greenlet`, and coverage.py's default
+thread-only trace hook doesn't follow it, silently under-reporting
+every async DB code path project-wide (measured 89.95% → 95.94% after
+adding this, zero test changes). If backend coverage ever looks
+implausibly low relative to how thoroughly a path is actually tested,
+check this setting first before writing more tests to compensate.
+
 `.github/workflows/migrate.yml` (prod schema):
 
 - On push to `main` when `apps/backend/migrations/**` or `alembic.ini` change
   (also `workflow_dispatch`).
 - Runs `uv run alembic upgrade head` against repository secret `DATABASE_URL`
   (prod Supabase). Not run in Vercel or Docker Compose entrypoints.
-- Latest schema add: `trm_estimado`/`trm_final` (renamed from
-  `trm_del_dia`) + `income_final` on `reservas` (#78/#79, PR #80).
+- Latest schema add: `gastos` + `gasto_reserva_splits` tables, plus a
+  one-time reset of `reservas.costos` to `NULL` (#81, migration
+  `958c6f8b6a56`) — `costos` becomes fully derived from gastos.
+  Previous: `trm_estimado`/`trm_final` (renamed from `trm_del_dia`) +
+  `income_final` on `reservas` (#78/#79, PR #80).
 
 ## Env vars (auth / CORS / UI)
 

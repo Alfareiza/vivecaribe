@@ -57,3 +57,17 @@ structured reservations operators can trust, while remaining an API platform
 - Creating a partido auto-checks for existing unassigned reservas matching
   its ciudad + calendar day and offers a one-click bulk-assign confirmation
   instead of linking reservas one by one.
+
+### Gastos (partido-level expenses, `#81`)
+
+- Operators register a partido's shared expenses by category (Comida
+  y/o Snacks, Transporte, Boletas, Apoyos, Otros) once, from the
+  Partido modal's collapsed-by-default "Gastos" section — no more
+  manually computing and typing each reserva's individual `costos`.
+- Each linked reserva's share is computed automatically, proportional
+  to how many people are on that booking, and stays live as gastos,
+  reserva links, or participant counts change afterward. A reserva's
+  own modal shows its computed share (read-only — gastos are only
+  edited from the partido side) so the operator can see exactly how
+  much of the shared spend landed on that specific booking, and how it
+  feeds that reserva's profit.
