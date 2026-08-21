@@ -12,15 +12,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Dropdown } from "@/components/ui/dropdown/Dropdown";
 import InlineLoading from "@/components/ui/loading/InlineLoading";
 import { useModal } from "@/hooks/useModal";
 import { fetchReservas } from "@/lib/reservas";
 import { BOOKING_PROVIDER_OPTIONS } from "@/types/reservation";
 import type { ReservationListItem } from "@/types/reservation";
+import { FilterIcon } from "@/icons";
 import ProviderLogo from "./ProviderLogo";
 import ReservationDetailModal from "./ReservationDetailModal";
 import { EsHoyStatusDot } from "./StatusDot";
-import { formatRawDateTime, formatPrice, PROVIDER_LABELS } from "./reservationUtils";
+import { formatRawDate, formatPrice, PROVIDER_LABELS } from "./reservationUtils";
 
 const PAGE_SIZE = 20;
 
@@ -55,6 +57,13 @@ export default function ReservationsTable() {
   const [dateTo, setDateTo] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [filterMenuOpen, setFilterMenuOpen] = useState(false);
+  const [filterResetToken, setFilterResetToken] = useState(0);
+
+  const activeFilterCount =
+    (estadoFilter !== ALL ? 1 : 0) +
+    (providerFilter !== ALL ? 1 : 0) +
+    (dateFrom || dateTo ? 1 : 0);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const page = Math.min(currentPage, totalPages);
@@ -103,8 +112,36 @@ export default function ReservationsTable() {
 
   const resetPage = () => setCurrentPage(1);
 
+  function clearFilters() {
+    setEstadoFilter(ALL);
+    setProviderFilter(ALL);
+    setDateFrom(null);
+    setDateTo(null);
+    setFilterResetToken((token) => token + 1);
+    resetPage();
+  }
+
+  // Commits the range on close, not on every intermediate click (flatpickr's
+  // onChange fires after picking "desde" alone too) — otherwise the state
+  // update from an early commit re-renders this component, which recreates
+  // the DatePicker's flatpickr instance mid-selection and drops the pending
+  // range before "hasta" can be picked. useCallback keeps this handler's
+  // identity stable across renders so the DatePicker's init effect doesn't
+  // tear down/rebuild the flatpickr instance on every unrelated re-render.
+  const handleFechaEventoRangeClose = useCallback((selectedDates: Date[]) => {
+    const from = selectedDates[0] ? toYmd(selectedDates[0]) : null;
+    const to = selectedDates[1]
+      ? toYmd(selectedDates[1])
+      : selectedDates[0]
+        ? toYmd(selectedDates[0])
+        : null;
+    setDateFrom(from);
+    setDateTo(to);
+    setCurrentPage(1);
+  }, []);
+
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white px-4 pb-3 pt-4 dark:border-gray-800 dark:bg-white/[0.03] sm:px-6">
+    <div className="rounded-2xl border border-gray-200 bg-white px-4 pb-3 pt-4 dark:border-gray-800 dark:bg-white/[0.03] sm:px-6">
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div className="flex items-end justify-between gap-3">
           <div>
@@ -120,50 +157,71 @@ export default function ReservationsTable() {
           </Button>
         </div>
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-          <div className="w-full sm:w-44">
-            <Select
-              options={estadoOptions}
-              placeholder="Estado"
-              defaultValue={ALL}
-              onChange={(value) => {
-                setEstadoFilter(value || ALL);
-                resetPage();
-              }}
-            />
-          </div>
-          <div className="w-full sm:w-48">
-            <Select
-              options={providerOptions}
-              placeholder="Proveedor"
-              defaultValue={ALL}
-              onChange={(value) => {
-                setProviderFilter(value || ALL);
-                resetPage();
-              }}
-            />
-          </div>
-          <div className="w-full sm:w-56">
-            <DatePicker
-              id="reservas-fecha-evento-range"
-              mode="range"
-              label="Fecha evento"
-              placeholder="Desde — Hasta"
-              onChange={(selectedDates) => {
-                const from = selectedDates[0]
-                  ? toYmd(selectedDates[0])
-                  : null;
-                const to = selectedDates[1]
-                  ? toYmd(selectedDates[1])
-                  : selectedDates[0]
-                    ? toYmd(selectedDates[0])
-                    : null;
-                setDateFrom(from);
-                setDateTo(to);
-                resetPage();
-              }}
-            />
-          </div>
+        <div className="relative inline-block self-start">
+          <button
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={filterMenuOpen}
+            onClick={() => setFilterMenuOpen((open) => !open)}
+            className="dropdown-toggle inline-flex h-11 items-center gap-2 rounded-lg border border-gray-300 px-4 text-sm font-medium text-gray-700 shadow-theme-xs transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5"
+          >
+            <FilterIcon className="size-4" />
+            Filtros
+            {activeFilterCount > 0 ? (
+              <span className="inline-flex size-5 items-center justify-center rounded-full bg-brand-500 text-xs font-semibold text-white">
+                {activeFilterCount}
+              </span>
+            ) : null}
+          </button>
+          <Dropdown
+            isOpen={filterMenuOpen}
+            onClose={() => setFilterMenuOpen(false)}
+            className="w-72 p-4"
+          >
+            <div className="space-y-3">
+              <Select
+                key={`estado-${filterResetToken}`}
+                options={estadoOptions}
+                placeholder="Estado"
+                defaultValue={ALL}
+                onChange={(value) => {
+                  setEstadoFilter(value || ALL);
+                  resetPage();
+                }}
+              />
+              <Select
+                key={`provider-${filterResetToken}`}
+                options={providerOptions}
+                placeholder="Proveedor"
+                defaultValue={ALL}
+                onChange={(value) => {
+                  setProviderFilter(value || ALL);
+                  resetPage();
+                }}
+              />
+              <div>
+                <p className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                  Fecha evento
+                </p>
+                <DatePicker
+                  key={`fecha-${filterResetToken}`}
+                  id="reservas-fecha-evento-range"
+                  mode="range"
+                  placeholder="Desde — Hasta"
+                  onClose={handleFechaEventoRangeClose}
+                />
+              </div>
+              {activeFilterCount > 0 ? (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="text-theme-xs font-medium text-brand-500 hover:underline"
+                >
+                  Limpiar filtros
+                </button>
+              ) : null}
+            </div>
+          </Dropdown>
         </div>
       </div>
 
@@ -214,7 +272,7 @@ export default function ReservationsTable() {
                         onClick={() => handleRowClick(reservation)}
                       >
                         <TableCell className="px-4 py-3 text-start">
-                          <div className="flex flex-col items-center gap-3 xl:flex-row xl:items-center">
+                          <div className="flex flex-col items-start gap-3 xl:flex-row xl:items-center">
                             <ProviderLogo
                               provider={reservation.booking_provider}
                               size={28}
@@ -244,7 +302,7 @@ export default function ReservationsTable() {
                           </span>
                         </TableCell>
                         <TableCell className="px-4 py-3 text-start text-theme-sm text-gray-500 dark:text-gray-400">
-                          {formatRawDateTime(reservation.fecha_evento)}
+                          {formatRawDate(reservation.fecha_evento)}
                         </TableCell>
                         <TableCell className="px-4 py-3 text-start text-theme-sm text-gray-500 dark:text-gray-400">
                           {reservation.participants}

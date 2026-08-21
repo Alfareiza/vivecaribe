@@ -441,17 +441,18 @@ class SqlAlchemyPartidoRepository:
         fecha_to: datetime | None = None,
         q: str | None = None,
     ) -> tuple[list[dict[str, object]], int]:
-        """Return a filtered page of non-deleted partidos, each with a reservas_count.
+        """Return a filtered page of non-deleted partidos, each with counts.
 
         Filters compose with AND. ``q`` does a case-insensitive search across
         ``equipo_local``, ``equipo_visitante``, and ``ciudad``. Ordered by
         ``fecha`` ascending (soonest first).
 
-        Each item is a plain dict (partido fields + ``reservas_count``), built
-        from a single LEFT JOIN + COUNT query — no N+1. The non-deleted filter
-        on reservas lives in the join's ON clause, not WHERE, so a partido
-        whose reservas are all soft-deleted still appears (with count 0)
-        instead of being dropped from the page entirely.
+        Each item is a plain dict (partido fields + ``reservas_count`` +
+        ``participants_count``), built from a single LEFT JOIN + COUNT/SUM
+        query — no N+1. The non-deleted filter on reservas lives in the
+        join's ON clause, not WHERE, so a partido whose reservas are all
+        soft-deleted still appears (with counts 0) instead of being dropped
+        from the page entirely.
         """
         filters: list[ColumnElement[bool]] = [PartidoORM.deleted_at.is_(None)]
         if ciudad is not None:
@@ -476,7 +477,13 @@ class SqlAlchemyPartidoRepository:
         total = total_result.scalar_one()
 
         result = await self._session.execute(
-            select(PartidoORM, func.count(ReservaORM.id).label("reservas_count"))
+            select(
+                PartidoORM,
+                func.count(ReservaORM.id).label("reservas_count"),
+                func.coalesce(func.sum(ReservaORM.participants), 0).label(
+                    "participants_count",
+                ),
+            )
             .outerjoin(
                 ReservaORM,
                 and_(
@@ -492,8 +499,12 @@ class SqlAlchemyPartidoRepository:
         )
 
         items = [
-            {**Partido.model_validate(row).model_dump(), "reservas_count": count}
-            for row, count in result.all()
+            {
+                **Partido.model_validate(row).model_dump(),
+                "reservas_count": reservas_count,
+                "participants_count": participants_count,
+            }
+            for row, reservas_count, participants_count in result.all()
         ]
         return items, total
 

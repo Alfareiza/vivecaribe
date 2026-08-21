@@ -53,6 +53,7 @@ import MoreDotIcon from "./more-dot.svg";
 import BellIcon from "./bell.svg";
 import WhatsappIcon from "./whatsapp.svg";
 import CalendarIcon from "./calendar.svg";
+import FilterIcon from "./filter.svg";
 
 export {
   DownloadIcon,
@@ -110,4 +111,5 @@ export {
   ChatIcon,
   WhatsappIcon,
   CalendarIcon,
+  FilterIcon,
 };

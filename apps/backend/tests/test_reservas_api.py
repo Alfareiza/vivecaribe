@@ -755,6 +755,82 @@ async def test_list_reservas_date_range_excludes_null_fecha(
 
 
 @pytest.mark.asyncio
+async def test_list_reservas_date_filter_uses_bogota_calendar_day(
+    auth_client: AsyncClient,
+) -> None:
+    """The date filter matches America/Bogota calendar days, not UTC days.
+
+    Regression guard for the "date-only" fecha_evento filter: a reserva
+    whose UTC timestamp falls late at night still belongs to the *next* UTC
+    calendar day, but is still the *same* Bogota calendar day (UTC-5). The
+    filter must follow Bogota, or an operator filtering "September 1st"
+    would silently miss reservas that are stored a few hours into
+    September 2nd UTC.
+    """
+    headers = await auth_headers(auth_client)
+    # 2026-09-01T04:30:00Z == 2026-08-31T23:30:00-05:00 (Bogota).
+    late_utc_but_same_bogota_day = await auth_client.post(
+        "/reservas",
+        json=_reserva_payload(
+            reserva_reference="LATE-UTC-SAME-BOGOTA-DAY",
+            fecha_evento="2026-09-01T04:30:00Z",
+        ),
+        headers=headers,
+    )
+    assert late_utc_but_same_bogota_day.status_code == 201
+
+    # Filtering by the Bogota day (Aug 31) must include it...
+    matches_bogota_day = await auth_client.get(
+        "/reservas",
+        params={"fecha_evento_from": "2026-08-31", "fecha_evento_to": "2026-08-31"},
+        headers=headers,
+    )
+    assert matches_bogota_day.status_code == 200
+    assert matches_bogota_day.json()["total"] == 1
+
+    # ...while filtering by the UTC day (Sep 1) must exclude it.
+    excludes_utc_day = await auth_client.get(
+        "/reservas",
+        params={"fecha_evento_from": "2026-09-01", "fecha_evento_to": "2026-09-01"},
+        headers=headers,
+    )
+    assert excludes_utc_day.status_code == 200
+    assert excludes_utc_day.json()["total"] == 0
+
+
+@pytest.mark.asyncio
+async def test_list_reservas_date_filter_includes_late_evening_events(
+    auth_client: AsyncClient,
+) -> None:
+    """A same-day upper bound doesn't drop late-evening events (no off-by-one).
+
+    A naive range filter comparing raw UTC datetimes against a midnight
+    boundary would exclude an evening event when filtering "to" that same
+    day. Since the filter compares Bogota calendar days, an event at
+    23:00 Bogota time must still match a from=to=that-day filter.
+    """
+    headers = await auth_headers(auth_client)
+    # 2026-09-02T04:00:00Z == 2026-09-01T23:00:00-05:00 (Bogota).
+    late_evening = await auth_client.post(
+        "/reservas",
+        json=_reserva_payload(
+            reserva_reference="LATE-EVENING-BOGOTA",
+            fecha_evento="2026-09-02T04:00:00Z",
+        ),
+        headers=headers,
+    )
+    assert late_evening.status_code == 201
+
+    response = await auth_client.get(
+        "/reservas",
+        params={"fecha_evento_from": "2026-09-01", "fecha_evento_to": "2026-09-01"},
+        headers=headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["total"] == 1
+
+
+@pytest.mark.asyncio
 async def test_list_reservas_filters_by_ciudad_case_insensitive(
     auth_client: AsyncClient,
 ) -> None:

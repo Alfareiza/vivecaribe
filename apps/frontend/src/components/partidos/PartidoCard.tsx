@@ -13,6 +13,7 @@ type PartidoCardProps = {
 export default function PartidoCard({ partido, onClick }: PartidoCardProps) {
   const dateState = getDateState(partido.fecha);
   const reservaCount = partido.reservas_count;
+  const participantsCount = partido.participants_count;
   const isPast = dateState === "past";
   const isToday = dateState === "today";
 
@@ -78,9 +79,10 @@ export default function PartidoCard({ partido, onClick }: PartidoCardProps) {
       >
         {/* Main content */}
         <div className="w-full">
-          {/* Reserva badge: above team names */}
-          <div className="mb-3">
+          {/* Reserva + participants badges: above team names */}
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <ReservaBadge count={reservaCount} />
+            <ParticipantsBadge count={participantsCount} />
           </div>
 
           {/* Team matchup */}
@@ -167,6 +169,35 @@ function ReservaBadge({ count }: { count: number }) {
         {count} Reserva{count !== 1 ? "s" : ""}
       </span>
       {tier !== "none" ? <span className="reserva-badge-shine" /> : null}
+    </div>
+  );
+}
+
+/**
+ * Participants badge: flat count badge (icon + total headcount across this
+ * partido's reservas). Deliberately untiered — unlike reserva counts,
+ * headcounts are unbounded sums across bookings, so a medal-tier scale
+ * doesn't map cleanly onto them.
+ */
+function ParticipantsBadge({ count }: { count: number }) {
+  return (
+    <div className="inline-flex items-center gap-1.5 rounded-lg border border-transparent bg-gray-100 px-2 py-1.5 text-xs font-medium text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+      <Image
+        src="/images/icons/users.svg"
+        width={14}
+        height={14}
+        alt=""
+        className="shrink-0"
+      />
+      {count > 0 ? (
+        <span>
+          {count} Persona{count !== 1 ? "s" : ""}
+        </span>
+      ) : !count ? (
+        <span>-</span>
+      ) : null}
+ 
+ 
     </div>
   );
 }

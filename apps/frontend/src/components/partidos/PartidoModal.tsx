@@ -11,7 +11,7 @@ import { AngleDownIcon } from "@/icons";
 import {
   formatCOP,
   formatIntegerCO,
-  formatRawDateTime,
+  formatRawDate,
   rawDateOnly,
   sanitizeIntegerInput,
   toDatetimeLocal,
@@ -545,7 +545,7 @@ export default function PartidoModal({
                 </h5>
                 <div className="text-right">
                   <p className="text-theme-xs font-medium text-gray-500 dark:text-gray-400">
-                    Total participantes
+                    Cantidad de Personas
                   </p>
                   <p className="text-lg font-semibold text-gray-800 dark:text-white/90">
                     {detail.reservas.reduce((sum, r) => sum + r.participants, 0)}
@@ -576,7 +576,7 @@ export default function PartidoModal({
                         </span>
                       </div>
                       <span className="mt-0.5 ml-6 text-theme-xs text-gray-500 dark:text-gray-400">
-                        {formatRawDateTime(reserva.fecha_evento)}
+                        {formatRawDate(reserva.fecha_evento)}
                       </span>
                     </button>
                     <span className="shrink-0 text-theme-sm font-medium text-gray-700 dark:text-gray-300">
