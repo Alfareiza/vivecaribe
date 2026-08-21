@@ -8,7 +8,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
 
-from vivecaribe.api.deps import CurrentUser, ReservaRepo
+from vivecaribe.api.deps import CurrentUser, GastoRepo, ReservaRepo
+from vivecaribe.api.schemas.gastos import GastoShareItem
 from vivecaribe.api.schemas.reservas import (
     ReservaCreate,
     ReservaListResponse,
@@ -30,6 +31,7 @@ router = APIRouter(tags=["reservas"])
 async def create_reserva(
     payload: ReservaCreate,
     reservas: ReservaRepo,
+    gastos: GastoRepo,
     _current_user: CurrentUser,
 ) -> ReservaResponse:
     """Create a reservation (JWT required).
@@ -48,7 +50,14 @@ async def create_reserva(
                 f"{payload.reserva_reference})"
             ),
         )
-    return ReservaResponse.model_validate(saved)
+    shares = await gastos.shares_by_reserva(saved.id)
+    return ReservaResponse(
+        **saved.model_dump(),
+        gastos=[
+            GastoShareItem(categoria=categoria, monto=monto)
+            for categoria, monto in shares
+        ],
+    )
 
 
 @router.get("/reservas", response_model=ReservaListResponse)
@@ -101,6 +110,7 @@ async def list_reservas(
 async def get_reserva(
     reserva_id: UUID,
     reservas: ReservaRepo,
+    gastos: GastoRepo,
     _current_user: CurrentUser,
 ) -> ReservaResponse:
     """Return a single reservation by id (JWT required)."""
@@ -110,7 +120,14 @@ async def get_reserva(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Reserva {reserva_id} not found",
         )
-    return ReservaResponse.model_validate(reserva)
+    shares = await gastos.shares_by_reserva(reserva.id)
+    return ReservaResponse(
+        **reserva.model_dump(),
+        gastos=[
+            GastoShareItem(categoria=categoria, monto=monto)
+            for categoria, monto in shares
+        ],
+    )
 
 
 @router.patch("/reservas/{reserva_id}", response_model=ReservaResponse)
@@ -118,6 +135,7 @@ async def update_reserva(
     reserva_id: UUID,
     payload: ReservaUpdate,
     reservas: ReservaRepo,
+    gastos: GastoRepo,
     _current_user: CurrentUser,
 ) -> ReservaResponse:
     """Partially update a reservation (JWT required)."""
@@ -139,7 +157,14 @@ async def update_reserva(
         },
     )
     saved = await reservas.save(updated)
-    return ReservaResponse.model_validate(saved)
+    shares = await gastos.shares_by_reserva(saved.id)
+    return ReservaResponse(
+        **saved.model_dump(),
+        gastos=[
+            GastoShareItem(categoria=categoria, monto=monto)
+            for categoria, monto in shares
+        ],
+    )
 
 
 @router.delete(

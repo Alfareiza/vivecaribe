@@ -1,5 +1,7 @@
 /** Reservation shapes aligned with API OpenAPI schemas. */
 
+import type { GastoShareItem } from "@/types/gasto";
+
 export type BookingProvider =
   | "getyourguide"
   | "viator"
@@ -63,6 +65,7 @@ export type Reservation = ReservationListItem & {
   notas_cliente: string | null;
   tipo_tour: TipoTour | string | null;
   notas_personales: string | null;
+  /** Derived from this reserva's share of its partido's gastos; not operator-editable. */
   costos: string | null;
   meeting_point: MeetingPoint | string | null;
   lugar_de_recogida: string | null;
@@ -74,4 +77,8 @@ export type Reservation = ReservationListItem & {
   percentage_profit: string | null;
   menores_de_edad: boolean;
   paid_at: string | null;
+  /** This reserva's computed share of each of its partido's registered gasto categories. */
+  gastos: GastoShareItem[];
+  /** Sum of this reserva's share across all gasto categories. */
+  gastos_total: string;
 };

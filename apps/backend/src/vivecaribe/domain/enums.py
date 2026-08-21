@@ -72,3 +72,18 @@ class Ciudad(StrEnum):
 
     BARRANQUILLA = "Barranquilla"
     CARTAGENA = "Cartagena"
+
+
+class GastoCategoria(StrEnum):
+    """Expense category for a ``Gasto`` tied to a ``Partido``.
+
+    At most one ``Gasto`` exists per ``(partido_id, categoria)`` pair.
+    Registering a new category is a one-line addition here — the column is
+    a plain ``VARCHAR`` (no DB-level enum), so no migration is needed.
+    """
+
+    COMIDA_SNACKS = "Comida y/o Snacks"
+    TRANSPORTE = "Transporte"
+    BOLETAS = "Boletas"
+    APOYOS = "Apoyos"
+    OTROS = "Otros"

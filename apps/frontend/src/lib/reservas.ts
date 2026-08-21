@@ -69,7 +69,6 @@ export type ReservaUpdatePayload = Partial<
     | "notas_cliente"
     | "tipo_tour"
     | "notas_personales"
-    | "costos"
     | "meeting_point"
     | "lugar_de_recogida"
     | "income_estimado"
@@ -113,7 +112,6 @@ export type ReservaCreatePayload = {
   notas_cliente?: string | null;
   tipo_tour?: TipoTour | string | null;
   notas_personales?: string | null;
-  costos?: string | null;
   meeting_point?: MeetingPoint | string | null;
   lugar_de_recogida?: string | null;
   income_estimado?: string | null;

@@ -243,3 +243,6 @@ refresh_token*.txt
 
 # Cursor
 .cursor/
+
+# playwright-cli local session artifacts (snapshots, console/network logs)
+.playwright-cli/

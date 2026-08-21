@@ -25,6 +25,7 @@ import { fetchTrmToCop } from "@/lib/trm";
 import { BOOKING_PROVIDER_OPTIONS } from "@/types/reservation";
 import type { Reservation, ReservationListItem } from "@/types/reservation";
 import type { PartidoListItem } from "@/types/partido";
+import { GASTO_CATEGORIA_META, GASTO_CATEGORIA_OPTIONS } from "@/types/gasto";
 import PartidoSelector from "./PartidoSelector";
 import ProviderLogo from "./ProviderLogo";
 import ShareMenu from "./ShareMenu";
@@ -45,6 +46,7 @@ import {
   formatPrice,
   formatRawDateTime,
   partidoLabel,
+  sanitizeDecimalInput,
   toDatetimeLocal,
   toIsoUtc,
   truncateText,
@@ -81,7 +83,6 @@ type FormState = {
   income_estimado: string;
   trm_estimado: string;
   trm_final: string;
-  costos: string;
   notas_personales: string;
   notas_cliente: string;
   tipo_tour: string;
@@ -124,7 +125,6 @@ const CREATE_DEFAULTS: FormState = {
   income_estimado: "",
   trm_estimado: "",
   trm_final: "",
-  costos: "",
   notas_personales: "",
   notas_cliente: "",
   tipo_tour: "football tour",
@@ -150,7 +150,6 @@ function seedFormFromDetail(detail: Reservation): FormState {
     income_estimado: detail.income_estimado ?? "",
     trm_estimado: detail.trm_estimado ?? "",
     trm_final: detail.trm_final ?? "",
-    costos: detail.costos ?? "",
     notas_personales: detail.notas_personales ?? "",
     notas_cliente: detail.notas_cliente ?? "",
     tipo_tour: detail.tipo_tour ?? "",
@@ -226,22 +225,6 @@ function normalizePhone(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) return trimmed;
   return trimmed.startsWith("+") ? trimmed : `+${trimmed}`;
-}
-
-/**
- * Strips everything but digits and a decimal point from a numeric-only
- * input (rates, costs) as the operator types, keeping only the first "."
- * if they type more than one — so a field like TRM Final can never end
- * up holding letters or symbols.
- */
-function sanitizeDecimalInput(value: string): string {
-  const digitsAndDots = value.replace(/[^\d.]/g, "");
-  const firstDot = digitsAndDots.indexOf(".");
-  if (firstDot === -1) return digitsAndDots;
-  return (
-    digitsAndDots.slice(0, firstDot + 1) +
-    digitsAndDots.slice(firstDot + 1).replace(/\./g, "")
-  );
 }
 
 const experienciaOptions = Object.keys(EXPERIENCIA_PRESETS).map((value) => ({
@@ -510,6 +493,7 @@ export default function ReservationDetailModal({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [gastoExpanded, setGastoExpanded] = useState(false);
 
   // Precio -> Ingreso -> Ingreso estimado auto-fill (create mode only);
   // each stops once the operator edits that specific field by hand.
@@ -542,6 +526,7 @@ export default function ReservationDetailModal({
     setPartidoCandidates(null);
     setPartidoLookupLoading(false);
     setLinkedPartido(null);
+    setGastoExpanded(false);
   }
 
   useEffect(() => {
@@ -938,7 +923,6 @@ export default function ReservationDetailModal({
         meeting_point: form.meeting_point || null,
         lugar_de_recogida: form.lugar_de_recogida.trim() || null,
         income_estimado: form.income_estimado.trim() || null,
-        costos: form.costos.trim() || null,
         trm_estimado:
           form.moneda.trim() === "COP" ? null : form.trm_estimado.trim() || null,
         trm_final:
@@ -1541,18 +1525,20 @@ export default function ReservationDetailModal({
               ) : null}
 
               {!createMode ? (
-                <div className="mt-4">
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2">
                   <FormField
-                    label="Costos"
-                    hint="Costos de la reserva, en COP. Solo números."
+                    label={<CalculatedLabel text="Costos" />}
+                    hint="Suma de la parte de esta reserva en los gastos del partido. Se edita desde la sección Gastos del partido."
                   >
                     <Input
                       type="text"
                       prefix="COP"
-                      placeholder="0.00"
-                      value={form.costos}
-                      onChange={(e) =>
-                        update("costos", sanitizeDecimalInput(e.target.value))
+                      placeholder="Sin gastos registrados"
+                      disabled
+                      value={
+                        detail?.costos != null
+                          ? formatPlainNumberCO(detail.costos)
+                          : ""
                       }
                     />
                   </FormField>
@@ -1820,6 +1806,67 @@ export default function ReservationDetailModal({
                 </div>
               </div>
             </section>
+
+            {detail.partido_id ? (
+              <section className="rounded-xl border border-gray-100 dark:border-gray-800">
+                <button
+                  type="button"
+                  aria-expanded={gastoExpanded}
+                  onClick={() => setGastoExpanded((value) => !value)}
+                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left"
+                >
+                  <AngleDownIcon
+                    className={`size-4 shrink-0 text-gray-400 transition-transform duration-200 ${
+                      gastoExpanded ? "-rotate-90" : ""
+                    }`}
+                  />
+                  <span className="flex-1 text-theme-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                    Gastos de esta reserva
+                  </span>
+                  <Badge color="primary" variant="light" size="sm">
+                    Total {formatCOP(detail.gastos_total)}
+                  </Badge>
+                </button>
+                <div
+                  className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+                    gastoExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                  }`}
+                  inert={!gastoExpanded}
+                >
+                  <div className="overflow-hidden">
+                    <ul className="space-y-1.5 border-t border-gray-100 p-3 dark:border-gray-800">
+                      {GASTO_CATEGORIA_OPTIONS.map((categoria) => {
+                        const meta = GASTO_CATEGORIA_META[categoria];
+                        const share = detail.gastos.find(
+                          (g) => g.categoria === categoria,
+                        );
+                        return (
+                          <li
+                            key={categoria}
+                            className="flex items-center gap-2.5"
+                          >
+                            <span
+                              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm ${meta.chipClass}`}
+                            >
+                              {meta.icon}
+                            </span>
+                            <span className="min-w-0 flex-1 truncate text-theme-sm text-gray-600 dark:text-gray-300">
+                              {categoria}
+                            </span>
+                            <span className="shrink-0 text-theme-sm font-medium text-gray-700 dark:text-gray-300">
+                              {share ? formatCOP(share.monto) : "—"}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    <p className="px-3 pb-3 text-theme-xs text-gray-400 dark:text-gray-500">
+                      Se editan desde el partido asociado.
+                    </p>
+                  </div>
+                </div>
+              </section>
+            ) : null}
 
             <CollapsibleMetadata>
               <DetailRow label="Fuente" value={detail.source || "—"} />

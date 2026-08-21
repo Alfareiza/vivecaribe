@@ -6,14 +6,20 @@ import Label from "@/components/form/Label";
 import Input from "@/components/form/input/InputField";
 import Select from "@/components/form/Select";
 import { Modal } from "@/components/ui/modal";
+import Badge from "@/components/ui/badge/Badge";
+import { AngleDownIcon } from "@/icons";
 import {
+  formatCOP,
+  formatIntegerCO,
   formatRawDateTime,
   rawDateOnly,
+  sanitizeIntegerInput,
   toDatetimeLocal,
   toIsoUtc,
 } from "@/components/reservations/reservationUtils";
 import ProviderLogo from "@/components/reservations/ProviderLogo";
 import { ApiError } from "@/lib/api";
+import { deleteGasto, upsertGasto } from "@/lib/gastos";
 import {
   createPartido,
   deletePartido,
@@ -24,6 +30,11 @@ import { fetchReservas } from "@/lib/reservas";
 import { CAMPEONATO_OPTIONS, CIUDAD_OPTIONS, ESTADIO_OPTIONS, EQUIPOS_LOCALES } from "@/types/partido";
 import type { Partido } from "@/types/partido";
 import type { ReservationListItem } from "@/types/reservation";
+import {
+  GASTO_CATEGORIA_META,
+  GASTO_CATEGORIA_OPTIONS,
+  type GastoCategoria,
+} from "@/types/gasto";
 import ReservationDetailModal from "@/components/reservations/ReservationDetailModal";
 import PartidoMatchedReservasModal from "./PartidoMatchedReservasModal";
 
@@ -80,6 +91,11 @@ export default function PartidoModal({
   const [isReservaModalOpen, setIsReservaModalOpen] = useState(false);
   const [matchCandidates, setMatchCandidates] = useState<ReservationListItem[]>([]);
   const [isMatchModalOpen, setIsMatchModalOpen] = useState(false);
+  const [gastoDrafts, setGastoDrafts] = useState<Record<string, string>>({});
+  const [gastoFocus, setGastoFocus] = useState<Record<string, boolean>>({});
+  const [gastoSaving, setGastoSaving] = useState<Record<string, boolean>>({});
+  const [gastoError, setGastoError] = useState<string | null>(null);
+  const [gastoExpanded, setGastoExpanded] = useState(false);
 
   /**
    * `partidoId` (prop) stays null through a create-with-matches flow — the
@@ -102,6 +118,11 @@ export default function PartidoModal({
       setIsReservaModalOpen(false);
       setMatchCandidates([]);
       setIsMatchModalOpen(false);
+      setGastoDrafts({});
+      setGastoFocus({});
+      setGastoSaving({});
+      setGastoError(null);
+      setGastoExpanded(false);
       return;
     }
 
@@ -164,6 +185,60 @@ export default function PartidoModal({
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  /**
+   * Seed the Gastos grid drafts once per loaded partido (keyed on id, not
+   * the whole `detail` object) — re-running this on every `detail` update
+   * would blindly overwrite every category's draft each time any single
+   * category's save resolves, clobbering a sibling field the operator is
+   * still mid-edit on. `handleGastoBlur` updates its own draft directly
+   * once its save completes instead.
+   */
+  useEffect(() => {
+    const next: Record<string, string> = {};
+    for (const categoria of GASTO_CATEGORIA_OPTIONS) {
+      const existing = detail?.gastos.find((g) => g.categoria === categoria);
+      next[categoria] = existing ? existing.monto : "";
+    }
+    setGastoDrafts(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detail?.id]);
+
+  async function handleGastoBlur(categoria: GastoCategoria) {
+    setGastoFocus((prev) => ({ ...prev, [categoria]: false }));
+    if (!effectiveId) return;
+    const raw = gastoDrafts[categoria]?.trim() ?? "";
+    const existing = detail?.gastos.find((g) => g.categoria === categoria);
+
+    // Nothing changed since the last committed value — skip the round-trip.
+    if ((existing?.monto ?? "") === raw) return;
+
+    setGastoError(null);
+    setGastoSaving((prev) => ({ ...prev, [categoria]: true }));
+    try {
+      const updated =
+        raw && Number(raw) > 0
+          ? await upsertGasto(effectiveId, categoria, raw)
+          : existing
+            ? await deleteGasto(effectiveId, categoria)
+            : null;
+      if (updated) {
+        setDetail(updated);
+        const saved = updated.gastos.find((g) => g.categoria === categoria);
+        setGastoDrafts((prev) => ({
+          ...prev,
+          [categoria]: saved ? saved.monto : "",
+        }));
+      }
+      onSaved();
+    } catch (err) {
+      setGastoError(
+        err instanceof ApiError ? err.message : "No se pudo guardar el gasto",
+      );
+    } finally {
+      setGastoSaving((prev) => ({ ...prev, [categoria]: false }));
+    }
   }
 
   const isValid =
@@ -278,6 +353,7 @@ export default function PartidoModal({
         </p>
       ) : (
         <>
+          <div className="max-h-[min(65vh,34rem)] space-y-5 overflow-y-auto overflow-x-hidden pe-1">
           {/* Key ensures form fields reset when switching between create/edit modes */}
           <div key={`form-${displayAsExisting}`} className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2">
             <div>
@@ -349,6 +425,118 @@ export default function PartidoModal({
             </div>
           </div>
 
+          {effectiveId ? (
+            <div className="mt-5 rounded-xl border border-gray-100 dark:border-gray-800">
+              <button
+                type="button"
+                aria-expanded={gastoExpanded}
+                onClick={() => setGastoExpanded((value) => !value)}
+                className="flex w-full items-center gap-2 px-3 py-2.5 text-left"
+              >
+                <AngleDownIcon
+                  className={`size-4 shrink-0 text-gray-400 transition-transform duration-200 ${
+                    gastoExpanded ? "-rotate-90" : ""
+                  }`}
+                />
+                <span className="flex-1 text-theme-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                  Gastos
+                </span>
+                <Badge color="primary" variant="light" size="sm">
+                  Total {formatCOP(detail?.gastos_total ?? "0")}
+                </Badge>
+              </button>
+              <div
+                className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+                  gastoExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                }`}
+                // Keeps the collapsed rows' inputs out of tab order and out
+                // of find-in-page/AT reach, not just visually hidden.
+                inert={!gastoExpanded}
+              >
+                <div className="overflow-hidden">
+                  {gastoError ? (
+                    <p
+                      role="alert"
+                      className="px-3 text-theme-xs text-error-600 dark:text-error-400"
+                    >
+                      {gastoError}
+                    </p>
+                  ) : null}
+                  <ul className="divide-y divide-gray-100 border-t border-gray-100 dark:divide-gray-800 dark:border-gray-800">
+                    {GASTO_CATEGORIA_OPTIONS.map((categoria) => {
+                      const meta = GASTO_CATEGORIA_META[categoria];
+                      const registered = detail?.gastos.find(
+                        (g) => g.categoria === categoria,
+                      );
+                      const total = Number(detail?.gastos_total ?? "0");
+                      const share =
+                        registered && total > 0
+                          ? (Number(registered.monto) / total) * 100
+                          : 0;
+                      const draft = gastoDrafts[categoria] ?? "";
+                      const focused = gastoFocus[categoria] ?? false;
+
+                      return (
+                        <li
+                          key={categoria}
+                          className="relative flex items-center gap-2 px-3 py-1"
+                        >
+                          <span
+                            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs ${meta.chipClass}`}
+                          >
+                            {meta.icon}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate text-theme-sm text-gray-600 dark:text-gray-300">
+                            {categoria}
+                          </span>
+                          <div className="relative w-[8.5rem] shrink-0">
+                            <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center border-r border-gray-300 px-2 text-theme-xs text-gray-500 dark:border-gray-700 dark:text-gray-400">
+                              COP
+                            </span>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              placeholder="0"
+                              disabled={gastoSaving[categoria]}
+                              value={
+                                focused || !draft
+                                  ? draft
+                                  : formatIntegerCO(draft)
+                              }
+                              onFocus={() =>
+                                setGastoFocus((prev) => ({
+                                  ...prev,
+                                  [categoria]: true,
+                                }))
+                              }
+                              onChange={(e) =>
+                                setGastoDrafts((prev) => ({
+                                  ...prev,
+                                  [categoria]: sanitizeIntegerInput(
+                                    e.target.value,
+                                  ),
+                                }))
+                              }
+                              onBlur={() => handleGastoBlur(categoria)}
+                              className="h-8 w-full rounded-lg border border-gray-300 bg-transparent py-1 pl-11 pr-2 text-right text-theme-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:outline-hidden focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:cursor-not-allowed disabled:text-gray-400 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:disabled:text-gray-500"
+                            />
+                          </div>
+                          {/* Proportion of the total, drawn on the row divider itself — no extra height. */}
+                          <span className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 overflow-hidden">
+                            <span
+                              className={`block h-full rounded-r-full transition-all duration-300 ${meta.barClass}`}
+                              style={{ width: registered ? `${Math.max(share, 4)}%` : "0%" }}
+                            />
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           {detail && detail.reservas.length > 0 ? (
             <div className="mt-5">
               <div className="mb-3 flex items-center justify-between">
@@ -399,6 +587,7 @@ export default function PartidoModal({
               </ul>
             </div>
           ) : null}
+          </div>
 
           <div className="mt-6 flex items-center justify-between gap-3">
             {displayAsExisting ? (

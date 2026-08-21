@@ -8,6 +8,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
+from vivecaribe.api.schemas.gastos import GastoShareItem
 from vivecaribe.domain.enums import (
     BookingProvider,
     MeetingPoint,
@@ -48,7 +49,6 @@ class ReservaCreate(BaseModel):
     notas_cliente: str | None = Field(default=None, max_length=255)
     tipo_tour: TipoTour | None = None
     notas_personales: str | None = Field(default=None, max_length=255)
-    costos: Decimal | None = None
     meeting_point: MeetingPoint | None = None
     lugar_de_recogida: str | None = Field(default=None, max_length=64)
     income_estimado: Decimal | None = None
@@ -76,8 +76,10 @@ class ReservaUpdate(BaseModel):
     ``trm_estimado`` is normally set at creation from the auto-fetched rate;
     this endpoint accepts it only to fill in a still-null value (e.g. a
     legacy reserva) — once set, the router silently drops further attempts
-    to change it. ``profit``/``percentage_profit`` are derived server-side
-    from income, costos, and ``trm_final``.
+    to change it. ``costos`` is not writable here: it's derived server-side
+    from this reserva's share of its partido's gastos (see
+    ``vivecaribe.api.routers.gastos``). ``profit``/``percentage_profit`` are
+    in turn derived from income, costos, and ``trm_final``.
     """
 
     estado: ReservaEstado | None = None
@@ -97,7 +99,6 @@ class ReservaUpdate(BaseModel):
     notas_cliente: str | None = Field(default=None, max_length=255)
     tipo_tour: TipoTour | None = None
     notas_personales: str | None = Field(default=None, max_length=255)
-    costos: Decimal | None = None
     meeting_point: MeetingPoint | None = None
     lugar_de_recogida: str | None = Field(default=None, max_length=64)
     income_estimado: Decimal | None = None
@@ -142,15 +143,27 @@ class ReservaShortItem(BaseModel):
 
 
 class ReservaResponse(Reserva):
-    """Public reservation representation (detail / mutations)."""
+    """Public reservation representation (detail / mutations).
+
+    ``gastos`` lists this reserva's computed share of each of its partido's
+    registered gasto categories (read-only here; gastos are set from the
+    Partido side via ``PUT``/``DELETE /partidos/{id}/gastos/{categoria}``).
+    """
 
     deleted_at: datetime | None = Field(default=None, exclude=True)
+    gastos: list[GastoShareItem] = Field(default_factory=list)
 
     @computed_field  # type: ignore[prop-decorator]
     @property
     def es_hoy(self) -> bool:
         """Whether ``fecha_evento`` is today's calendar date."""
         return _es_hoy(self.fecha_evento)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def gastos_total(self) -> Decimal:
+        """Sum of this reserva's share across all gasto categories."""
+        return sum((g.monto for g in self.gastos), Decimal(0))
 
 
 class ReservaListResponse(BaseModel):
