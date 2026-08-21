@@ -44,15 +44,19 @@ export default function ConfirmDialog({
   onClose,
 }: ConfirmDialogProps) {
   const [value, setValue] = useState("");
-  // Reset the textarea when the dialog transitions closed -> open, without
-  // an effect (this component stays mounted; only `isOpen` toggles).
+  // Reset the textarea when the dialog transitions closed -> open. This
+  // component stays mounted (only `isOpen` toggles), so an effect would
+  // cause an extra render; comparing against the previous `isOpen` during
+  // render is React's documented pattern for this — see
+  // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
   const [wasOpen, setWasOpen] = useState(isOpen);
   if (isOpen !== wasOpen) {
     setWasOpen(isOpen);
     if (isOpen) setValue("");
   }
 
-  const isValid = !textInput?.required || value.trim().length > 0;
+  const required = textInput ? (textInput.required ?? true) : false;
+  const isValid = !required || value.trim().length > 0;
 
   return (
     <Modal
