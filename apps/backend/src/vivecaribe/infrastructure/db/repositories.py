@@ -37,10 +37,11 @@ async def _recompute_gasto_splits(session: AsyncSession, partido_id: UUID) -> No
     """Recompute every gasto's per-reserva split for ``partido_id`` and sync ``costos``.
 
     Each reserva's share of a gasto is proportional to its ``participants``
-    among the partido's non-deleted linked reservas. Deletes and reinserts
-    every split row for the partido's gastos in one pass — simplest way to
-    stay correct after any gasto/reserva-link/participant-count change, and
-    cheap given the tiny row counts involved (at most 5 gastos).
+    among the partido's non-deleted, non-cancelled linked reservas. Deletes
+    and reinserts every split row for the partido's gastos in one pass —
+    simplest way to stay correct after any gasto/reserva-link/participant-
+    count change, and cheap given the tiny row counts involved (at most 5
+    gastos).
 
     A reserva's ``costos`` becomes the sum of its shares when the partido
     has at least one gasto, or ``None`` when it has none yet (distinct from
