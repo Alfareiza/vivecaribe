@@ -180,6 +180,7 @@ def get_process_booking_emails_use_case(
         accounts=settings.load_booking_providers().booking_providers,
         email_messages=SqlAlchemyEmailMessageRepository(session),
         reservas=SqlAlchemyReservaRepository(session),
+        partidos=SqlAlchemyPartidoRepository(session),
         whatsapp=NoOpWhatsAppNotifier(),
     )
 

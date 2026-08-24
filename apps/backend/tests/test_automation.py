@@ -9,6 +9,14 @@ from uuid import uuid4
 
 import pytest
 
+from tests.fakes import (
+    AlwaysNotifyWhatsApp,
+    FailingMailbox,
+    FakeEmailMessageStore,
+    FakeMailbox,
+    FakePartidoStore,
+    FakeReservaStore,
+)
 from vivecaribe.application.automation.models import ReservaDraft
 from vivecaribe.application.automation.providers import (
     GetYourGuideExtractor,
@@ -18,17 +26,18 @@ from vivecaribe.application.automation.providers import (
 )
 from vivecaribe.application.automation.use_cases import ProcessBookingEmailsUseCase
 from vivecaribe.domain.email_message import EmailMessage
-from vivecaribe.domain.enums import BookingProvider, ReservaEstado
+from vivecaribe.domain.enums import (
+    BookingProvider,
+    Campeonato,
+    Ciudad,
+    Estadio,
+    ReservaEstado,
+)
 from vivecaribe.domain.errors import DomainError, ValidationError
+from vivecaribe.domain.partido import Partido
+from vivecaribe.domain.reserva import Reserva
 from vivecaribe.infrastructure.integrations.whatsapp import NoOpWhatsAppNotifier
 from vivecaribe.settings import BookingProviderAccount, MailboxConfig
-from tests.fakes import (
-    AlwaysNotifyWhatsApp,
-    FakeEmailMessageStore,
-    FakeMailbox,
-    FakeReservaStore,
-    FailingMailbox,
-)
 
 FIXTURES = Path(__file__).parent / "fixtures" / "emails"
 
@@ -204,6 +213,7 @@ async def test_pipeline_happy_path_noop_whatsapp_skips_mark_read(
         ],
         email_messages=FakeEmailMessageStore(),  # type: ignore[arg-type]
         reservas=reservas,  # type: ignore[arg-type]
+        partidos=FakePartidoStore(),  # type: ignore[arg-type]
         whatsapp=NoOpWhatsAppNotifier(),
     )
 
@@ -241,6 +251,7 @@ async def test_pipeline_notify_true_with_noop_still_skips_mark_read(
         ],
         email_messages=FakeEmailMessageStore(),  # type: ignore[arg-type]
         reservas=FakeReservaStore(),  # type: ignore[arg-type]
+        partidos=FakePartidoStore(),  # type: ignore[arg-type]
         whatsapp=NoOpWhatsAppNotifier(),
     )
 
@@ -273,6 +284,7 @@ async def test_pipeline_marks_read_only_when_whatsapp_succeeds(
         ],
         email_messages=FakeEmailMessageStore(),  # type: ignore[arg-type]
         reservas=reservas,  # type: ignore[arg-type]
+        partidos=FakePartidoStore(),  # type: ignore[arg-type]
         whatsapp=AlwaysNotifyWhatsApp(),
     )
 
@@ -325,6 +337,7 @@ async def test_pipeline_skips_mark_read_when_mailbox_lacks_it(
         ],
         email_messages=FakeEmailMessageStore(),  # type: ignore[arg-type]
         reservas=FakeReservaStore(),  # type: ignore[arg-type]
+        partidos=FakePartidoStore(),  # type: ignore[arg-type]
         whatsapp=AlwaysNotifyWhatsApp(),
     )
 
@@ -358,6 +371,7 @@ async def test_pipeline_error_path_extraction_fails(
         ],
         email_messages=FakeEmailMessageStore(),  # type: ignore[arg-type]
         reservas=FakeReservaStore(),  # type: ignore[arg-type]
+        partidos=FakePartidoStore(),  # type: ignore[arg-type]
         whatsapp=NoOpWhatsAppNotifier(),
     )
 
@@ -380,6 +394,7 @@ async def test_pipeline_skips_account_without_query() -> None:
         ],
         email_messages=FakeEmailMessageStore(),  # type: ignore[arg-type]
         reservas=FakeReservaStore(),  # type: ignore[arg-type]
+        partidos=FakePartidoStore(),  # type: ignore[arg-type]
         whatsapp=NoOpWhatsAppNotifier(),
     )
 
@@ -415,6 +430,7 @@ async def test_pipeline_filters_by_booking_provider(
         ],
         email_messages=FakeEmailMessageStore(),  # type: ignore[arg-type]
         reservas=FakeReservaStore(),  # type: ignore[arg-type]
+        partidos=FakePartidoStore(),  # type: ignore[arg-type]
         whatsapp=NoOpWhatsAppNotifier(),
     )
 
@@ -448,12 +464,14 @@ async def test_pipeline_second_run_counts_existing(
         accounts=accounts,
         email_messages=email_messages,  # type: ignore[arg-type]
         reservas=reservas,  # type: ignore[arg-type]
+        partidos=FakePartidoStore(),  # type: ignore[arg-type]
         whatsapp=NoOpWhatsAppNotifier(),
     )
     second = ProcessBookingEmailsUseCase(
         accounts=accounts,
         email_messages=email_messages,  # type: ignore[arg-type]
         reservas=reservas,  # type: ignore[arg-type]
+        partidos=FakePartidoStore(),  # type: ignore[arg-type]
         whatsapp=NoOpWhatsAppNotifier(),
     )
 
@@ -481,6 +499,7 @@ async def test_get_messages_from_mailbox_swallows_domain_error(
         ],
         email_messages=FakeEmailMessageStore(),  # type: ignore[arg-type]
         reservas=FakeReservaStore(),  # type: ignore[arg-type]
+        partidos=FakePartidoStore(),  # type: ignore[arg-type]
         whatsapp=NoOpWhatsAppNotifier(),
     )
 
@@ -496,6 +515,7 @@ def test_validate_draft_rejects_invalid_fields() -> None:
         accounts=[],
         email_messages=FakeEmailMessageStore(),  # type: ignore[arg-type]
         reservas=FakeReservaStore(),  # type: ignore[arg-type]
+        partidos=FakePartidoStore(),  # type: ignore[arg-type]
         whatsapp=NoOpWhatsAppNotifier(),
     )
     base = ReservaDraft(
@@ -517,7 +537,7 @@ def test_validate_draft_rejects_invalid_fields() -> None:
     with pytest.raises(ValidationError, match="nombre_experiencia"):
         use_case._validate_draft(base.model_copy(update={"nombre_experiencia": ""}))
     with pytest.raises(ValidationError, match="price"):
-        use_case._validate_draft(base.model_copy(update={"price": Decimal("-1")}))
+        use_case._validate_draft(base.model_copy(update={"price": Decimal(-1)}))
 
 
 def test_reserva_draft_to_reserva() -> None:
@@ -546,3 +566,178 @@ def test_reserva_draft_to_reserva() -> None:
     assert reserva.reserva_reference == "VT-1"
     assert reserva.income == Decimal("8.00")
     assert reserva.notificado_whatsapp is False
+
+
+def _football_reserva(**overrides: object) -> Reserva:
+    """Build a football-tour ``Reserva`` ready for partido matching."""
+    draft_fields: dict[str, object] = {
+        "booking_provider": BookingProvider.VIATOR,
+        "reserva_reference": "VT-MATCH-1",
+        "estado": ReservaEstado.CONFIRMADA,
+        "nombre_experiencia": "Football match at the stadium",
+        "ciudad_experiencia": "Cartagena",
+        "fecha_evento": datetime(2026, 5, 2, 15, 25, tzinfo=UTC),
+        "participants": 1,
+        "customer_name": "Ada",
+        "price": Decimal("10.00"),
+        "income": Decimal("8.00"),
+    }
+    draft_fields.update(overrides)
+    draft = ReservaDraft(**draft_fields)  # type: ignore[arg-type]
+    return draft.to_reserva(
+        source="gmail",
+        sender="x@viator.com",
+        subject="Booking",
+        fecha_email_recibido=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+
+
+def _partido(**overrides: object) -> Partido:
+    """Build a valid ``Partido`` matching ``_football_reserva``'s defaults."""
+    defaults: dict[str, object] = {
+        "equipo_local": "Junior",
+        "equipo_visitante": "Millonarios",
+        "nombre_campeonato": Campeonato.COLOMBIAN_LEAGUE,
+        "estadio": Estadio.METROPOLITANO,
+        "fecha": datetime(2026, 5, 2, 12, 0, tzinfo=UTC),
+        "ciudad": Ciudad.CARTAGENA,
+    }
+    defaults.update(overrides)
+    return Partido(**defaults)  # type: ignore[arg-type]
+
+
+@pytest.mark.asyncio
+async def test_link_partido_if_matched_links_on_single_match() -> None:
+    """A single fecha/ciudad match links the reserva and is persisted."""
+    partido = _partido()
+    reservas = FakeReservaStore()
+    use_case = ProcessBookingEmailsUseCase(
+        accounts=[],
+        email_messages=FakeEmailMessageStore(),  # type: ignore[arg-type]
+        reservas=reservas,  # type: ignore[arg-type]
+        partidos=FakePartidoStore([partido]),  # type: ignore[arg-type]
+        whatsapp=NoOpWhatsAppNotifier(),
+    )
+
+    linked, reserva = await use_case.link_partido_if_matched(_football_reserva())
+
+    assert linked is True
+    assert reserva.partido_id == partido.id
+    stored = next(iter(reservas.by_key.values()))
+    assert stored.partido_id == partido.id
+
+
+@pytest.mark.asyncio
+async def test_link_partido_if_matched_skips_on_ambiguous_match(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Two candidates on the same fecha/ciudad ⇒ no auto-link, just a warning."""
+    partidos = [_partido(), _partido(equipo_local="Other")]
+    use_case = ProcessBookingEmailsUseCase(
+        accounts=[],
+        email_messages=FakeEmailMessageStore(),  # type: ignore[arg-type]
+        reservas=FakeReservaStore(),  # type: ignore[arg-type]
+        partidos=FakePartidoStore(partidos),  # type: ignore[arg-type]
+        whatsapp=NoOpWhatsAppNotifier(),
+    )
+
+    with caplog.at_level("WARNING"):
+        linked, reserva = await use_case.link_partido_if_matched(_football_reserva())
+
+    assert linked is False
+    assert reserva.partido_id is None
+    assert "varios partidos" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_link_partido_if_matched_skips_when_no_match() -> None:
+    """No candidate for that fecha/ciudad ⇒ no auto-link."""
+    use_case = ProcessBookingEmailsUseCase(
+        accounts=[],
+        email_messages=FakeEmailMessageStore(),  # type: ignore[arg-type]
+        reservas=FakeReservaStore(),  # type: ignore[arg-type]
+        partidos=FakePartidoStore(),  # type: ignore[arg-type]
+        whatsapp=NoOpWhatsAppNotifier(),
+    )
+
+    linked, reserva = await use_case.link_partido_if_matched(_football_reserva())
+
+    assert linked is False
+    assert reserva.partido_id is None
+
+
+@pytest.mark.asyncio
+async def test_link_partido_if_matched_skips_non_football_tour() -> None:
+    """A non-football-tour reserva is never auto-linked, even with a match."""
+    partido = _partido()
+    use_case = ProcessBookingEmailsUseCase(
+        accounts=[],
+        email_messages=FakeEmailMessageStore(),  # type: ignore[arg-type]
+        reservas=FakeReservaStore(),  # type: ignore[arg-type]
+        partidos=FakePartidoStore([partido]),  # type: ignore[arg-type]
+        whatsapp=NoOpWhatsAppNotifier(),
+    )
+    reserva = _football_reserva(nombre_experiencia="City sightseeing tour")
+    assert reserva.tipo_tour is None
+
+    linked, reserva = await use_case.link_partido_if_matched(reserva)
+
+    assert linked is False
+    assert reserva.partido_id is None
+
+
+@pytest.mark.asyncio
+async def test_link_partido_if_matched_skips_already_linked() -> None:
+    """A reserva that already has a partido is left untouched."""
+    other_id = uuid4()
+    use_case = ProcessBookingEmailsUseCase(
+        accounts=[],
+        email_messages=FakeEmailMessageStore(),  # type: ignore[arg-type]
+        reservas=FakeReservaStore(),  # type: ignore[arg-type]
+        partidos=FakePartidoStore([_partido()]),  # type: ignore[arg-type]
+        whatsapp=NoOpWhatsAppNotifier(),
+    )
+    reserva = _football_reserva()
+    reserva.partido_id = other_id
+
+    linked, reserva = await use_case.link_partido_if_matched(reserva)
+
+    assert linked is False
+    assert reserva.partido_id == other_id
+
+
+@pytest.mark.asyncio
+async def test_link_partido_if_matched_skips_soft_deleted_reserva() -> None:
+    """A re-fetched, soft-deleted reserva is never auto-linked."""
+    use_case = ProcessBookingEmailsUseCase(
+        accounts=[],
+        email_messages=FakeEmailMessageStore(),  # type: ignore[arg-type]
+        reservas=FakeReservaStore(),  # type: ignore[arg-type]
+        partidos=FakePartidoStore([_partido()]),  # type: ignore[arg-type]
+        whatsapp=NoOpWhatsAppNotifier(),
+    )
+    reserva = _football_reserva()
+    reserva.deleted_at = datetime(2026, 5, 3, tzinfo=UTC)
+
+    linked, reserva = await use_case.link_partido_if_matched(reserva)
+
+    assert linked is False
+    assert reserva.partido_id is None
+
+
+@pytest.mark.asyncio
+async def test_link_partido_if_matched_skips_cancelled_reserva() -> None:
+    """A cancelled reserva is never auto-linked, even on a fresh match."""
+    use_case = ProcessBookingEmailsUseCase(
+        accounts=[],
+        email_messages=FakeEmailMessageStore(),  # type: ignore[arg-type]
+        reservas=FakeReservaStore(),  # type: ignore[arg-type]
+        partidos=FakePartidoStore([_partido()]),  # type: ignore[arg-type]
+        whatsapp=NoOpWhatsAppNotifier(),
+    )
+    reserva = _football_reserva(estado=ReservaEstado.CANCELADA)
+
+    linked, reserva = await use_case.link_partido_if_matched(reserva)
+
+    assert linked is False
+    assert reserva.partido_id is None

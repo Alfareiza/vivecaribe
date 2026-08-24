@@ -19,6 +19,7 @@ def _response_from_use_case(
         fetched=result.fetched,
         created=result.created,
         existing=result.existing,
+        linked=result.linked,
         notified=result.notified,
     )
 

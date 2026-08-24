@@ -10,14 +10,36 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from vivecaribe.domain.email_message import EmailMessage
-from vivecaribe.domain.enums import BookingProvider, ReservaEstado
+from vivecaribe.domain.enums import (
+    BookingProvider,
+    Campeonato,
+    Ciudad,
+    Estadio,
+    ReservaEstado,
+)
+from vivecaribe.domain.partido import Partido
 from vivecaribe.domain.reserva import Reserva
 from vivecaribe.domain.user import User
 from vivecaribe.infrastructure.db.repositories import (
     SqlAlchemyEmailMessageRepository,
+    SqlAlchemyPartidoRepository,
     SqlAlchemyReservaRepository,
     SqlAlchemyUserRepository,
 )
+
+
+def _partido(**overrides: object) -> Partido:
+    """Build a valid ``Partido`` with sensible defaults."""
+    defaults: dict[str, object] = {
+        "equipo_local": "Junior",
+        "equipo_visitante": "Millonarios",
+        "nombre_campeonato": Campeonato.COLOMBIAN_LEAGUE,
+        "estadio": Estadio.METROPOLITANO,
+        "fecha": datetime(2026, 9, 1, 20, 0, tzinfo=UTC),
+        "ciudad": Ciudad.BARRANQUILLA,
+    }
+    defaults.update(overrides)
+    return Partido(**defaults)  # type: ignore[arg-type]
 
 
 @pytest.mark.asyncio
@@ -164,3 +186,58 @@ async def test_user_get_by_id_and_save_update(db_session: AsyncSession) -> None:
     updated = await repo.save(saved)
     assert updated.is_active is False
     assert await repo.get_by_id(uuid4()) is None
+
+
+@pytest.mark.asyncio
+async def test_partido_find_partidos_based_on_ciudad_and_dt_matches_by_bogota_day_and_ciudad(
+    db_session: AsyncSession,
+) -> None:
+    """``find_partidos_based_on_ciudad_and_dt`` matches ciudad (case-insensitive) and Bogota calendar day.
+
+    ``partido.fecha`` is 2026-09-01 21:00 Bogota (2026-09-02 02:00 UTC) — a
+    different UTC calendar day than the reserva's, so an exact-day compare
+    without timezone conversion would wrongly miss it.
+    """
+    repo = SqlAlchemyPartidoRepository(db_session)
+    matching = await repo.save(
+        _partido(fecha=datetime(2026, 9, 2, 2, 0, tzinfo=UTC)),
+    )
+    await repo.save(
+        _partido(equipo_local="Other", ciudad=Ciudad.CARTAGENA),
+    )
+    await repo.save(
+        _partido(equipo_local="Different day", fecha=datetime(2026, 9, 5, 20, 0, tzinfo=UTC)),
+    )
+
+    fecha_evento = datetime(2026, 9, 1, 18, 0, tzinfo=UTC)  # 13:00 Bogota, same day
+    matches = await repo.find_partidos_based_on_ciudad_and_dt("barranquilla", fecha_evento)
+
+    assert [m.id for m in matches] == [matching.id]
+
+
+@pytest.mark.asyncio
+async def test_partido_find_partidos_based_on_ciudad_and_dt_returns_multiple_on_ambiguous_day(
+    db_session: AsyncSession,
+) -> None:
+    """Two partidos in the same city/day both come back — caller decides."""
+    repo = SqlAlchemyPartidoRepository(db_session)
+    fecha = datetime(2026, 9, 1, 20, 0, tzinfo=UTC)
+    first = await repo.save(_partido(fecha=fecha))
+    second = await repo.save(_partido(equipo_local="Other", fecha=fecha))
+
+    matches = await repo.find_partidos_based_on_ciudad_and_dt("Barranquilla", fecha)
+
+    assert {m.id for m in matches} == {first.id, second.id}
+
+
+@pytest.mark.asyncio
+async def test_partido_find_partidos_based_on_ciudad_and_dt_no_match_returns_empty(
+    db_session: AsyncSession,
+) -> None:
+    """No candidates in that city/day returns an empty list."""
+    repo = SqlAlchemyPartidoRepository(db_session)
+    await repo.save(_partido())
+
+    matches = await repo.find_partidos_based_on_ciudad_and_dt("Cartagena", datetime(2026, 9, 1, 20, 0, tzinfo=UTC))
+
+    assert matches == []

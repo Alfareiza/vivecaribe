@@ -20,4 +20,5 @@ class GetBookingsResponse(BaseModel):
     fetched: int = Field(ge=0)
     created: int = Field(ge=0)
     existing: int = Field(ge=0)
+    linked: int = Field(ge=0)
     notified: int = Field(ge=0)
