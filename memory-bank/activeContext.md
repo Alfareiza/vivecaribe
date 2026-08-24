@@ -2,18 +2,59 @@
 
 ## Current focus
 
-Reservas/partidos UX polish: wider notas fields, partido participants
-count, date-only `fecha_evento`, collapsible notas, consolidated
-reservas filter menu (`#83`, PR #84 — merged to main). Built on top of
-Gastos (`#81`, PR #82 — merged), which built on Reserva financiero
-(`#78`/`#79`, PR #80 — merged), which built on Vercel Ignored Build
-Step fix (`#74` — merged & wired live) and Reservas partido linking +
-income auto-fill (`#72`, PR #73 — merged), which built on the full
-Create/Edit/Delete UI (`#40`/`#41`/`#70`, PR #71 — merged). Partidos
-`#61`→`#69` (CRUD + UI/UX passes, PR #69) status as of its last
-update, below.
+Automation pipeline (`ProcessBookingEmailsUseCase`) now auto-links each
+ingested reserva to an existing `Partido` on an exact fecha/ciudad/
+football-tour match, guarding against cancelled/deleted reservas
+(`#89`, PR #90 — open). Built on top of main as of PR #88 (Sentry
+request-validation error reporting), PR #87 (exclude cancelled reservas
+from partido aggregates), and PR #86/#85 (reserva cancellation with a
+required reason) — those three not yet individually detailed below.
+Before that: Reservas/partidos UX polish (`#83`, PR #84 — merged), on
+top of Gastos (`#81`, PR #82 — merged), Reserva financiero (`#78`/`#79`,
+PR #80 — merged), Vercel Ignored Build Step fix (`#74` — merged & wired
+live), and Reservas partido linking + income auto-fill (`#72`, PR #73 —
+merged), which built on the full Create/Edit/Delete UI (`#40`/`#41`/
+`#70`, PR #71 — merged). Partidos `#61`→`#69` (CRUD + UI/UX passes,
+PR #69) status as of its last update, further below.
 
 ## Recent decisions
+
+### Automation: auto-link reservas to matching partidos on ingestion (#89, PR #90)
+
+- New `SqlAlchemyPartidoRepository.find_partidos_based_on_ciudad_and_dt(ciudad, fecha_evento)`:
+  returns non-deleted partidos matching `ciudad` (case-insensitive) and
+  the same America/Bogota calendar day as `fecha_evento` — same
+  timezone-conversion pattern as the existing `fecha_evento_from/to`
+  reservas filter, applied in the opposite direction.
+- New `ProcessBookingEmailsUseCase.link_partido_if_matched(reserva)`,
+  called for every reserva `start()` fetches (both newly created and
+  already-existing): links only when the reserva has no partido yet, is
+  a football tour (`tipo_tour == TipoTour.FOOTBALL_TOUR`), has a known
+  `fecha_evento`, and exactly one partido matches; 2+ candidates are
+  logged as ambiguous and skipped rather than guessed. New `linked`
+  counter on the use case, surfaced through
+  `GetBookingsResponse`/pipeline logs.
+- **Confirmed, not a gap**: `Reserva.tipo_tour` is not guaranteed
+  `football tour` for every automation-created reserva — it's inferred
+  from `nombre_experiencia` keywords (`domain/reserva.py`'s
+  `check_tipo_tour`), so non-football bookings correctly never
+  auto-link; no separate validation needed since the tipo_tour check
+  already gates it.
+- **Real gap, found via user walkthrough, not a test failure**: a
+  cancelled or soft-deleted reserva must never get auto-linked. Confirmed
+  first that re-fetching a deleted reserva's email doesn't create a
+  duplicate — `get_by_booking_provider_reserva_reference` intentionally
+  still finds soft-deleted rows (its `deleted_at` filter is commented
+  out on purpose), so `get_or_create` returns the existing row with
+  `created=False`. But `link_partido_if_matched` originally ran
+  unconditionally on whatever came back, so a re-fetched deleted/
+  cancelled football-tour reserva with a matching partido would get
+  relinked. Fixed with a direct check on the reserva's own state
+  (`deleted_at is not None or estado == ReservaEstado.CANCELADA`)
+  inside `link_partido_if_matched` itself — deliberately *not* gated on
+  the use case's `created` flag (that would also block legitimately
+  re-fetched active reservas from ever getting a first-time link),
+  since the direct state check is what the user explicitly asked for.
 
 ### Reservas/partidos UX polish: notas length, participants count, date-only fecha_evento, filter menu (#83, PR #84 — merged)
 
@@ -541,10 +582,14 @@ update, below.
 - Hourly Colombia-window ingest still needs Pro (Hobby Cron is once/day).
   API-project Cron was removed; ingest is triggered by an external scheduler.
 - Stored dates eventually all America/Bogota (noted during #46).
-- Partido↔reserva matching only runs on partido *create* and only offers a
-  one-time confirmation; no ongoing/periodic re-match for reservas created
-  or edited afterward (noted as a future idea before #68/#69 built the
-  create-time version).
+- Partido↔reserva matching: partido *create* still only offers a one-time
+  bulk-assign confirmation (#68/#69); the automation pipeline (#89, PR
+  #90) now also attempts an exact match on every reserva it fetches, which
+  in practice re-attempts on every re-fetch of a still-unlinked, still-
+  unread email — but it's not a true periodic re-match, since a reserva
+  whose email the mailbox stops returning (e.g. already marked read) gets
+  no further attempts, and a manually-edited fecha/ciudad on an existing
+  reserva never re-triggers matching at all.
 - `public/images/icons/*.svg` referenced via `next/image` don't inherit
   `currentColor` (fixed color regardless of theme/hover/tier) — accepted
   tradeoff for having one source-of-truth icon file (#69).

@@ -37,6 +37,10 @@
 | Reserva financiero: trm_estimado/trm_final, income_final, UI redesign | Merged (#78/#79, PR #80) | `trm_estimado` (auto-fetched at creation, editable only while null) + `trm_final` (renamed from `trm_del_dia`, always editable) drive server-computed `income_estimado`/`income_final`; `profit`/`percentage_profit` now derive from `income_final`. Edit form redesigned into paired Estimado/Final panels with disabled "(calculado)" derived fields; Resumen redesigned into a hero (Ingreso final, Profit + % badge)/secondary (Ingreso, Ingreso estimado, Costos) hierarchy. Numeric-only sanitization on rate/cost inputs; fixed a focus-triggered reformat race that could silently double a saved rate |
 | Gastos: partido-level expenses split across reservas | Merged (#82) | New `Gasto`/`gasto_reserva_splits` tables — one gasto per `(partido, categoria)`, split proportional to each linked reserva's `participants`, recomputed on every gasto/link/participant change. `Reserva.costos` no longer client-writable, fully derived. Collapsed-by-default Gastos dropdown in both the Partido (editable) and Reserva (read-only) modals; scrollable modal body so the section can't push the title off-screen. Fixed a real routing bug (categoria as query param, not path segment — some labels contain `/`), a real stale-costos-on-unlink bug, and a real coverage-measurement gap (`concurrency = ["greenlet", "thread"]`) |
 | Reservas/partidos UX polish: notas length, participants count, date-only fecha_evento, filter menu | Merged (#83, PR #84) | `notas_cliente`/`notas_personales` 255→5000 chars; `GET /partidos` gained `participants_count` (SUM of participants, same LEFT JOIN as `reservas_count`) shown as a flat badge; reserva notas are now independently collapsible rows; `fecha_evento` edited as date-only everywhere with an internal noon placeholder; reservas table filters (Estado/Proveedor/Fecha evento) consolidated behind one filter-icon menu. Fixed a mobile column-alignment bug, an `overflow-hidden` clipping bug on the new filter dropdown, a label-click-opens-calendar bug, a date-range-only-captures-first-click bug (flatpickr `onChange`→`onClose`), and the missing `otro` provider icon (was 404ing) |
+| Reserva cancellation with reason | Merged (#85, PR #86) | `POST /reservas/{id}/cancelar` sets `estado=cancelada` + required `motivo_cancelacion`; recomputes the linked partido's gasto split; frontend Cancelar action + confirm dialog + banner/badge |
+| Exclude cancelled reservas from partido aggregates | Merged (PR #87) | Cancelled reservas dropped from linked lists, `reservas_count`/`participants_count`, and gasto splits |
+| Sentry request-validation error reporting | Merged (PR #88) | FastAPI request-validation errors now reported to Sentry |
+| Automation: auto-link reservas to matching partidos on ingestion | Open (#89, PR #90) | `ProcessBookingEmailsUseCase.link_partido_if_matched` runs on every fetched reserva: links only on an exact ciudad + America/Bogota-day match against a football-tour reserva with no partido yet (2+ candidates ⇒ logged as ambiguous, skipped). New `SqlAlchemyPartidoRepository.find_partidos_based_on_ciudad_and_dt`; new `linked` counter on the pipeline response/logs. Cancelled and (soft-)deleted reservas are never auto-linked — confirmed first that re-fetching a deleted reserva's email doesn't duplicate it (`get_or_create` finds the existing soft-deleted row) |
 
 ## In progress / open children of #41
 
@@ -86,7 +90,10 @@
   "Limpiar filtros".
 - Shared pulse loading for auth gate, reservas fetch, and sign-in submit.
 - Automation POST accepts JWT **or** `CRON_SECRET`; GET same auth.
-- Pipeline GYG / Viator / Homefans / Propio (Zoho); idempotent persistence.
+- Pipeline GYG / Viator / Homefans / Propio (Zoho); idempotent persistence;
+  each fetched reserva is auto-linked to an existing partido on an exact
+  ciudad + America/Bogota-day + football-tour match (skips cancelled/
+  deleted reservas and ambiguous multi-partido matches).
 - Isolated Postgres tests ≥ 90% coverage; frontend CI path-filtered build.
 - Compose: Postgres + API + frontend.
 - Migrate workflow on main applies Alembic when migrations change.
@@ -102,8 +109,12 @@
 - Real WhatsApp Meta notifier after Meta authorization.
 - Zoho mark-as-read (deferred).
 - Optional: per-user ownership on reservas.
-- Partido↔reserva matching is create-time only, one-shot; no periodic
-  re-match for reservas added/edited afterward.
+- Partido *create* still only offers a one-time bulk-assign confirmation;
+  the automation pipeline (#89, PR #90) now also matches on every reserva
+  it fetches, but that's not a true periodic re-match — a reserva whose
+  email the mailbox stops returning (e.g. already marked read) gets no
+  further attempts, and editing an existing reserva's fecha/ciudad never
+  re-triggers matching.
 
 ## Known issues / deliberate non-goals
 
