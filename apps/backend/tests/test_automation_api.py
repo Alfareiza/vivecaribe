@@ -24,6 +24,7 @@ def _mock_use_case() -> MagicMock:
     use_case.fetched = 3
     use_case.created = 2
     use_case.existing = 1
+    use_case.linked = 1
     use_case.notified = 0
     use_case.start = AsyncMock(return_value=use_case)
     return use_case
@@ -116,6 +117,7 @@ async def test_get_bookings_get_accepts_cron_secret(
         "fetched": 3,
         "created": 2,
         "existing": 1,
+        "linked": 1,
         "notified": 0,
     }
     use_case.start.assert_awaited_once_with(
@@ -162,6 +164,7 @@ async def test_get_bookings_post_jwt_maps_counters(
         "fetched": 3,
         "created": 2,
         "existing": 1,
+        "linked": 1,
         "notified": 0,
     }
     use_case.start.assert_awaited_once_with(

@@ -5,11 +5,12 @@ from __future__ import annotations
 from vivecaribe.application.automation.models import ReservaDraft
 from vivecaribe.application.automation.providers import EXTRACTORS, BaseExtractor
 from vivecaribe.domain.email_message import EmailMessage
-from vivecaribe.domain.enums import BookingProvider
+from vivecaribe.domain.enums import BookingProvider, ReservaEstado, TipoTour
 from vivecaribe.domain.errors import DomainError, ValidationError
 from vivecaribe.domain.reserva import Reserva
 from vivecaribe.infrastructure.db.repositories import (
     SqlAlchemyEmailMessageRepository,
+    SqlAlchemyPartidoRepository,
     SqlAlchemyReservaRepository,
 )
 from vivecaribe.infrastructure.integrations.gmail import GmailMailbox
@@ -32,6 +33,7 @@ class ProcessBookingEmailsUseCase:
         accounts: list[BookingProviderAccount],
         email_messages: SqlAlchemyEmailMessageRepository,
         reservas: SqlAlchemyReservaRepository,
+        partidos: SqlAlchemyPartidoRepository,
         whatsapp: NoOpWhatsAppNotifier,
         max_results: int = 100,
     ) -> None:
@@ -39,12 +41,14 @@ class ProcessBookingEmailsUseCase:
         self._accounts = accounts
         self._email_messages = email_messages
         self._reservas = reservas
+        self._partidos = partidos
         self._whatsapp = whatsapp
         self._max_results = max_results
         self.fetched = 0
         self.created = 0
         self.existing = 0
         self.notified = 0
+        self.linked = 0
 
     async def get_messages_from_mailbox(
         self,
@@ -127,6 +131,50 @@ class ProcessBookingEmailsUseCase:
             )
         return notified, reserva
 
+    async def link_partido_if_matched(self, reserva: Reserva) -> tuple[bool, Reserva]:
+        """Auto-link ``reserva`` to a partido on exact fecha/ciudad/tour match.
+
+        Only football-tour reservas with no partido yet and a known
+        ``fecha_evento`` are considered. A cancelled or (soft-)deleted
+        reserva is never linked — e.g. re-fetching an already-deleted
+        booking's email must not resurrect a partido assignment for it.
+        When more than one partido matches the same city/day, the link is
+        ambiguous and skipped.
+
+        Returns:
+            ``(linked, reserva)`` — reserva is updated when linked.
+        """
+        if (
+            reserva.partido_id is not None
+            or reserva.tipo_tour != TipoTour.FOOTBALL_TOUR
+            or reserva.fecha_evento is None
+            or reserva.deleted_at is not None
+            or reserva.estado == ReservaEstado.CANCELADA
+        ):
+            return False, reserva
+
+        matches = await self._partidos.find_partidos_based_on_ciudad_and_dt(
+            reserva.ciudad_experiencia,
+            reserva.fecha_evento,
+        )
+        if len(matches) != 1:
+            if len(matches) > 1:
+                logger.warning(
+                    f"Al vincular la reserva {reserva.reserva_reference!r} a partidos, "
+                    f"se se encontraron varios partidos el {reserva.fecha_evento:%d/%m/%Y}. "
+                    f"({reserva.ciudad_experiencia!r}, {reserva.fecha_evento}): "
+                    f"{len(matches)} candidates, skipping auto-link",
+                )
+            return False, reserva
+
+        reserva.partido_id = matches[0].id
+        reserva = await self._reservas.save(reserva)
+        logger.info(
+            f"Linked reserva {reserva.reserva_reference!r} to partido {matches[0]} "
+            f"({reserva.ciudad_experiencia!r}, {reserva.fecha_evento})",
+        )
+        return True, reserva
+
     async def start(
         self,
         *,
@@ -135,8 +183,8 @@ class ProcessBookingEmailsUseCase:
     ) -> ProcessBookingEmailsUseCase:
         """Run the pipeline for configured booking-provider accounts.
 
-        Counters ``fetched``, ``created``, ``existing``, and ``notified``
-        are reset at the start of each run.
+        Counters ``fetched``, ``created``, ``existing``, ``linked``, and
+        ``notified`` are reset at the start of each run.
 
         Args:
             booking_provider: If set, only process that provider.
@@ -145,6 +193,7 @@ class ProcessBookingEmailsUseCase:
         self.fetched = 0
         self.created = 0
         self.existing = 0
+        self.linked = 0
         self.notified = 0
 
         accounts = self._accounts
@@ -183,6 +232,7 @@ class ProcessBookingEmailsUseCase:
                             account.booking_provider,
                         )
                     )
+                    linked, reserva = await self.link_partido_if_matched(reserva)
                     notified = False
                     if notify:
                         notified, _ = await self.notify_if_necessary(
@@ -201,12 +251,14 @@ class ProcessBookingEmailsUseCase:
                     self.created += 1
                 else:
                     self.existing += 1
+                if linked:
+                    self.linked += 1
                 if notified:
                     self.notified += 1
 
         logger.info(
             f"Pipeline finished. fetched={self.fetched} created={self.created} "
-            f"existing={self.existing} notified={self.notified}",
+            f"existing={self.existing} linked={self.linked} notified={self.notified}",
         )
         return self
 
@@ -252,6 +304,7 @@ async def _run_manually() -> None:
             accounts=accounts,
             email_messages=SqlAlchemyEmailMessageRepository(session),
             reservas=SqlAlchemyReservaRepository(session),
+            partidos=SqlAlchemyPartidoRepository(session),
             whatsapp=NoOpWhatsAppNotifier(),
         )
         await use_case.start()
@@ -260,7 +313,7 @@ async def _run_manually() -> None:
     logger.info(
         f"Manual run finished fetched={use_case.fetched} "
         f"created={use_case.created} existing={use_case.existing} "
-        f"notified={use_case.notified}",
+        f"linked={use_case.linked} notified={use_case.notified}",
     )
     await engine.dispose()
 

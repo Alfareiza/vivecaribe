@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from vivecaribe.domain.email_message import EmailMessage
+from vivecaribe.domain.partido import Partido
 from vivecaribe.domain.reserva import Reserva
 from vivecaribe.infrastructure.integrations.whatsapp import NoOpWhatsAppNotifier
 
@@ -88,6 +91,24 @@ class FakeReservaStore:
         key = (reserva.booking_provider.value, reserva.reserva_reference)
         self.by_key[key] = reserva
         return reserva
+
+
+class FakePartidoStore:
+    """In-memory partido persistence with ``find_partidos_based_on_ciudad_and_dt`` lookup."""
+
+    def __init__(self, partidos: list[Partido] | None = None) -> None:
+        """Seed the store with ``partidos`` (defaults to empty)."""
+        self.partidos = list(partidos or [])
+
+    async def find_partidos_based_on_ciudad_and_dt(self, ciudad: str, fecha_evento: datetime) -> list[Partido]:
+        """Return partidos matching ``ciudad`` (case-insensitive) and day."""
+        target_day = fecha_evento.date()
+        return [
+            partido
+            for partido in self.partidos
+            if partido.ciudad.value.lower() == ciudad.lower()
+            and partido.fecha.date() == target_day
+        ]
 
 
 class AlwaysNotifyWhatsApp(NoOpWhatsAppNotifier):

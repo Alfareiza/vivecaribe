@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import ColumnElement, Date, and_, cast, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -453,6 +454,23 @@ class SqlAlchemyPartidoRepository:
         )
         row = result.scalar_one_or_none()
         return Partido.model_validate(row) if row else None
+
+    async def find_partidos_based_on_ciudad_and_dt(self, ciudad: str, fecha_evento: datetime) -> list[Partido]:
+        """Return non-deleted partidos in ``ciudad`` on ``fecha_evento``'s day.
+
+        ``ciudad`` matches case-insensitively; ``fecha`` matches by
+        America/Bogota calendar day, not exact timestamp.
+        """
+        target_day = fecha_evento.astimezone(ZoneInfo("America/Bogota")).date()
+        event_day = cast(func.timezone("America/Bogota", PartidoORM.fecha), Date)
+        result = await self._session.execute(
+            select(PartidoORM).where(
+                PartidoORM.deleted_at.is_(None),
+                func.lower(PartidoORM.ciudad) == ciudad.lower(),
+                event_day == target_day,
+            ),
+        )
+        return [Partido.model_validate(row) for row in result.scalars()]
 
     async def save(self, partido: Partido) -> Partido:
         """Insert or update a partido and return the persisted entity."""
