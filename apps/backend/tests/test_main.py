@@ -5,6 +5,8 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi.exceptions import RequestValidationError
+from fastapi.testclient import TestClient
 
 from vivecaribe.main import _init_sentry, create_app, lifespan
 from vivecaribe.settings import get_settings
@@ -67,6 +69,21 @@ def test_init_sentry_initializes_when_dsn_set(monkeypatch: pytest.MonkeyPatch) -
     init.assert_called_once()
     assert init.call_args.kwargs["traces_sample_rate"] == 1.0
     get_settings.cache_clear()
+
+
+def test_validation_error_is_reported_to_sentry() -> None:
+    """A bad request body reaches Sentry and still returns the usual 422.
+
+    FastAPI answers these itself, so the Sentry integration never sees them
+    (it only auto-captures 5xx); without our handler they are invisible.
+    """
+    client = TestClient(create_app())
+    with patch("vivecaribe.main.sentry_sdk.capture_exception") as capture:
+        response = client.post("/users", json={"email": 42, "password": "x"})
+
+    assert response.status_code == 422
+    capture.assert_called_once()
+    assert isinstance(capture.call_args.args[0], RequestValidationError)
 
 
 @pytest.mark.asyncio

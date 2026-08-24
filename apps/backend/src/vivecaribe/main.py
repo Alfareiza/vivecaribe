@@ -6,8 +6,11 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 import sentry_sdk
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.responses import Response
 
 from vivecaribe import __version__
 from vivecaribe.api import deps
@@ -38,6 +41,19 @@ def _init_sentry() -> None:
         traces_sample_rate=traces_sample_rate,
         enable_logs=True,
     )
+
+
+async def _report_validation_error(
+    request: Request,
+    exc: RequestValidationError,
+) -> Response:
+    """Report request-validation failures to Sentry, then respond as usual.
+
+    FastAPI's default handling never raises these past the router, so
+    Sentry's auto-instrumentation misses them; we capture explicitly instead.
+    """
+    sentry_sdk.capture_exception(exc)
+    return await request_validation_exception_handler(request, exc)
 
 
 @asynccontextmanager
@@ -76,6 +92,7 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_exception_handler(RequestValidationError, _report_validation_error)
     app.include_router(health.router)
     app.include_router(auth.router)
     app.include_router(automation.router)
