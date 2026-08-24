@@ -47,8 +47,12 @@ Stages live in `ProcessBookingEmailsUseCase.start`:
 2. Extract via registry (`EXTRACTORS`).
 3. Validate draft.
 4. Persist `email_messages` + `reservas` (`get_or_create`).
-5. Optional WhatsApp notify.
-6. `mark_as_read` **only** when notify returns `True` **and** the mailbox
+5. `link_partido_if_matched`: auto-link to a partido on an exact ciudad +
+   America/Bogota-day match, only for a football-tour reserva with no
+   partido yet, not cancelled, not (soft-)deleted; 2+ candidates ⇒
+   ambiguous, logged and skipped (#89, PR #90).
+6. Optional WhatsApp notify.
+7. `mark_as_read` **only** when notify returns `True` **and** the mailbox
    client implements `mark_as_read` (Gmail/Outlook). Zoho skips for now.
 
 ## Mailbox contract
@@ -318,6 +322,21 @@ When Zoho shows an identity email challenge, `ZohoSession` uses the
   filters (#68/#69), used for the auto-match-on-create flow below —
   reused rather than adding a dedicated `/partidos/{id}/candidate-reservas`
   endpoint.
+
+### Automation-time auto-match (#89, PR #90)
+
+- `SqlAlchemyPartidoRepository.find_partidos_based_on_ciudad_and_dt(ciudad, fecha_evento)`:
+  non-deleted partidos matching `ciudad` case-insensitively and the same
+  America/Bogota calendar day as `fecha_evento` — the same
+  `func.timezone("America/Bogota", ...)` cast used by the `fecha_evento`
+  reservas filter (see below), applied to `PartidoORM.fecha` instead, in
+  the opposite direction (looking up partidos for a given reserva instead
+  of reservas for a given partido/day).
+  `ProcessBookingEmailsUseCase.link_partido_if_matched` calls it for every
+  fetched reserva; links only on exactly one candidate, and only for a
+  football-tour reserva with no partido yet that isn't cancelled or
+  (soft-)deleted — see activeContext.md for the deleted-reserva
+  re-fetch reasoning.
 
 ## Gastos: partido-level expenses split across reservas (#81)
 
