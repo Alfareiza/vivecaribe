@@ -50,8 +50,8 @@ class Campeonato(StrEnum):
 
     COLOMBIAN_CUP = "Colombian Cup"
     COLOMBIAN_LEAGUE = "Colombian League"
-    COPA_LIBERTADORES = "Copa Libertadores"
-    COPA_SUDAMERICANA = "Copa Sudamericana"
+    COPA_LIBERTADORES = "Libertadores Cup"
+    COPA_SUDAMERICANA = "Sudamericana Cup"
     COLOMBIAN_SECOND_DIVISION_LEAGUE = "Colombian Second Division League"
 
 
