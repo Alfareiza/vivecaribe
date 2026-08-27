@@ -22,6 +22,9 @@ from vivecaribe.infrastructure.db.repositories import (
     SqlAlchemyReservaRepository,
     SqlAlchemyUserRepository,
 )
+from vivecaribe.infrastructure.db.reports_repository import (
+    SqlAlchemyReportsRepository,
+)
 from vivecaribe.infrastructure.db.session import create_engine, create_session_factory
 from vivecaribe.infrastructure.integrations.security import (
     Argon2PasswordHasher,
@@ -117,6 +120,13 @@ def get_gasto_repository(
     return SqlAlchemyGastoRepository(session)
 
 
+def get_reports_repository(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> SqlAlchemyReportsRepository:
+    """Build a reports repository for the current request session."""
+    return SqlAlchemyReportsRepository(session)
+
+
 def _unauthorized(detail: str) -> HTTPException:
     """Build a 401 response that advertises Bearer auth."""
     return HTTPException(
@@ -202,6 +212,10 @@ PartidoRepo = Annotated[
 GastoRepo = Annotated[
     SqlAlchemyGastoRepository,
     Depends(get_gasto_repository),
+]
+ReportsRepo = Annotated[
+    SqlAlchemyReportsRepository,
+    Depends(get_reports_repository),
 ]
 PasswordHasherDep = Annotated[Argon2PasswordHasher, Depends(get_password_hasher)]
 TokenServiceDep = Annotated[JwtTokenService, Depends(get_token_service)]

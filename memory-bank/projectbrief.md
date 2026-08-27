@@ -8,8 +8,10 @@ booking confirmations from channels such as GetYourGuide, Viator, Homefans,
 and first-party Propio (Grupo Vive Caribe / WooCommerce via Zoho Mail);
 the system normalizes those bookings into a shared `Reserva` model.
 
-A Next.js admin UI (`apps/frontend`) provides the operator-facing dashboard
-(TailAdmin-based starter). Backend and frontend deploy as **independent**
+A Next.js admin UI (`apps/frontend`) provides the operator-facing admin
+shell (TailAdmin-based) with a live business dashboard on the home page
+(`/reports` API) plus reservas/partidos CRUD. Backend and frontend deploy
+as **independent**
 Vercel projects from the same GitHub monorepo.
 
 ## Goals
@@ -40,4 +42,6 @@ frontend `#61` / `#62`, UI/UX (temporal states, auto-select ciudad/estadio,
 nested reserva detail) `#65`, `reservas_count` N+1-safe fix `#66`,
 past/upcoming split ordering `#67`, auto-match reservas on create + tiered
 badges `#68` / `#69`.
+Dashboard overhaul (uncommitted): `/reports` backend family + live home
+dashboard replacing the TailAdmin ecommerce demo.
 Open `#41` children: Edit `#40`, signup `#47`.
