@@ -12,6 +12,13 @@ function getReservaTier(count: number): ReservaTier {
   return "none";
 }
 
+function getParticipantsTier(count: number): ReservaTier {
+  if (count >= 7) return "gold";
+  if (count >= 4) return "silver";
+  if (count >= 1) return "bronze";
+  return "none";
+}
+
 const TIER_CLASSES: Record<ReservaTier, string> = {
   none: "bg-gray-100 text-gray-500 border border-transparent dark:bg-gray-800 dark:text-gray-500",
   bronze:
@@ -44,8 +51,12 @@ export function ReservaBadge({ count }: { count: number }) {
 }
 
 export function ParticipantsBadge({ count }: { count: number }) {
+  const tier = getParticipantsTier(count);
+
   return (
-    <div className="inline-flex items-center gap-1.5 rounded-lg border border-transparent bg-gray-100 px-2 py-1.5 text-xs font-medium text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+    <div
+      className={`relative inline-flex items-center gap-1.5 overflow-hidden rounded-lg px-2 py-1.5 text-xs font-medium transition-colors ${TIER_CLASSES[tier]}`}
+    >
       <Image
         src="/images/icons/users.svg"
         width={14}
@@ -60,6 +71,7 @@ export function ParticipantsBadge({ count }: { count: number }) {
       ) : (
         <span>-</span>
       )}
+      {tier !== "none" ? <span className="reserva-badge-shine" /> : null}
     </div>
   );
 }

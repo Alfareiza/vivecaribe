@@ -335,6 +335,64 @@ async def test_get_top_cities_groups_on_ciudad_experiencia(
 
 
 @pytest.mark.asyncio
+async def test_get_temporada_groups_participants_by_month_and_city(
+    db_session: AsyncSession,
+) -> None:
+    """Temporada sums participants per month per city; skips non-confirmada."""
+    reports = SqlAlchemyReportsRepository(db_session)
+
+    await _persist_reserva(
+        db_session,
+        _reserva(
+            ciudad_experiencia="Barranquilla",
+            fecha_evento=datetime(2026, 7, 10, 17, 0, tzinfo=UTC),
+            participants=2,
+        ),
+    )
+    await _persist_reserva(
+        db_session,
+        _reserva(
+            ciudad_experiencia="Barranquilla",
+            fecha_evento=datetime(2026, 7, 20, 17, 0, tzinfo=UTC),
+            participants=3,
+        ),
+    )
+    await _persist_reserva(
+        db_session,
+        _reserva(
+            ciudad_experiencia="Cartagena",
+            fecha_evento=datetime(2026, 7, 15, 17, 0, tzinfo=UTC),
+            participants=4,
+        ),
+    )
+    await _persist_reserva(
+        db_session,
+        _reserva(
+            ciudad_experiencia="Cartagena",
+            fecha_evento=datetime(2026, 8, 5, 17, 0, tzinfo=UTC),
+            participants=1,
+        ),
+    )
+    await _persist_reserva(
+        db_session,
+        _reserva(
+            estado=ReservaEstado.EN_PROGRESO,
+            ciudad_experiencia="Barranquilla",
+            fecha_evento=datetime(2026, 7, 12, 17, 0, tzinfo=UTC),
+            participants=10,
+        ),
+    )
+
+    points = await reports.get_temporada()
+
+    assert [(point.month, point.city, point.participants) for point in points] == [
+        (date(2026, 7, 1), "Barranquilla", 5),
+        (date(2026, 7, 1), "Cartagena", 4),
+        (date(2026, 8, 1), "Cartagena", 1),
+    ]
+
+
+@pytest.mark.asyncio
 async def test_get_demographics_ranks_countries_by_participants(
     db_session: AsyncSession,
 ) -> None:

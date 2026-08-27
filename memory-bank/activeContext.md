@@ -2,18 +2,41 @@
 
 ## Current focus
 
-**Dashboard overhaul (uncommitted on main):** the admin home page
-(`app/(admin)/page.tsx`) is no longer the TailAdmin ecommerce demo — it
-is a live business-intelligence dashboard wired to a new `/reports` API
-family on the backend. All sections read real `reservas`/`partidos`
-data; date range + booking-provider filters drive most widgets via
-client-side React state (`DashboardPage.tsx` + `DashboardFilters.tsx`).
+**Dashboard overhaul (uncommitted on main):** live `/reports` API +
+admin home dashboard, plus reservas/dashboard polish on the same
+uncommitted work (Profit column, icon actions, `en_progreso` = today,
+Temporada chart, Statistics independent dates, Proximos carousel).
 
 Before that: automation pipeline auto-link (`#89`, PR #90 — open),
 Sentry validation reporting (PR #88), cancelled-reserva aggregate
 exclusion (PR #87), reserva cancellation (PR #86/#85), Reservas/partidos
 UX polish (`#83`, PR #84 — merged), Gastos (`#81`, PR #82 — merged),
 Reserva financiero (`#78`/`#79`, PR #80 — merged).
+
+### Dashboard + reservas list polish (uncommitted, on top of the overhaul)
+
+- **Reservas table:** `ReservaShortItem` now includes `profit`. Column
+  renamed Precio → Profit (COP via `formatCOP`, `"-"` when null). Acciones
+  are outline icon buttons (pencil / X / eye) with sr-only labels.
+  Nueva reserva sits right of the title, left of the filter icon, both
+  `h-11`, plus-icon rotates on hover.
+- **`estado=en_progreso` on `GET /reservas`:** date window, not stored
+  state. `fecha_evento` is today (America/Bogota) and `estado != cancelada`.
+  The date-range picker is ignored while this option is selected.
+- **Edit form:** experiencia and ciudad are the same two-preset dropdowns
+  as create; save blocked until a preset is picked. City Tour is hidden;
+  a city-tour reserva seeds as football tour. Personas `min="1"`.
+- **Participants badge:** 1–3 bronze, 4–6 silver, 7+ gold (same shine as
+  reserva badges).
+- **Dashboard layout:** Top Providers | Top Cities | Temporada (new
+  grouped bar of participants by month × city, follows dashboard filters).
+  Proximos Partidos is a full-width horizontal carousel of 5 cards.
+- **Statistics:** own date range, defaults to Este año (YTD, Bogota).
+  Presets Este año / Este mes / Último semestre / Año pasado + custom
+  picker. Does **not** follow top-level date or provider. Caption is a
+  human phrase next to “Ingreso final vs gastos por mes”.
+- New `GET /reports/temporada`. Statistics refetch is independent of the
+  rest of the dashboard `Promise.all`.
 
 ### Dashboard: live `/reports` API + frontend (uncommitted)
 
@@ -41,14 +64,13 @@ Reserva financiero (`#78`/`#79`, PR #80 — merged).
   docstring notes the America/Bogota date cast may need a functional
   index if `reservas` grows large.
 - Frontend: `components/dashboard/DashboardPage.tsx` orchestrates
-  `Promise.all` across all 8 endpoints on filter change.
-  `lib/reports.ts` typed API client; `lib/formatMoney.ts` for K/M
-  notation on money values. Reused/updated TailAdmin widgets:
-  `EcommerceMetrics` (4 KPI cards), `StatisticsChart`, `MonthlySalesChart`,
-  `DemographicCard`. New sections: `TopProviders`, `TopCities`,
-  `ProximosPartidos`, `ProviderCards`. Removed demo sections:
-  `MonthlyTarget`, `RecentOrders`. Share → Screenshot via
-  `window.print()` + `@media print` CSS hiding sidebar/header.
+  `Promise.all` across report endpoints on filter change (Statistics is
+  fetched separately with its own date range). `lib/reports.ts` typed
+  API client; `lib/formatMoney.ts` for K/M notation. Reused/updated
+  TailAdmin widgets: `EcommerceMetrics`, `StatisticsChart`,
+  `MonthlySalesChart`, `DemographicCard`. New sections: `TopProviders`,
+  `TopCities`, `TemporadaChart`, `ProximosPartidos` (carousel),
+  `ProviderCards`. Removed demo sections: `MonthlyTarget`, `RecentOrders`.
 - **`PartidoBadges` extracted** from `PartidoCard.tsx` into
   `components/partidos/PartidoBadges.tsx` for reuse in dashboard
   Proximos Partidos list.

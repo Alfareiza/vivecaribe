@@ -140,6 +140,7 @@ class ReservaShortItem(BaseModel):
     moneda: str
     price: Decimal
     income: Decimal
+    profit: Decimal | None = None
     partido_id: UUID | None
 
     @computed_field  # type: ignore[prop-decorator]

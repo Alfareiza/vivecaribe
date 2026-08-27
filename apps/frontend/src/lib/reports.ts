@@ -39,6 +39,12 @@ export type TopCityItem = {
   reservas: number;
 };
 
+export type TemporadaPoint = {
+  month: string;
+  city: string;
+  participants: number;
+};
+
 export type DemographicItem = {
   country: string;
   reservas: number;
@@ -98,6 +104,14 @@ export async function fetchReportTopCities(
 ): Promise<TopCityItem[]> {
   return apiJson<TopCityItem[]>(
     `/reports/top-cities${buildReportQuery(filters)}`,
+  );
+}
+
+export async function fetchReportTemporada(
+  filters: ReportFilters = {},
+): Promise<TemporadaPoint[]> {
+  return apiJson<TemporadaPoint[]>(
+    `/reports/temporada${buildReportQuery(filters)}`,
   );
 }
 

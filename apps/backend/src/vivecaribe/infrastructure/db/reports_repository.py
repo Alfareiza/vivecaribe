@@ -51,6 +51,7 @@ from vivecaribe.domain.reports import (
     ProviderCardItem,
     ProximoPartidoItem,
     ReportSummary,
+    TemporadaPoint,
     TopCityItem,
     TopProviderItem,
 )
@@ -352,6 +353,49 @@ class SqlAlchemyReportsRepository:
                 city=row.ciudad_experiencia,
                 profit=row.profit,
                 reservas=int(row.reservas),
+            )
+            for row in result.all()
+        ]
+
+    async def get_temporada(
+        self,
+        *,
+        fecha_from: date | None = None,
+        fecha_to: date | None = None,
+        booking_provider: BookingProvider | None = None,
+    ) -> list[TemporadaPoint]:
+        """Return participants grouped by month and experience city.
+
+        One grouped query. Includes all confirmed reservas (no costos
+        requirement) so volume of visitors is visible even before profit
+        is known. Ordered chronologically, then by city name.
+        """
+        filters = _reserva_report_filters(
+            fecha_from=fecha_from,
+            fecha_to=fecha_to,
+            booking_provider=booking_provider,
+        )
+        filters.append(ReservaORM.fecha_evento.is_not(None))
+        where_clause = and_(*filters)
+        month = _month_bucket(ReservaORM.fecha_evento)
+
+        result = await self._session.execute(
+            select(
+                month,
+                ReservaORM.ciudad_experiencia,
+                func.coalesce(func.sum(ReservaORM.participants), 0).label(
+                    "participants",
+                ),
+            )
+            .where(where_clause)
+            .group_by(month, ReservaORM.ciudad_experiencia)
+            .order_by(month.asc(), ReservaORM.ciudad_experiencia.asc()),
+        )
+        return [
+            TemporadaPoint(
+                month=row.month.date(),
+                city=row.ciudad_experiencia,
+                participants=int(row.participants),
             )
             for row in result.all()
         ]

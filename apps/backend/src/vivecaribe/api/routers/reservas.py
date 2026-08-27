@@ -90,6 +90,10 @@ async def list_reservas(
 
     Filters compose with AND. Omitted params mean no constraint. When either
     fecha bound is set, rows with null ``fecha_evento`` are excluded.
+
+    ``estado=en_progreso`` means ``fecha_evento`` is today (America/Bogota)
+    and the reserva is not cancelada — it does not match the stored estado.
+    Date bounds are ignored while that filter is active.
     """
     items, total = await reservas.list(
         skip=skip,

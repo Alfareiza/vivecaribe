@@ -41,7 +41,7 @@
 | Exclude cancelled reservas from partido aggregates | Merged (PR #87) | Cancelled reservas dropped from linked lists, `reservas_count`/`participants_count`, and gasto splits |
 | Sentry request-validation error reporting | Merged (PR #88) | FastAPI request-validation errors now reported to Sentry |
 | Automation: auto-link reservas to matching partidos on ingestion | Open (#89, PR #90) | `ProcessBookingEmailsUseCase.link_partido_if_matched` runs on every fetched reserva: links only on an exact ciudad + America/Bogota-day match against a football-tour reserva with no partido yet (2+ candidates ⇒ logged as ambiguous, skipped). New `SqlAlchemyPartidoRepository.find_partidos_based_on_ciudad_and_dt`; new `linked` counter on the pipeline response/logs. Cancelled and (soft-)deleted reservas are never auto-linked — confirmed first that re-fetching a deleted reserva's email doesn't duplicate it (`get_or_create` finds the existing soft-deleted row) |
-| Dashboard overhaul: live `/reports` + home dashboard | Uncommitted | Backend: 8 JWT endpoints, `SqlAlchemyReportsRepository` (single-query aggregates, no N+1). Frontend: `DashboardPage` with date+provider filters, 4 KPI cards, Statistics/Monthly Sales/Demographics charts, Top Providers/Cities, Proximos Partidos, dynamic provider cards; K/M money formatting; print screenshot; removed TailAdmin demo widgets (`MonthlyTarget`, `RecentOrders`) |
+| Dashboard overhaul: live `/reports` + home dashboard | Uncommitted | Backend: 9 JWT endpoints (incl. `temporada`), `SqlAlchemyReportsRepository`. Frontend: `DashboardPage` with date+provider filters, 4 KPI cards, Statistics with independent date presets, Monthly Sales/Demographics, Top Providers/Cities, Temporada (month × city participants), Proximos Partidos carousel, provider cards. Reservas list: Profit column, icon actions, `en_progreso` = today. |
 
 ## In progress / open children of #41
 
@@ -52,9 +52,10 @@
 - Register/login; access JWT + refresh cookie rotation.
 - Reserva CRUD; soft-delete hidden from get/list.
 - **`GET /reports/*` dashboard API** (uncommitted): KPI summary,
-  monthly statistics/sales, top providers/cities, demographics,
-  provider cards, proximos partidos — all filtered by confirmada
-  reservas with optional date range and provider.
+  monthly statistics/sales, top providers/cities, temporada
+  (participants by month × city), demographics, provider cards,
+  proximos partidos — filtered by confirmada reservas with optional
+  date range and provider (Statistics uses its own date range).
 - Admin home dashboard (uncommitted): live data from `/reports`; filter
   by date range + provider; K/M money notation; print screenshot.
 - `GET /reservas` server filters (`estado`, `booking_provider`,

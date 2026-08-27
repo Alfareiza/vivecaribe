@@ -10,6 +10,7 @@ import DashboardFilters, {
 } from "@/components/dashboard/DashboardFilters";
 import ProviderCards from "@/components/dashboard/ProviderCards";
 import ProximosPartidos from "@/components/dashboard/ProximosPartidos";
+import TemporadaChart from "@/components/dashboard/TemporadaChart";
 import TopCities from "@/components/dashboard/TopCities";
 import TopProviders from "@/components/dashboard/TopProviders";
 import { Dropdown } from "@/components/ui/dropdown/Dropdown";
@@ -23,6 +24,7 @@ import {
   fetchReportProximosPartidos,
   fetchReportStatistics,
   fetchReportSummary,
+  fetchReportTemporada,
   fetchReportTopCities,
   fetchReportTopProviders,
   type DemographicItem,
@@ -31,9 +33,16 @@ import {
   type ProviderCardItem,
   type ReportFilters,
   type ReportSummary,
+  type TemporadaPoint,
   type TopCityItem,
   type TopProviderItem,
 } from "@/lib/reports";
+import {
+  rangeForPreset,
+  statsFilterPhrase,
+  type DateRange,
+  type StatsPreset,
+} from "@/lib/statsPeriod";
 import type { PartidoListItem } from "@/types/partido";
 
 const EMPTY_SUMMARY: ReportSummary = {
@@ -51,16 +60,23 @@ export default function DashboardPage() {
   });
   const [shareOpen, setShareOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [statsLoading, setStatsLoading] = useState(true);
   const [summary, setSummary] = useState<ReportSummary>(EMPTY_SUMMARY);
   const [statistics, setStatistics] = useState<MonthlyStatisticsPoint[]>([]);
   const [monthlySales, setMonthlySales] = useState<MonthlySalesPoint[]>([]);
   const [topProviders, setTopProviders] = useState<TopProviderItem[]>([]);
   const [topCities, setTopCities] = useState<TopCityItem[]>([]);
+  const [temporada, setTemporada] = useState<TemporadaPoint[]>([]);
   const [demographics, setDemographics] = useState<DemographicItem[]>([]);
   const [providers, setProviders] = useState<ProviderCardItem[]>([]);
   const [proximosPartidos, setProximosPartidos] = useState<PartidoListItem[]>(
     [],
   );
+  const [statsPreset, setStatsPreset] = useState<StatsPreset>("this_year");
+  const [statsRange, setStatsRange] = useState<DateRange>(() =>
+    rangeForPreset("this_year"),
+  );
+  const [statsDatePickerKey, setStatsDatePickerKey] = useState(0);
 
   function handleFilterChange(patch: Partial<DashboardFilterValues>) {
     setFilters((prev) => ({ ...prev, ...patch }));
@@ -80,37 +96,37 @@ export default function DashboardPage() {
     try {
       const [
         summaryData,
-        statisticsData,
         monthlySalesData,
         topProvidersData,
         topCitiesData,
+        temporadaData,
         demographicsData,
         providersData,
         proximosData,
       ] = await Promise.all([
         fetchReportSummary(apiFilters),
-        fetchReportStatistics(apiFilters),
         fetchReportMonthlySales(apiFilters),
         fetchReportTopProviders(apiFilters),
         fetchReportTopCities(apiFilters),
+        fetchReportTemporada(apiFilters),
         fetchReportDemographics(apiFilters),
         fetchReportProviders(apiFilters),
         fetchReportProximosPartidos(),
       ]);
       setSummary(summaryData);
-      setStatistics(statisticsData);
       setMonthlySales(monthlySalesData);
       setTopProviders(topProvidersData);
       setTopCities(topCitiesData);
+      setTemporada(temporadaData);
       setDemographics(demographicsData);
       setProviders(providersData);
       setProximosPartidos(proximosData);
     } catch {
       setSummary(EMPTY_SUMMARY);
-      setStatistics([]);
       setMonthlySales([]);
       setTopProviders([]);
       setTopCities([]);
+      setTemporada([]);
       setDemographics([]);
       setProviders([]);
       setProximosPartidos([]);
@@ -119,9 +135,39 @@ export default function DashboardPage() {
     }
   }, [apiFilters]);
 
+  const loadStatistics = useCallback(async () => {
+    setStatsLoading(true);
+    try {
+      const statisticsData = await fetchReportStatistics({
+        fecha_from: statsRange.from,
+        fecha_to: statsRange.to,
+      });
+      setStatistics(statisticsData);
+    } catch {
+      setStatistics([]);
+    } finally {
+      setStatsLoading(false);
+    }
+  }, [statsRange]);
+
   useEffect(() => {
     void loadDashboard();
   }, [loadDashboard]);
+
+  useEffect(() => {
+    void loadStatistics();
+  }, [loadStatistics]);
+
+  function handleStatsPreset(preset: Exclude<StatsPreset, "custom">) {
+    setStatsPreset(preset);
+    setStatsRange(rangeForPreset(preset));
+    setStatsDatePickerKey((key) => key + 1);
+  }
+
+  const handleStatsCustomRange = useCallback((range: DateRange) => {
+    setStatsPreset("custom");
+    setStatsRange(range);
+  }, []);
 
   function handleScreenshot() {
     setShareOpen(false);
@@ -168,27 +214,43 @@ export default function DashboardPage() {
         </div>
 
         <div className="col-span-12">
-          <StatisticsChart data={statistics} loading={loading} />
+          <StatisticsChart
+            data={statistics}
+            loading={statsLoading}
+            phrase={statsFilterPhrase(statsPreset, statsRange)}
+            preset={statsPreset}
+            dateRange={statsRange}
+            datePickerKey={statsDatePickerKey}
+            onPreset={handleStatsPreset}
+            onCustomRange={handleStatsCustomRange}
+          />
         </div>
 
-        <div className="col-span-12 md:col-span-6 xl:col-span-4">
-          <TopProviders data={topProviders} loading={loading} />
+        <div className="col-span-12 grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6 xl:grid-cols-[3fr_2fr_5fr]">
+          <div className="min-w-0">
+            <TopProviders data={topProviders} loading={loading} />
+          </div>
+          <div className="min-w-0">
+            <TopCities data={topCities} loading={loading} />
+          </div>
+          <div className="min-w-0 md:col-span-2 xl:col-span-1">
+            <TemporadaChart data={temporada} loading={loading} />
+          </div>
         </div>
-        <div className="col-span-12 md:col-span-6 xl:col-span-4">
-          <TopCities data={topCities} loading={loading} />
-        </div>
-        <div className="col-span-12 xl:col-span-4">
+
+        <div className="col-span-12">
           <ProximosPartidos data={proximosPartidos} loading={loading} />
         </div>
 
-        <div className="col-span-12 xl:col-span-7">
-          <MonthlySalesChart data={monthlySales} loading={loading} />
+        <div className="col-span-12 grid grid-cols-1 gap-4 md:gap-6 xl:grid-cols-[minmax(0,7fr)_minmax(0,3fr)]">
+          <div className="flex min-w-0 flex-col gap-4 md:gap-6">
+            <MonthlySalesChart data={monthlySales} loading={loading} />
+            <ProviderCards data={providers} loading={loading} />
+          </div>
+          <div className="min-w-0 xl:h-full">
+            <DemographicCard data={demographics} loading={loading} />
+          </div>
         </div>
-        <div className="col-span-12 xl:col-span-5">
-          <DemographicCard data={demographics} loading={loading} />
-        </div>
-
-        <ProviderCards data={providers} loading={loading} />
       </div>
     </div>
   );

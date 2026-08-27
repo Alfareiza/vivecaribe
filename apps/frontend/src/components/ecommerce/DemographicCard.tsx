@@ -18,7 +18,7 @@ export default function DemographicCard({
   );
 
   return (
-    <div className="h-full rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] sm:p-6">
+    <div className="flex h-full flex-col rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] sm:p-6">
       <div>
         <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
           Customers Demographic
@@ -28,8 +28,8 @@ export default function DemographicCard({
         </p>
       </div>
 
-      <div className="my-6 overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 px-4 py-6 dark:border-gray-800 dark:bg-gray-900 sm:px-6">
-        <div className="mapOne map-btn -mx-4 -my-6 h-[212px] w-full sm:-mx-6">
+      <div className="my-6 min-h-[212px] flex-1 overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 px-4 py-6 dark:border-gray-800 dark:bg-gray-900 sm:px-6">
+        <div className="mapOne map-btn -mx-4 -my-6 h-full min-h-[212px] w-full sm:-mx-6">
           <CountryMap />
         </div>
       </div>
