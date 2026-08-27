@@ -14,7 +14,15 @@ from starlette.responses import Response
 
 from vivecaribe import __version__
 from vivecaribe.api import deps
-from vivecaribe.api.routers import auth, automation, gastos, health, partidos, reservas
+from vivecaribe.api.routers import (
+    auth,
+    automation,
+    gastos,
+    health,
+    partidos,
+    reports,
+    reservas,
+)
 from vivecaribe.logging import configure_logging, logger
 from vivecaribe.settings import get_settings
 
@@ -99,6 +107,7 @@ def create_app() -> FastAPI:
     app.include_router(reservas.router)
     app.include_router(partidos.router)
     app.include_router(gastos.router)
+    app.include_router(reports.router)
     return app
 
 

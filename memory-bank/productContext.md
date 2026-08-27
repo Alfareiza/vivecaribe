@@ -33,8 +33,16 @@ structured reservations operators can trust, while remaining an API platform
 
 ### Frontend (operators)
 
-- Admin dashboard for day-to-day booking operations (TailAdmin under
-  `apps/frontend`).
+- Admin **home dashboard** (`/`, `DashboardPage.tsx`): live KPI cards
+  (Customers/participants, Reservas, Profit, Reservas/Partidos ratio),
+  Statistics chart (monthly `income_final` vs `costos`), Top Providers,
+  Top Cities, Proximos Partidos (next 5, ignores filters), Monthly Sales
+  (monthly profit), Customers Demographic (by `pais_del_visitante`), and
+  dynamic per-provider cards. Date range + provider filters at the top;
+  no default filter (all-time until the operator sets one). Money values
+  use K/M notation. Share → print/screenshot (hides sidebar/navbar).
+- Day-to-day booking operations on `/reservas`, `/partidos` (TailAdmin
+  shell under `apps/frontend`).
 - Auth: email/password sign-in; access token in memory; refresh via HttpOnly
   cookie on the API; live `/reservas` list with server filters + `es_hoy`
   (epic #41 through #46 / #54).

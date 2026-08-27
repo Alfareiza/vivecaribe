@@ -2,20 +2,59 @@
 
 ## Current focus
 
-Automation pipeline (`ProcessBookingEmailsUseCase`) now auto-links each
-ingested reserva to an existing `Partido` on an exact fecha/ciudad/
-football-tour match, guarding against cancelled/deleted reservas
-(`#89`, PR #90 — open). Built on top of main as of PR #88 (Sentry
-request-validation error reporting), PR #87 (exclude cancelled reservas
-from partido aggregates), and PR #86/#85 (reserva cancellation with a
-required reason) — those three not yet individually detailed below.
-Before that: Reservas/partidos UX polish (`#83`, PR #84 — merged), on
-top of Gastos (`#81`, PR #82 — merged), Reserva financiero (`#78`/`#79`,
-PR #80 — merged), Vercel Ignored Build Step fix (`#74` — merged & wired
-live), and Reservas partido linking + income auto-fill (`#72`, PR #73 —
-merged), which built on the full Create/Edit/Delete UI (`#40`/`#41`/
-`#70`, PR #71 — merged). Partidos `#61`→`#69` (CRUD + UI/UX passes,
-PR #69) status as of its last update, further below.
+**Dashboard overhaul (uncommitted on main):** the admin home page
+(`app/(admin)/page.tsx`) is no longer the TailAdmin ecommerce demo — it
+is a live business-intelligence dashboard wired to a new `/reports` API
+family on the backend. All sections read real `reservas`/`partidos`
+data; date range + booking-provider filters drive most widgets via
+client-side React state (`DashboardPage.tsx` + `DashboardFilters.tsx`).
+
+Before that: automation pipeline auto-link (`#89`, PR #90 — open),
+Sentry validation reporting (PR #88), cancelled-reserva aggregate
+exclusion (PR #87), reserva cancellation (PR #86/#85), Reservas/partidos
+UX polish (`#83`, PR #84 — merged), Gastos (`#81`, PR #82 — merged),
+Reserva financiero (`#78`/`#79`, PR #80 — merged).
+
+### Dashboard: live `/reports` API + frontend (uncommitted)
+
+- New backend family under `GET /reports/*` (JWT required):
+  `summary`, `statistics`, `monthly-sales`, `top-providers`,
+  `top-cities`, `demographics`, `providers`, `proximos-partidos`.
+  Domain schemas in `domain/reports.py`; queries in
+  `infrastructure/db/reports_repository.py`; router in
+  `api/routers/reports.py`; `ReportsRepo` dep in `deps.py`.
+- **Filter semantics (locked in plan):** all filtered endpoints include
+  only `estado = confirmada` AND `deleted_at IS NULL`. Optional query
+  params: `fecha_from`, `fecha_to` (inclusive America/Bogota calendar
+  days, same pattern as `GET /reservas`), `booking_provider`.
+- **Money semantics:** Statistics chart top line = `SUM(income_final)`;
+  bottom line = `SUM(costos)` where not null. All other profit-facing
+  sections = `SUM(income_final - costos)` excluding rows where
+  `costos IS NULL`. Monthly Sales = monthly profit (same exclusion).
+- **KPI summary:** participants (sum), reservas (count), profit,
+  partidos (count distinct `partido_id` among filtered reservas).
+- **`proximos-partidos`:** no filter params; next 5 non-deleted partidos
+  with `fecha >= now`, counts from confirmed non-deleted reservas via
+  single LEFT JOIN + GROUP BY (same ON-clause pattern as partidos list).
+- **Performance:** every repository method is one SQL round-trip with
+  server-side aggregates — no ORM relationship traversal, no N+1. Module
+  docstring notes the America/Bogota date cast may need a functional
+  index if `reservas` grows large.
+- Frontend: `components/dashboard/DashboardPage.tsx` orchestrates
+  `Promise.all` across all 8 endpoints on filter change.
+  `lib/reports.ts` typed API client; `lib/formatMoney.ts` for K/M
+  notation on money values. Reused/updated TailAdmin widgets:
+  `EcommerceMetrics` (4 KPI cards), `StatisticsChart`, `MonthlySalesChart`,
+  `DemographicCard`. New sections: `TopProviders`, `TopCities`,
+  `ProximosPartidos`, `ProviderCards`. Removed demo sections:
+  `MonthlyTarget`, `RecentOrders`. Share → Screenshot via
+  `window.print()` + `@media print` CSS hiding sidebar/header.
+- **`PartidoBadges` extracted** from `PartidoCard.tsx` into
+  `components/partidos/PartidoBadges.tsx` for reuse in dashboard
+  Proximos Partidos list.
+- Provider cards use existing `ProviderLogo` →
+  `/images/providers/{provider}.svg`. When a provider filter is active,
+  provider cards show only that provider (filter applies consistently).
 
 ## Recent decisions
 
@@ -596,4 +635,9 @@ PR #69) status as of its last update, further below.
 
 ## Next
 
+- Commit + deploy dashboard overhaul (backend `/reports` + frontend home).
 - #47 signup (low priority) if needed.
+- Optional: consolidate dashboard's 8 parallel API calls into fewer
+  endpoints if filter-change latency becomes noticeable.
+- Optional: functional index on Bogota calendar day of `fecha_evento`
+  for report queries at scale.

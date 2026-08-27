@@ -18,8 +18,13 @@ API-first Clean Architecture under `apps/backend/src/vivecaribe/`:
 
 Next.js 16 App Router under `apps/frontend/src/`:
 
-- `app/` — routes (admin dashboard, auth pages, UI element demos).
-- `components/` — TailAdmin UI primitives (forms, tables, charts, etc.).
+- `app/` — routes (admin dashboard home, `/reservas`, `/partidos`, auth).
+- `components/dashboard/` — live home dashboard: `DashboardPage`,
+  `DashboardFilters`, `TopProviders`, `TopCities`, `ProximosPartidos`,
+  `ProviderCards` (#dashboard-overhaul, uncommitted).
+- `components/ecommerce/` — TailAdmin chart/metric widgets reused by the
+  home dashboard (now accept live `data` props instead of hardcoded demo
+  values).
 - `components/ui/loading/` — shared pulse loaders (#50): `PulseLoader`,
   `PageLoading` (full viewport / `className` hatch), `InlineLoading`.
   Spanish `label` is required and screen-reader-only; `color` + `darkColor`.
@@ -494,6 +499,41 @@ When Zoho shows an identity email challenge, `ZohoSession` uses the
   match that shape for any new icon, and actually look at the rendered
   result at its real usage size before trusting a new icon compiled
   correctly (a stripped `viewBox` doesn't error, it just misrenders).
+
+## Dashboard reports API (#dashboard-overhaul, uncommitted)
+
+- **`SqlAlchemyReportsRepository`** (`infrastructure/db/reports_repository.py`):
+  one SQL statement per method, server-side `SUM`/`COUNT`/`GROUP BY` —
+  no ORM relationship loads, no N+1. Shared filter builder
+  `_reserva_report_filters()` enforces `estado = confirmada`,
+  `deleted_at IS NULL`, optional Bogota calendar-day bounds and
+  `booking_provider`. Profit aggregates use
+  `func.sum(income_final - costos).filter(costos.is_not(None), …)`.
+- **Eight endpoints** under `/reports` (JWT): `summary`, `statistics`,
+  `monthly-sales`, `top-providers`, `top-cities`, `demographics`,
+  `providers`, `proximos-partidos`. Filtered endpoints share the same
+  three optional query params; `proximos-partidos` ignores them.
+- **Statistics vs profit split:** Statistics chart =
+  `SUM(income_final)` + `SUM(costos)` by month; profit-facing widgets =
+  `SUM(income_final - costos)` excluding null `costos`.
+- **`proximos-partidos`:** same LEFT JOIN + GROUP BY pattern as
+  `GET /partidos` list (#66), but JOIN ON restricts to confirmed
+  reservas; ordered by `fecha ASC`, `LIMIT 5`, `fecha >= now`.
+- **Frontend orchestration:** `DashboardPage.tsx` is `'use client'`;
+  filter state (date range + provider) lives in React state, not URL.
+  Filter change triggers `Promise.all` across all 8 fetches
+  (`lib/reports.ts`). Money display via `formatMoney()` K/M helper.
+- **`DashboardFilters`:** extracted filter dropdown (provider `Select` +
+  `DatePicker` range + clear), patterned after `ReservationsTable`'s
+  filter menu but without estado. Uses `onClose` on the date picker and
+  partial `onChange(patch)` updates to avoid stale-closure bugs.
+- **Screenshot/share:** `window.print()` + `@media print` in
+  `globals.css` hides `aside`, `nav`, `header`, `.dashboard-share-btn`.
+- **Performance note:** America/Bogota date cast on `fecha_evento` in
+  WHERE may not use the plain `ix_reservas_fecha_evento` btree at scale;
+  see repository module docstring for optional functional-index guidance.
+  The 8 parallel HTTP calls on filter change are an API-layer trade-off,
+  not an in-repository N+1.
 
 ### Frontend patterns worth reusing
 

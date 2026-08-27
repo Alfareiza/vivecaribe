@@ -21,6 +21,8 @@
 - TailAdmin starter (ApexCharts, FullCalendar, jvectormap, etc.)
 - Shared loading: `apps/frontend/src/components/ui/loading/` (#50)
 - Reservas UI: server-filtered list + `es_hoy` badge (`StatusDot`) (#46)
+- Dashboard home: live `/reports` API, client filter state, K/M money
+  formatting (#dashboard-overhaul, uncommitted)
 - Package manager: npm (`package-lock.json`)
 - `output: 'standalone'` for Docker
 
@@ -103,6 +105,22 @@ check this setting first before writing more tests to compensate.
 | `JWT_REFRESH_EXPIRE_DAYS` | API | Refresh cookie TTL (default 7) |
 | `NEXT_PUBLIC_API_URL` | Frontend | API origin, e.g. `https://vivecaribe.vercel.app` |
 | `NEXT_PUBLIC_LOGIN_REDIRECT_URL` | Frontend | Default `/reservas` |
+
+## Reports API (dashboard, uncommitted)
+
+| Endpoint | Notes |
+|----------|-------|
+| `GET /reports/summary` | KPIs: participants, reservas, profit, partidos |
+| `GET /reports/statistics` | `[{month, income_final, costos}]` |
+| `GET /reports/monthly-sales` | `[{month, profit}]` |
+| `GET /reports/top-providers` | Ranked by profit, default limit 10 |
+| `GET /reports/top-cities` | By `ciudad_experiencia`, default limit 10 |
+| `GET /reports/demographics` | By `pais_del_visitante`, default limit 10 |
+| `GET /reports/providers` | All providers with ≥1 profitable reserva |
+| `GET /reports/proximos-partidos` | Next 5 partidos, no filter params |
+
+Shared optional query params on filtered routes: `fecha_from`, `fecha_to`,
+`booking_provider`. JWT required (same as `/reservas`).
 
 ## Deploy targets
 
