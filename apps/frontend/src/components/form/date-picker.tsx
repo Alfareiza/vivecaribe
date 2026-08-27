@@ -12,7 +12,8 @@ type PropsType = {
   onChange?: Hook | Hook[];
   /** Fires once the calendar closes — the right hook for range mode, where onChange fires after every intermediate click. */
   onClose?: Hook | Hook[];
-  defaultDate?: DateOption;
+  /** Single date, or `[from, to]` in range mode — same as flatpickr's `defaultDate`. */
+  defaultDate?: DateOption | DateOption[];
   label?: string;
   placeholder?: string;
 };
