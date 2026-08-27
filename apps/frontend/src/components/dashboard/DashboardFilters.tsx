@@ -75,7 +75,7 @@ export default function DashboardFilters({
         className="dropdown-toggle inline-flex h-11 items-center gap-2 rounded-lg border border-gray-300 px-4 text-sm font-medium text-gray-700 shadow-theme-xs transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5"
       >
         <FilterIcon className="size-4" />
-        Filtros
+        {/* Filtros */}
         {activeFilterCount > 0 ? (
           <span className="inline-flex size-5 items-center justify-center rounded-full bg-brand-500 text-xs font-semibold text-white">
             {activeFilterCount}

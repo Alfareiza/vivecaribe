@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 import pytest
 from httpx import AsyncClient
@@ -608,6 +610,7 @@ _LIST_ITEM_KEYS = {
     "moneda",
     "price",
     "income",
+    "profit",
     "partido_id",
     "es_hoy",
 }
@@ -649,6 +652,79 @@ async def test_list_reservas_paginates(auth_client: AsyncClient) -> None:
     assert rest.status_code == 200
     assert rest.json()["total"] == 3
     assert len(rest.json()["items"]) == 1
+    assert rest.json()["items"][0]["profit"] is None
+
+
+@pytest.mark.asyncio
+async def test_list_reservas_en_progreso_means_today_not_stored_estado(
+    auth_client: AsyncClient,
+) -> None:
+    """``estado=en_progreso`` is today's fecha_evento, excluding cancelada."""
+    headers = await auth_headers(auth_client)
+    today = datetime.now(ZoneInfo("America/Bogota")).date()
+    noon = datetime(
+        today.year,
+        today.month,
+        today.day,
+        12,
+        0,
+        tzinfo=ZoneInfo("America/Bogota"),
+    )
+    today_utc = noon.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    yesterday_utc = (noon - timedelta(days=1)).astimezone(UTC).strftime(
+        "%Y-%m-%dT%H:%M:%SZ",
+    )
+
+    fixtures = [
+        _reserva_payload(
+            reserva_reference="TODAY-CONF",
+            estado="confirmada",
+            fecha_evento=today_utc,
+            customer_name="Today Confirmada",
+        ),
+        _reserva_payload(
+            reserva_reference="TODAY-PROG",
+            estado="en_progreso",
+            fecha_evento=today_utc,
+            customer_name="Today En Progreso",
+        ),
+        _reserva_payload(
+            reserva_reference="TODAY-CANC",
+            estado="cancelada",
+            fecha_evento=today_utc,
+            customer_name="Today Cancelada",
+        ),
+        _reserva_payload(
+            reserva_reference="YDAY-CONF",
+            estado="confirmada",
+            fecha_evento=yesterday_utc,
+            customer_name="Yesterday Confirmada",
+        ),
+        _reserva_payload(
+            reserva_reference="YDAY-PROG",
+            estado="en_progreso",
+            fecha_evento=yesterday_utc,
+            customer_name="Yesterday Stored En Progreso",
+        ),
+    ]
+    for payload in fixtures:
+        created = await auth_client.post(
+            "/reservas",
+            json=payload,
+            headers=headers,
+        )
+        assert created.status_code == 201, created.text
+
+    filtered = await auth_client.get(
+        "/reservas",
+        params={"estado": "en_progreso"},
+        headers=headers,
+    )
+    assert filtered.status_code == 200
+    body = filtered.json()
+    names = {item["customer_name"] for item in body["items"]}
+    assert body["total"] == 2
+    assert names == {"Today Confirmada", "Today En Progreso"}
 
 
 @pytest.mark.asyncio

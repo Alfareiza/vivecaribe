@@ -315,9 +315,22 @@ class SqlAlchemyReservaRepository:
         ``ciudad`` matches ``ciudad_experiencia`` exactly (case-insensitive).
         ``unassigned_only`` restricts to rows with no linked partido.
         Ordered by ``fecha_evento`` descending (nulls last).
+
+        ``estado=en_progreso`` is a date window, not a stored-state match:
+        ``fecha_evento`` is today in America/Bogota and ``estado`` is not
+        ``cancelada``. The date-range picker is ignored in that case.
         """
         filters: list[ColumnElement[bool]] = [ReservaORM.deleted_at.is_(None)]
-        if estado is not None:
+        event_day = cast(
+            func.timezone("America/Bogota", ReservaORM.fecha_evento),
+            Date,
+        )
+        if estado == ReservaEstado.EN_PROGRESO:
+            today = datetime.now(ZoneInfo("America/Bogota")).date()
+            filters.append(ReservaORM.estado != ReservaEstado.CANCELADA.value)
+            filters.append(ReservaORM.fecha_evento.is_not(None))
+            filters.append(event_day == today)
+        elif estado is not None:
             filters.append(ReservaORM.estado == estado.value)
         if booking_provider is not None:
             filters.append(
@@ -327,12 +340,10 @@ class SqlAlchemyReservaRepository:
             filters.append(func.lower(ReservaORM.ciudad_experiencia) == ciudad.lower())
         if unassigned_only:
             filters.append(ReservaORM.partido_id.is_(None))
-        if fecha_evento_from is not None or fecha_evento_to is not None:
+        if estado != ReservaEstado.EN_PROGRESO and (
+            fecha_evento_from is not None or fecha_evento_to is not None
+        ):
             filters.append(ReservaORM.fecha_evento.is_not(None))
-            event_day = cast(
-                func.timezone("America/Bogota", ReservaORM.fecha_evento),
-                Date,
-            )
             if fecha_evento_from is not None:
                 filters.append(event_day >= fecha_evento_from)
             if fecha_evento_to is not None:

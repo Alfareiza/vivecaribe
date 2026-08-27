@@ -21,13 +21,13 @@ import { ApiError } from "@/lib/api";
 import { cancelReserva, fetchReservas } from "@/lib/reservas";
 import { BOOKING_PROVIDER_OPTIONS } from "@/types/reservation";
 import type { ReservationListItem } from "@/types/reservation";
-import { FilterIcon } from "@/icons";
+import { FilterIcon, PlusIcon, PencilIcon, CloseLineIcon, EyeIcon } from "@/icons";
 import ProviderLogo from "./ProviderLogo";
 import ReservationDetailModal from "./ReservationDetailModal";
 import { EsHoyStatusDot } from "./StatusDot";
 import {
   formatRawDate,
-  formatPrice,
+  formatCOP,
   getEstadoBadgeColor,
   formatEstadoLabel,
   PROVIDER_LABELS,
@@ -89,14 +89,15 @@ export default function ReservationsTable() {
     setLoading(true);
     setError(null);
     try {
+      const enProgreso = estadoFilter === "en_progreso";
       const response = await fetchReservas({
         skip: (page - 1) * PAGE_SIZE,
         limit: PAGE_SIZE,
         estado: estadoFilter !== ALL ? estadoFilter : undefined,
         booking_provider:
           providerFilter !== ALL ? providerFilter : undefined,
-        fecha_evento_from: dateFrom ?? undefined,
-        fecha_evento_to: dateTo ?? undefined,
+        fecha_evento_from: enProgreso ? undefined : (dateFrom ?? undefined),
+        fecha_evento_to: enProgreso ? undefined : (dateTo ?? undefined),
       });
       setItems(response.items);
       setTotal(response.total);
@@ -189,86 +190,93 @@ export default function ReservationsTable() {
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white px-4 pb-3 pt-4 dark:border-gray-800 dark:bg-white/[0.03] sm:px-6">
-      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div className="flex items-end justify-between gap-3">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-              Reservas
-            </h3>
-            <p className="mt-1 text-theme-sm text-gray-500 dark:text-gray-400">
-              {total} resultado{total === 1 ? "" : "s"}
-            </p>
-          </div>
-          <Button size="sm" onClick={() => setIsCreateOpen(true)}>
-            Nueva reserva
-          </Button>
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+            Reservas
+          </h3>
+          <p className="mt-1 text-theme-sm text-gray-500 dark:text-gray-400">
+            {total} resultado{total === 1 ? "" : "s"}
+          </p>
         </div>
 
-        <div className="relative inline-block self-start">
-          <button
-            type="button"
-            aria-haspopup="menu"
-            aria-expanded={filterMenuOpen}
-            onClick={() => setFilterMenuOpen((open) => !open)}
-            className="dropdown-toggle inline-flex h-11 items-center gap-2 rounded-lg border border-gray-300 px-4 text-sm font-medium text-gray-700 shadow-theme-xs transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5"
+        <div className="flex items-center justify-end gap-3">
+          <Button
+            size="sm"
+            className="group h-11"
+            startIcon={
+              <PlusIcon className="transition-transform duration-300 ease-out group-hover:rotate-90 group-hover:scale-125" />
+            }
+            onClick={() => setIsCreateOpen(true)}
           >
-            <FilterIcon className="size-4" />
-            Filtros
-            {activeFilterCount > 0 ? (
-              <span className="inline-flex size-5 items-center justify-center rounded-full bg-brand-500 text-xs font-semibold text-white">
-                {activeFilterCount}
-              </span>
-            ) : null}
-          </button>
-          <Dropdown
-            isOpen={filterMenuOpen}
-            onClose={() => setFilterMenuOpen(false)}
-            className="w-72 p-4"
-          >
-            <div className="space-y-3">
-              <Select
-                key={`estado-${filterResetToken}`}
-                options={estadoOptions}
-                placeholder="Estado"
-                defaultValue={ALL}
-                onChange={(value) => {
-                  setEstadoFilter(value || ALL);
-                  resetPage();
-                }}
-              />
-              <Select
-                key={`provider-${filterResetToken}`}
-                options={providerOptions}
-                placeholder="Proveedor"
-                defaultValue={ALL}
-                onChange={(value) => {
-                  setProviderFilter(value || ALL);
-                  resetPage();
-                }}
-              />
-              <div>
-                <p className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                  Fecha evento
-                </p>
-                <DatePicker
-                  key={`fecha-${filterResetToken}`}
-                  id="reservas-fecha-evento-range"
-                  mode="range"
-                  placeholder="Desde — Hasta"
-                  onClose={handleFechaEventoRangeClose}
-                />
-              </div>
+            Nueva reserva
+          </Button>
+          <div className="relative inline-block">
+            <button
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={filterMenuOpen}
+              onClick={() => setFilterMenuOpen((open) => !open)}
+              className="dropdown-toggle inline-flex h-11 items-center gap-2 rounded-lg border border-gray-300 px-4 text-sm font-medium text-gray-700 shadow-theme-xs transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5"
+            >
+              <FilterIcon className="size-4" />
+              {/* Filtros */}
               {activeFilterCount > 0 ? (
-                <button
-                  type="button"
-                  onClick={clearFilters}
-                  className="text-theme-xs font-medium text-brand-500 hover:underline"
-                >
-                  Limpiar filtros
-                </button>
+                <span className="inline-flex size-5 items-center justify-center rounded-full bg-brand-500 text-xs font-semibold text-white">
+                  {activeFilterCount}
+                </span>
               ) : null}
-            </div>
-          </Dropdown>
+            </button>
+            <Dropdown
+              isOpen={filterMenuOpen}
+              onClose={() => setFilterMenuOpen(false)}
+              className="w-72 p-4"
+            >
+              <div className="space-y-3">
+                <Select
+                  key={`estado-${filterResetToken}`}
+                  options={estadoOptions}
+                  placeholder="Estado"
+                  defaultValue={ALL}
+                  onChange={(value) => {
+                    setEstadoFilter(value || ALL);
+                    resetPage();
+                  }}
+                />
+                <Select
+                  key={`provider-${filterResetToken}`}
+                  options={providerOptions}
+                  placeholder="Proveedor"
+                  defaultValue={ALL}
+                  onChange={(value) => {
+                    setProviderFilter(value || ALL);
+                    resetPage();
+                  }}
+                />
+                <div>
+                  <p className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                    Fecha evento
+                  </p>
+                  <DatePicker
+                    key={`fecha-${filterResetToken}`}
+                    id="reservas-fecha-evento-range"
+                    mode="range"
+                    placeholder="Desde — Hasta"
+                    onClose={handleFechaEventoRangeClose}
+                  />
+                </div>
+                {activeFilterCount > 0 ? (
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    className="text-theme-xs font-medium text-brand-500 hover:underline"
+                  >
+                    Limpiar filtros
+                  </button>
+                ) : null}
+              </div>
+            </Dropdown>
+          </div>
         </div>
       </div>
 
@@ -288,7 +296,7 @@ export default function ReservationsTable() {
                       "Cliente",
                       "Fecha evento",
                       "Pax",
-                      "Precio",
+                      "Profit",
                       "Acciones",
                     ].map((header) => (
                       <TableCell
@@ -366,39 +374,49 @@ export default function ReservationsTable() {
                             {reservation.participants}
                           </TableCell>
                           <TableCell className="px-4 py-3 text-start text-theme-sm text-gray-500 dark:text-gray-400">
-                            {formatPrice(reservation.income, reservation.moneda)}
+                            {reservation.profit == null
+                              ? "-"
+                              : formatCOP(reservation.profit)}
                           </TableCell>
-                          <TableCell className="px-4 py-3 text-start">
+                          <TableCell className="px-4 py-3 text-start whitespace-nowrap">
                             <div
-                              className="flex items-center gap-2"
+                              className="inline-flex items-center gap-1.5"
                               onClick={(event) => event.stopPropagation()}
                             >
                               <Button
                                 size="sm"
                                 variant="outline"
+                                className="size-9 shrink-0 !p-0 overflow-visible"
+                                title="Editar"
                                 onClick={() => handleEditAction(reservation)}
                               >
-                                Editar
+                                <PencilIcon className="size-5 overflow-visible" />
+                                <span className="sr-only">Editar</span>
                               </Button>
                               <Button
                                 size="sm"
                                 variant="outline"
-                                disabled={isCancelled}
-                                onClick={() => handleCancelAction(reservation)}
                                 className={
                                   isCancelled
-                                    ? undefined
-                                    : "!text-error-600 dark:!text-error-400"
+                                    ? "size-9 shrink-0 !p-0 overflow-visible"
+                                    : "size-9 shrink-0 !p-0 overflow-visible !text-error-600 dark:!text-error-400"
                                 }
+                                title="Cancelar"
+                                disabled={isCancelled}
+                                onClick={() => handleCancelAction(reservation)}
                               >
-                                Cancelar
+                                <CloseLineIcon className="size-5 overflow-visible" />
+                                <span className="sr-only">Cancelar</span>
                               </Button>
                               <Button
                                 size="sm"
                                 variant="outline"
+                                className="size-9 shrink-0 !p-0 overflow-visible"
+                                title="Ver"
                                 onClick={() => handleRowClick(reservation)}
                               >
-                                Ver
+                                <EyeIcon className="size-5 overflow-visible" />
+                                <span className="sr-only">Ver</span>
                               </Button>
                             </div>
                           </TableCell>

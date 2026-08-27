@@ -16,6 +16,7 @@ from vivecaribe.domain.reports import (
     ProviderCardItem,
     ProximoPartidoItem,
     ReportSummary,
+    TemporadaPoint,
     TopCityItem,
     TopProviderItem,
 )
@@ -110,6 +111,22 @@ async def report_top_cities(
         fecha_to=fecha_to,
         booking_provider=booking_provider,
         limit=limit,
+    )
+
+
+@router.get("/temporada", response_model=list[TemporadaPoint])
+async def report_temporada(
+    reports: ReportsRepo,
+    _current_user: CurrentUser,
+    fecha_from: Annotated[date | None, Query()] = None,
+    fecha_to: Annotated[date | None, Query()] = None,
+    booking_provider: Annotated[BookingProvider | None, Query()] = None,
+) -> list[TemporadaPoint]:
+    """Return participants per month, split by experience city."""
+    return await reports.get_temporada(
+        fecha_from=fecha_from,
+        fecha_to=fecha_to,
+        booking_provider=booking_provider,
     )
 
 

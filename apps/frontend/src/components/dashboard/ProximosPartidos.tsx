@@ -19,7 +19,7 @@ export default function ProximosPartidos({
   loading = false,
 }: ProximosPartidosProps) {
   return (
-    <div className="h-full rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] sm:p-6">
+    <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] sm:p-6">
       <div className="mb-5 flex items-center justify-between gap-3">
         <div>
           <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
@@ -42,11 +42,11 @@ export default function ProximosPartidos({
       ) : data.length === 0 ? (
         <p className="text-sm text-gray-500">No hay partidos próximos</p>
       ) : (
-        <div className="space-y-4">
+        <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-1 custom-scrollbar">
           {data.map((partido) => (
             <div
               key={partido.id}
-              className="group rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-white/[0.02]"
+              className="w-[min(100%,20rem)] shrink-0 snap-start rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-white/[0.02]"
             >
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <ReservaBadge count={partido.reservas_count} />

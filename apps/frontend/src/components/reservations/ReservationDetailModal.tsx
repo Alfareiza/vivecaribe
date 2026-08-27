@@ -154,7 +154,10 @@ function seedFormFromDetail(detail: Reservation): FormState {
     trm_final: detail.trm_final ?? "",
     notas_personales: detail.notas_personales ?? "",
     notas_cliente: detail.notas_cliente ?? "",
-    tipo_tour: detail.tipo_tour ?? "",
+    tipo_tour:
+      detail.tipo_tour === "city tour"
+        ? "football tour"
+        : (detail.tipo_tour ?? ""),
   };
 }
 
@@ -261,16 +264,13 @@ const meetingPointOptions = [
 /** Edit mode: all options open (legacy pipeline reservas may be city tours). */
 const tipoTourOptionsEdit = [
   { value: "", label: "Sin definir" },
-  ...Object.entries(TIPO_TOUR_LABELS).map(([value, label]) => ({
-    value,
-    label,
-  })),
+  { value: "football tour", label: TIPO_TOUR_LABELS["football tour"] },
 ];
 
 /** Create mode: locked to football tour — this modal only creates match-tour reservas. */
-const tipoTourOptionsCreate = Object.entries(TIPO_TOUR_LABELS).map(
-  ([value, label]) => ({ value, label, disabled: value !== "football tour" }),
-);
+const tipoTourOptionsCreate = [
+  { value: "football tour", label: TIPO_TOUR_LABELS["football tour"] },
+];
 
 /** Label + value as adjacent dl grid cells (tight, aligned within a section). */
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
@@ -845,8 +845,10 @@ export default function ReservationDetailModal({
     !Number.isNaN(Number(form.income)) &&
     Number(form.income) > 0 &&
     form.booking_provider.length > 0 &&
+    form.nombre_experiencia in EXPERIENCIA_PRESETS &&
+    ciudadOptions.some((option) => option.value === form.ciudad_experiencia) &&
     !Number.isNaN(Number(form.participants)) &&
-    Number(form.participants) >= 0;
+    Number(form.participants) >= 1;
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -1158,27 +1160,19 @@ export default function ReservationDetailModal({
               </h5>
               <div className="mb-4">
                 <FormField label="Nombre de la experiencia">
-                  {createMode ? (
-                    <Select
-                      key={`experiencia-${form.nombre_experiencia}`}
-                      options={experienciaOptions}
-                      placeholder="Selecciona una experiencia"
-                      defaultValue={form.nombre_experiencia}
-                      onChange={(value) =>
-                        update("nombre_experiencia", value)
-                      }
-                    />
-                  ) : (
-                    <Input
-                      type="text"
-                      maxLength={512}
-                      value={form.nombre_experiencia}
-                      onChange={(e) =>
-                        update("nombre_experiencia", e.target.value)
-                      }
-                      placeholder="City Tour"
-                    />
-                  )}
+                  <Select
+                    key={`experiencia-${form.nombre_experiencia}`}
+                    options={experienciaOptions}
+                    placeholder="Selecciona una experiencia"
+                    defaultValue={
+                      form.nombre_experiencia in EXPERIENCIA_PRESETS
+                        ? form.nombre_experiencia
+                        : ""
+                    }
+                    onChange={(value) =>
+                      update("nombre_experiencia", value)
+                    }
+                  />
                 </FormField>
               </div>
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
@@ -1195,27 +1189,21 @@ export default function ReservationDetailModal({
                 </div>
                 <div className="sm:flex-1">
                   <FormField label="Ciudad">
-                    {createMode ? (
-                      <Select
-                        key={`ciudad-${form.ciudad_experiencia}`}
-                        options={ciudadOptions}
-                        placeholder="Selecciona una ciudad"
-                        defaultValue={form.ciudad_experiencia}
-                        onChange={(value) =>
-                          update("ciudad_experiencia", value)
-                        }
-                      />
-                    ) : (
-                      <Input
-                        type="text"
-                        maxLength={255}
-                        value={form.ciudad_experiencia}
-                        onChange={(e) =>
-                          update("ciudad_experiencia", e.target.value)
-                        }
-                        placeholder="Cartagena"
-                      />
-                    )}
+                    <Select
+                      key={`ciudad-${form.ciudad_experiencia}`}
+                      options={ciudadOptions}
+                      placeholder="Selecciona una ciudad"
+                      defaultValue={
+                        ciudadOptions.some(
+                          (option) => option.value === form.ciudad_experiencia,
+                        )
+                          ? form.ciudad_experiencia
+                          : ""
+                      }
+                      onChange={(value) =>
+                        update("ciudad_experiencia", value)
+                      }
+                    />
                   </FormField>
                 </div>
                 <div className="sm:w-[220px] sm:shrink-0">
@@ -1332,7 +1320,7 @@ export default function ReservationDetailModal({
                   <FormField label="Personas">
                     <Input
                       type="number"
-                      min="0"
+                      min="1"
                       value={form.participants}
                       onChange={(e) =>
                         update("participants", e.target.value)

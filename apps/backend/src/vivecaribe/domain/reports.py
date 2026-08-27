@@ -52,6 +52,14 @@ class TopCityItem(BaseModel):
     reservas: int
 
 
+class TemporadaPoint(BaseModel):
+    """One city in one month for the Temporada grouped-bar chart."""
+
+    month: date
+    city: str
+    participants: int
+
+
 class DemographicItem(BaseModel):
     """Visitor country breakdown."""
 
