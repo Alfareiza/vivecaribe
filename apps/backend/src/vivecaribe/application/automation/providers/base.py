@@ -131,4 +131,4 @@ class BaseExtractor(ABC):
         region = phonenumbers.region_code_for_number(parsed)
         if not region:
             return ""
-        return COUNTRY_NAMES.get(region, region)
+        return COUNTRY_NAMES.get(region, "")
