@@ -11,6 +11,7 @@ from typing import Self
 import phonenumbers
 
 from vivecaribe.application.automation.models import ReservaDraft
+from vivecaribe.domain.countries import COUNTRY_NAMES
 from vivecaribe.domain.enums import BookingProvider
 from vivecaribe.domain.errors import ValidationError
 
@@ -119,7 +120,7 @@ class BaseExtractor(ABC):
         return value.strip()
 
     def get_pais_del_visitante(self) -> str:
-        """Return ISO alpha-2 country inferred from the customer phone."""
+        """Return the country name inferred from the customer phone number."""
         phone = self.get_phone()
         if not phone:
             return ""
@@ -128,4 +129,6 @@ class BaseExtractor(ABC):
         except phonenumbers.NumberParseException:
             return ""
         region = phonenumbers.region_code_for_number(parsed)
-        return region or ""
+        if not region:
+            return ""
+        return COUNTRY_NAMES.get(region, region)

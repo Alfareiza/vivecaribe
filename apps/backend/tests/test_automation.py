@@ -99,7 +99,7 @@ def test_getyourguide_extractor_from_fixture() -> None:
     assert ext.get_participants() == 2
     assert ext.get_customer_name() == "Terrance Turner"
     assert ext.get_phone() == "+16625709162"
-    assert ext.get_pais_del_visitante() == "US"
+    assert ext.get_pais_del_visitante() == "United States"
     assert ext.get_moneda() == "USD"
     assert ext.get_price() == Decimal("186.00")
     assert ext.get_income() == Decimal("130.200")
@@ -123,7 +123,7 @@ def test_homefans_extractor_from_fixture() -> None:
     assert ext.get_moneda() == "EUR"
     assert ext.get_price() == Decimal("89.68")
     assert ext.get_income() == Decimal("63.7500")
-    assert ext.get_pais_del_visitante() == "NL"
+    assert ext.get_pais_del_visitante() == "Netherlands"
     assert ext.get_phone() == "+31641428471"
     assert ext.get_dt_evento() == datetime(2026, 7, 29, 17, 4)
 
@@ -143,7 +143,7 @@ def test_viator_extractor_from_fixture() -> None:
     assert ext.get_participants() == 1
     assert ext.get_customer_name() == "Jane Doe"
     assert ext.get_phone() == "+18137350000"
-    assert ext.get_pais_del_visitante() == "US"
+    assert ext.get_pais_del_visitante() == "United States"
     assert ext.get_moneda() == "USD"
     assert ext.get_price() == Decimal("102.7040")
     assert ext.get_income() == Decimal("78.40")
@@ -162,7 +162,7 @@ def test_propio_extractor_from_fixture() -> None:
     assert ext.get_participants() == 2
     assert ext.get_customer_name() == "Lara Oliveira"
     assert ext.get_phone() == "+64224550339"
-    assert ext.get_pais_del_visitante() == "NZ"
+    assert ext.get_pais_del_visitante() == "New Zealand"
     assert ext.get_moneda() == "USD"
     assert ext.get_price() == Decimal("190.00")
     assert ext.get_income() == Decimal("190.00")

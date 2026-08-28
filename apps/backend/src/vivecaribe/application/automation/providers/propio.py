@@ -7,9 +7,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Self
 
-import phonenumbers
 from bs4 import BeautifulSoup, Tag
-from phonenumbers import NumberParseException, region_code_for_number
 
 from vivecaribe.application.automation.models import ReservaDraft
 from vivecaribe.application.automation.providers.base import BaseExtractor
@@ -156,18 +154,6 @@ class PropioExtractor(BaseExtractor):
         href = str(link.get("href", ""))
         raw = href.removeprefix("tel:")
         return self.normalize_phone(raw or link.get_text(strip=True))
-
-    def get_pais_del_visitante(self) -> str:
-        """Return ISO alpha-2 country inferred from the customer phone."""
-        phone = self.get_phone()
-        if not phone:
-            return ""
-        try:
-            parsed = phonenumbers.parse(phone, None)
-        except NumberParseException:
-            return ""
-        region = region_code_for_number(parsed)
-        return region or ""
 
     def get_moneda(self) -> str:
         """Return ``USD`` when a ``$`` amount is present in the order total."""

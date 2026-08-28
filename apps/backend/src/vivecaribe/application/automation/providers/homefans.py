@@ -12,6 +12,7 @@ import pycountry
 
 from vivecaribe.application.automation.models import ReservaDraft
 from vivecaribe.application.automation.providers.base import BaseExtractor
+from vivecaribe.domain.countries import COUNTRY_NAMES
 from vivecaribe.domain.enums import BookingProvider, ReservaEstado
 from vivecaribe.domain.errors import ValidationError
 from vivecaribe.logging import logger
@@ -104,12 +105,12 @@ class HomefansExtractor(BaseExtractor):
         return self.normalize_phone(self._after_strong("Phone"))
 
     def get_pais_del_visitante(self) -> str:
-        """Return the customer country in format 2-letter codes."""
-        try:
-            country = pycountry.countries.get(name=self._after_strong("Country"))
-            return country.alpha_2
-        except AttributeError:
-            return super().get_pais_del_visitante()
+        """Return the customer country common name from the booking HTML."""
+        raw = self._after_strong("Country")
+        country = pycountry.countries.get(name=raw)
+        if country is not None:
+            return COUNTRY_NAMES.get(country.alpha_2, country.name)
+        return super().get_pais_del_visitante()
 
     def get_moneda(self) -> str:
         """Return currency code for Homefans bookings."""
