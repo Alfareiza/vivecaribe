@@ -80,8 +80,9 @@ When Zoho shows an identity email challenge, `ZohoSession` uses the
 
 ## Extractor patterns
 
-- Shared: phone → E.164; `get_pais_del_visitante` alpha-2 unless overridden.
-- Homefans overrides country via `pycountry`.
+- Shared: phone → E.164; `get_pais_del_visitante` returns country common name (via `COUNTRY_NAMES` dict in `domain/countries.py`).
+- `COUNTRY_NAMES` maps ISO alpha-2 → common name, sourced from `world-countries` npm package — same data used by the frontend picker.
+- Homefans overrides country via `pycountry` to normalize HTML country name → alpha-2 → common name.
 - `price` vs `income` are provider-specific.
 
 ## Auth pattern
