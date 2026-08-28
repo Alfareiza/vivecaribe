@@ -28,7 +28,7 @@ booking_providers:
         token: GYG_GMAIL_TOKEN
         refresh_token: GYG_GMAIL_REFRESH_TOKEN
       queries:
-        new_bookings_query: 'from:do-not-reply@notification.getyourguide.com subject:(booking -"message about a booking" -"booking has been canceled" -"detail" -"first booking")'
+        new_bookings_query: 'newer_than:24h from:do-not-reply@notification.getyourguide.com subject:(booking -"message about a booking" -"booking has been canceled" -"detail" -"first booking")'
 
   - booking_provider: viator
     mailbox:
@@ -37,7 +37,7 @@ booking_providers:
         token: VIATOR_GMAIL_TOKEN
         refresh_token: VIATOR_GMAIL_REFRESH_TOKEN
       queries:
-        new_bookings_query: 'from:booking@t1.viator.com "Nueva reserva"'
+        new_bookings_query: 'newer_than:24h from:booking@t1.viator.com "Nueva reserva"'
 
   - booking_provider: homefans
     mailbox:
@@ -45,7 +45,7 @@ booking_providers:
       credentials_vars:
         refresh_token: HOMEFANS_OUTLOOK_REFRESH_TOKEN
       queries:
-        new_bookings_query: 'from:@homefans.net subject:new order received>07/07/2026'
+        new_bookings_query: 'from:@homefans.net subject:new order received>08/20/2026'
 
   - booking_provider: propio
     mailbox:
