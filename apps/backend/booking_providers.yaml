@@ -28,7 +28,7 @@ booking_providers:
         token: GYG_GMAIL_TOKEN
         refresh_token: GYG_GMAIL_REFRESH_TOKEN
       queries:
-        new_bookings_query: 'newer_than:24h from:do-not-reply@notification.getyourguide.com subject:(booking -"message about a booking" -"booking has been canceled" -"detail" -"first booking")'
+        new_bookings_query: 'from:do-not-reply@notification.getyourguide.com newer_than:24h subject:(booking OR reserva) -subject:"message about a booking" -subject:"booking has been canceled" -subject:detail -subject:"first booking"'
 
   - booking_provider: viator
     mailbox:
